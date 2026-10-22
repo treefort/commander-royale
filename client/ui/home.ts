@@ -1,6 +1,7 @@
 import { api, el, money } from "../api.ts";
 import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_COOP_PLAYERS, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
 import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
+import { checkSettings, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
 
 export interface Me {
@@ -99,22 +100,35 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
   const startFrom = el("select", { class: "start-from" }, el("option", { value: "" }, "Default settings")) as HTMLSelectElement;
   const formSlot = el("div", {});
   let pastSettings = new Map<string, MatchSettings>();
-  const showForm = () => {
+  let form: ReturnType<typeof settingsForm> | null = null;
+  const showForm = (given?: MatchSettings) => {
     const from = pastSettings.get(startFrom.value);
     // a "Random" environment that was rolled goes back to Random (sanitized again on the server)
-    const initial = from ? { ...structuredClone(from), biome: from.randomBiome ? ("RANDOM" as const) : from.biome, timeOfDay: from.randomTime ? ("random" as const) : from.timeOfDay, randomBiome: undefined, randomTime: undefined } : defaultSettings();
-    formSlot.replaceChildren(settingsForm(initial, async (s) => {
+    const initial = given ?? (from ? { ...structuredClone(from), biome: from.randomBiome ? ("RANDOM" as const) : from.biome, timeOfDay: from.randomTime ? ("random" as const) : from.timeOfDay, randomBiome: undefined, randomTime: undefined } : defaultSettings());
+    form = settingsForm(initial, async (s) => {
       const { id } = await api<{ id: string }>("/api/matches", { body: { settings: s } });
       go(`/m/${id}`);
-    }, "Create match"));
+    }, "Create match");
+    formSlot.replaceChildren(form);
   };
-  startFrom.addEventListener("change", showForm);
+  startFrom.addEventListener("change", () => showForm());
+  const ai = aiPanel(() => form!.current(), (settings) => {
+    startFrom.value = "";
+    showForm(settings);
+  });
   create.append(
     el("div", { class: "row", style: { marginBottom: "10px" } }, el("span", {}, "Start from:"), startFrom,
       el("span", { class: "hint" }, "copy every setting from an earlier match, then change what you like")),
+    ai.el,
     formSlot,
   );
   showForm();
+  // a link from an AI assistant: /?settings=<json> opens the form filled in (then the address is tidied up)
+  const linked = new URLSearchParams(location.search).get("settings");
+  if (linked) {
+    ai.load(linked, "the link");
+    history.replaceState(null, "", "/");
+  }
   try {
     const matches = await api<any[]>("/api/matches");
     pastSettings = new Map(matches.filter((m) => m.settings).map((m) => [m.id, m.settings as MatchSettings]));
@@ -173,7 +187,7 @@ function settingsSummary(s: MatchSettings): string {
 }
 
 /** The match settings form (create + edit). Budget guidance updates live. */
-export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings) => Promise<void>, submitLabel: string, readOnly = false): HTMLElement {
+export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings) => Promise<void>, submitLabel: string, readOnly = false): HTMLElement & { current(): MatchSettings } {
   const s: MatchSettings = structuredClone(initial);
   // settings of matches from before co-op and scenarios
   const d = defaultSettings();
@@ -411,7 +425,63 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     );
   }
   refresh();
-  return f;
+  return Object.assign(f, { current: () => structuredClone(s) });
+}
+
+/**
+ * "Set up a match with AI": a prompt to give an assistant (pointing it at /llms.txt), a box to paste its answer
+ * (JSON, a code block or the link), what had to be adjusted, and the current form as JSON or a link to iterate on.
+ */
+function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void) {
+  const origin = location.origin;
+  const prompt = `Read ${origin}/llms.txt (it explains how matches on this X-COM server are set up), then set up this match for me and give me the settings link and JSON: `;
+  const promptBox = el("textarea", { rows: 3, readonly: true }) as HTMLTextAreaElement;
+  promptBox.value = prompt + "<describe the match you want>";
+  const paste = el("textarea", { rows: 4, placeholder: "Paste what your assistant gave you: the JSON, or the link" }) as HTMLTextAreaElement;
+  const out = el("div", {});
+  const details = el("details", { class: "ai-panel" }) as HTMLDetailsElement;
+  const copy = async (text: string, btn: HTMLButtonElement) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      const t = btn.textContent;
+      btn.textContent = "Copied";
+      setTimeout(() => (btn.textContent = t), 1200);
+    } catch {
+      /* no clipboard access: the text is selectable */
+    }
+  };
+  const load = (text: string, source: string) => {
+    details.open = true;
+    try {
+      const raw = parseSettingsText(text.trim().startsWith("{") ? text : text.includes("settings=") ? text : `?settings=${encodeURIComponent(text)}`) as Record<string, unknown>;
+      const { settings, warnings } = checkSettings(raw);
+      // unless the assistant chose a map size or time zone, pick them like the form would
+      if (raw.mapBlocks === undefined) settings.mapBlocks = settings.mode === "coop" ? recommendedScenarioBlocks(settings) : recommendedMapBlocks(settings.maxPlayers, settings.budget);
+      if ((raw.coop as { timeZone?: unknown } | undefined)?.timeZone === undefined) settings.coop.timeZone = browserTimeZone();
+      apply(settings);
+      out.replaceChildren(el("div", { class: "loaded" }, `Loaded "${settings.name}" from ${source}: check the form below, then Create match.`));
+      if (warnings.length) out.append(el("div", { class: "warnings" }, el("div", {}, "Adjusted (tell your assistant if that's not what you wanted):"), el("ul", {}, ...warnings.map((w) => el("li", {}, w)))));
+    } catch (e) {
+      out.replaceChildren(el("div", { class: "err" }, `Couldn't read that: ${(e as Error).message}`));
+    }
+  };
+  details.append(
+    el("summary", {}, "Set up a match with AI"),
+    el("div", { class: "hint", style: { margin: "6px 0" } }, "Describe the match you want to any AI assistant (Claude, ChatGPT...) and let it fill in the settings. Start it off with this:"),
+    promptBox,
+    el("div", { class: "row", style: { margin: "4px 0 10px" } },
+      el("button", { class: "small", onclick: (e: Event) => copy(prompt, e.target as HTMLButtonElement) }, "Copy prompt"),
+      el("a", { href: "/llms.txt", target: "_blank", class: "hint" }, "what the assistant reads")),
+    el("div", { class: "hint" }, "It answers with a link (just open it) or JSON to paste here:"),
+    paste,
+    el("div", { class: "row", style: { marginTop: "4px" } },
+      el("button", { class: "small primary", onclick: () => load(paste.value, "your assistant") }, "Load into the form"),
+      el("span", { class: "hint" }, "Already set something up? Give it to your assistant to change:"),
+      el("button", { class: "small", onclick: (e: Event) => copy(JSON.stringify(settingsDelta(current()), null, 2), e.target as HTMLButtonElement) }, "Copy settings JSON"),
+      el("button", { class: "small", onclick: (e: Event) => copy(`${origin}/?settings=${encodeURIComponent(JSON.stringify(settingsDelta(current())))}`, e.target as HTMLButtonElement) }, "Copy settings link")),
+    out,
+  );
+  return { el: details, load };
 }
 
 /** The enemy AI's temperament (co-op scenarios). */

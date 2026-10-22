@@ -154,3 +154,11 @@ button.tab.active:disabled { opacity: 1; }
 .tab-blurb { margin: 8px 0 4px; }
 /* option texts are long settings summaries: don't let them stretch the form */
 select.start-from { flex: 1; min-width: 0; max-width: 100%; }
+.boot-note { padding: 0 40px; color: var(--dim); font-size: 16px; }
+
+/* home: setting up a match with an AI assistant */
+.ai-panel { margin: 0 0 12px; padding: 8px 12px; border: 2px dashed var(--frame-lo); background: rgba(5, 11, 38, 0.5); }
+.ai-panel summary { cursor: pointer; font-family: "Silkscreen", monospace; font-size: 13px; color: var(--green); }
+.ai-panel textarea { width: 100%; box-sizing: border-box; font-family: "VT323", monospace; font-size: 17px; background: var(--input); color: var(--text); border: 2px solid var(--frame-lo); padding: 4px 6px; }
+.ai-panel .warnings { margin: 6px 0 0; color: var(--orange); font-size: 17px; }
+.ai-panel .loaded { color: var(--green); font-size: 17px; margin-top: 6px; }

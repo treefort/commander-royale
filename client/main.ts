@@ -18,7 +18,8 @@ async function route() {
   current = null;
   document.body.classList.remove("battle");
   const path = location.pathname;
-  if (!me.user) return renderLogin(root, me, path);
+  // keep the query too: a ?settings= link from an AI assistant survives signing in
+  if (!me.user) return renderLogin(root, me, path + location.search);
   // signed in, but this server wants its passkey before anyone plays (then carry on to where they were going)
   if (me.needsPasskey) return renderPasskey(root, me, async () => {
     me = await api<Me>("/api/me");

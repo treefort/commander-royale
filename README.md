@@ -82,6 +82,18 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 4. **Battle**: squads deploy around the map edge. Players take turns in a shuffled order; the game is asynchronous
    (close the tab and come back) unless a turn timer is set. Last squad standing wins.
 
+### Setting up a match with an AI assistant
+
+The New Match form has a **"Set up a match with AI"** panel. Copy its prompt into any AI assistant, describe the
+match you want ("three of us against a Sectoid crash site, Floaters arriving later, turns end at 8pm"), and it
+answers with a link that opens the form filled in (or JSON to paste into the panel). The panel lists anything it
+had to adjust, and "Copy settings JSON / link" hands the current form back to the assistant to tweak.
+
+The assistant reads **`/llms.txt`** (public, also at `/docs/match-settings.md`): both game modes, every setting
+with its range and default, every enemy unit and weapon id with rough strengths, budget rules of thumb and worked
+examples. It's generated from the game's rules (`shared/settings-docs.ts`), and tests check it covers every setting
+and states the same ranges the server enforces.
+
 ### Co-op scenarios (game mode)
 
 Pick **Game mode: Co-op scenario** when creating a match and you're the **game master**: everyone who joins plays

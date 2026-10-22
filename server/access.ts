@@ -49,5 +49,5 @@ export interface AccessLogRow { at: number; user_id: string | null; email: strin
 
 /** The most recent access log entries, newest first. */
 export function accessLog(limit = 500): AccessLogRow[] {
-  return db.query("SELECT at, user_id, email, name, event, ip, agent FROM access_log ORDER BY at DESC LIMIT ?").all(limit) as AccessLogRow[];
+  return db.query("SELECT at, user_id, email, name, event, ip, agent FROM access_log ORDER BY at DESC, id DESC LIMIT ?").all(limit) as AccessLogRow[];
 }

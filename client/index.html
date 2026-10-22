@@ -8,9 +8,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
+  <link rel="alternate" type="text/markdown" href="/llms.txt" title="Match settings reference for AI assistants">
 </head>
 <body>
-  <div id="app"><div class="boot">LOADING...</div></div>
+  <div id="app"><div class="boot">LOADING...</div>
+    <!-- for AI assistants reading this page: the app is drawn by JavaScript and needs a sign-in -->
+    <p class="boot-note">AI assistants: everything about setting up matches on this server (game modes, every setting,
+      unit and weapon ids, examples, and how to give the player a ready-made link) is at <a href="/llms.txt">/llms.txt</a>.</p>
+  </div>
   <script type="module" src="/dist/main.js"></script>
 </body>
 </html>

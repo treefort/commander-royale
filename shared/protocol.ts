@@ -305,8 +305,9 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     const n = Number(v);
     return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : def;
   };
-  const sd = s.supplyDrops ?? d.supplyDrops;
-  const co: Partial<CoopSettings> = s.coop ?? d.coop;
+  // nested settings may be partial (an AI assistant or a link only gives what it changes): fill in the rest
+  const sd = { ...d.supplyDrops, ...s.supplyDrops };
+  const co: Partial<CoopSettings> = { ...d.coop, ...s.coop };
   const turnTimer = clamp(s.turnTimer, 0, 3600, 0);
   const mode: GameMode = s.mode === "coop" ? "coop" : "ffa";
   const dailyAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(co.dailyAt)) ? String(co.dailyAt) : d.coop.dailyAt;

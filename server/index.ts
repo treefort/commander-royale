@@ -3,6 +3,10 @@ import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { currentUser, googleStart, googleCallback, devLogin, logout, DEV_LOGIN, googleEnabled, renameUser, PUBLIC_URL } from "./auth.ts";
 import { mayPlay, passkeyRequired, tryPasskey, accessLog } from "./access.ts";
+import { settingsReference } from "../shared/settings-docs.ts";
+
+/** The match settings reference for AI assistants (public: no secrets, and an assistant can't sign in). */
+let reference = "";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
   resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots } from "./game.ts";
@@ -68,6 +72,10 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     const user = currentUser(req);
 
     if (path === "/health") return json({ ok: true });
+    if (path === "/llms.txt" || path === "/docs/match-settings.md") {
+      reference ||= settingsReference(PUBLIC_URL);
+      return new Response(reference, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+    }
     if (path === "/auth/google") return googleEnabled() ? googleStart(req) : err("Google sign-in is not configured", 503);
     if (path === "/auth/google/callback") return googleCallback(req);
     if (path === "/auth/dev") return devLogin(req);
