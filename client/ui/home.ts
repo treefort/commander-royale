@@ -124,7 +124,7 @@ function settingsSummary(s: MatchSettings): string {
   const env = s.randomBiome ? "Random" : biomeName(s.biome);
   if (s.mode === "coop") {
     const foes = s.scenario.enemies.reduce((a, g) => a + g.count, 0);
-    return `Co-op scenario: up to ${s.maxPlayers} × ${s.scenario.unitsPerPlayer} units vs ${foes} enemies, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${drops}`;
+    return `Co-op scenario: up to ${s.maxPlayers} × ${s.scenario.seatsPerPlayer} seats vs ${foes} enemies, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${drops}`;
   }
   return `${s.maxPlayers} squads, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${s.techLevel} tech, ${drops}`;
 }
@@ -215,9 +215,13 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   field("The team", el("div", { class: "row" },
     text(() => s.scenario.teamName, (v) => (s.scenario.teamName = v)),
     el("span", {}, "up to"), teamInput,
-    el("span", {}, "people, each commanding up to"), num(() => s.scenario.unitsPerPlayer, (v) => (s.scenario.unitsPerPlayer = v), 1, 20, 1, "60px"),
-    el("span", {}, "units")),
-    "e.g. 3 people with 4 units each, or 10 people with 1 each. Everyone hires and equips their own units", "coop");
+    el("span", {}, "people, each with"), num(() => s.scenario.seatsPerPlayer, (v) => (s.scenario.seatsPerPlayer = v), 1, 30, 1, "60px"),
+    el("span", {}, "Skyranger seats")),
+    "Soldiers and small aliens take 1 seat, tanks and large aliens 4: e.g. 3 people with 4 seats each (4 soldiers or a tank), or 10 people with 1. Everyone hires, equips and commands their own units", "coop");
+  field("Landing", sel([
+    { id: "together", name: "The whole team lands together" },
+    { id: "apart", name: "Everyone lands apart (like squads in a normal battle)" },
+  ] as const, () => s.scenario.teamStart, (v) => (s.scenario.teamStart = v)), "Apart: each person's units start in their own zone around the edge of the map", "coop");
   field("Game master", check(() => s.scenario.gmPlays, (v) => (s.scenario.gmPlays = v), "I play on the team too"),
     "If not, you hire nothing and watch the whole battle — every unit, both sides — as it happens", "coop");
   const dailyRow = el("span", { class: "row" });

@@ -26,8 +26,8 @@ function around(b: Battle, cx: number, cy: number, maxR: number): Pos[] {
   return spots;
 }
 
-/** Where `seat`'s units may land, best first. */
-export function deploySpots(b: Battle, seat: number, how: Placement | undefined): Pos[] {
+/** Where `seat`'s units may land, best first (`zone`: one of the side's landing zones, by its map-wide index). */
+export function deploySpots(b: Battle, seat: number, how: Placement | undefined, zone?: number): Pos[] {
   if (how === "ufo" && b.ufoArea) {
     const a = b.ufoArea;
     return around(b, a.x + a.w / 2, a.y + a.h / 2, Math.max(a.w, a.h) / 2 + 14);
@@ -35,14 +35,14 @@ export function deploySpots(b: Battle, seat: number, how: Placement | undefined)
   if (how === "ufo" || how === "center") return around(b, b.sx / 2, b.sy / 2, 22);
   if (how === "spread") {
     // anywhere, but not on top of anyone else's landing zone
-    const others = b.zones.filter((_, i) => i !== seat).map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 }));
+    const others = b.landingZones.filter((z) => z.seat !== seat).map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 }));
     const all: Pos[] = [];
     for (let x = 1; x < b.sx - 1; x++)
       for (let y = 1; y < b.sy - 1; y++) if (others.every((o) => Math.max(Math.abs(o.x - x), Math.abs(o.y - y)) >= 14)) all.push({ x, y, z: 0 });
     return b.rng.shuffle(all);
   }
-  const zone = b.zones[seat] ?? { x: b.sx / 2 - 5, y: b.sy / 2 - 5, w: 10, h: 10 };
-  return around(b, zone.x + zone.w / 2, zone.y + zone.h / 2, 18);
+  const z = (zone !== undefined ? b.landingZones[zone] : undefined) ?? b.zones[seat] ?? { x: b.sx / 2 - 5, y: b.sy / 2 - 5, w: 10, h: 10 };
+  return around(b, z.x + z.w / 2, z.y + z.h / 2, 18);
 }
 
 export function sizeOf(r: Recruit): number {
@@ -82,12 +82,12 @@ export function deployAll(b: Battle, seat: number, entries: { r: Recruit; m: Squ
   const spotsBy = new Map<string, Pos[]>();
   const sorted = [...entries].sort((a, c) => sizeOf(c.r) - sizeOf(a.r));
   for (const { r, m } of sorted) {
-    const key = m.deploy ?? "edge";
+    const key = `${m.deploy ?? "edge"}:${m.zone ?? ""}`;
     let spots = spotsBy.get(key);
-    if (!spots) spotsBy.set(key, (spots = deploySpots(b, seat, m.deploy)));
+    if (!spots) spotsBy.set(key, (spots = deploySpots(b, seat, m.deploy, m.zone)));
     // scattered units each take the next random spot rather than crowding the first one
     const u = deployMember(b, r, m, seat, spots);
-    if (key === "spread" && u) spotsBy.set(key, spots.filter((p) => Math.max(Math.abs(p.x - u.pos.x), Math.abs(p.y - u.pos.y)) >= 4));
+    if (m.deploy === "spread" && u) spotsBy.set(key, spots.filter((p) => Math.max(Math.abs(p.x - u.pos.x), Math.abs(p.y - u.pos.y)) >= 4));
     if (u) out.push({ unit: u, m });
   }
   return out;

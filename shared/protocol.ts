@@ -78,8 +78,10 @@ export interface Scenario {
   /** the players' side */
   teamName: string;
   enemyName: string;
-  /** units each person may hire and command */
-  unitsPerPlayer: number;
+  /** Skyranger seats each person may fill and command (soldiers and small aliens take 1, tanks and large aliens 4) */
+  seatsPerPlayer: number;
+  /** "together": the whole team lands in one zone; "apart": each person's units land in their own, like squads in a free-for-all */
+  teamStart: "together" | "apart";
   /** the creator hires units and plays too; otherwise they run the game and watch everything */
   gmPlays: boolean;
   enemies: EnemyGroup[];
@@ -98,7 +100,8 @@ export function defaultScenario(): Scenario {
   return {
     teamName: "X-COM",
     enemyName: "Aliens",
-    unitsPerPlayer: 4,
+    seatsPerPlayer: 4,
+    teamStart: "together",
     gmPlays: true,
     enemies: [
       { type: "STR_SECTOID_SOLDIER", count: 6, weapon: "standard", grenades: 0, armor: "STR_NONE_UC", placement: "edge", round: 1 },
@@ -130,7 +133,9 @@ function sanitizeScenario(raw: unknown): Scenario {
   return {
     teamName: str(s.teamName, d.teamName),
     enemyName: str(s.enemyName, d.enemyName),
-    unitsPerPlayer: clamp(s.unitsPerPlayer, 1, 20, d.unitsPerPlayer),
+    // "unitsPerPlayer" was the first version of this setting
+    seatsPerPlayer: clamp(s.seatsPerPlayer ?? (s as { unitsPerPlayer?: number }).unitsPerPlayer, 1, 30, d.seatsPerPlayer),
+    teamStart: s.teamStart === "apart" ? "apart" : "together",
     gmPlays: s.gmPlays === undefined ? d.gmPlays : !!s.gmPlays,
     // the enemy needs someone there from the start
     enemies: enemies.some((g) => g.round === 1) ? enemies : d.enemies,
@@ -263,8 +268,10 @@ export function recommendedMapBlocks(players: number, budget: number): number {
 
 /** Map size for a co-op scenario, from how many units take the field (both sides, reinforcements included). */
 export function recommendedScenarioBlocks(s: MatchSettings): number {
-  const units = s.maxPlayers * s.scenario.unitsPerPlayer + s.scenario.enemies.reduce((a, g) => a + g.count, 0);
-  return units <= 12 ? 5 : units <= 24 ? 6 : units <= 40 ? 7 : units <= 60 ? 8 : 9;
+  const units = s.maxPlayers * s.scenario.seatsPerPlayer + s.scenario.enemies.reduce((a, g) => a + g.count, 0);
+  const blocks = units <= 12 ? 5 : units <= 24 ? 6 : units <= 40 ? 7 : units <= 60 ? 8 : 9;
+  // several landing zones around the edge want a bit more room
+  return Math.min(10, blocks + (s.scenario.teamStart === "apart" && s.maxPlayers > 2 ? 1 : 0));
 }
 
 export function defaultSettings(): MatchSettings {
@@ -361,6 +368,8 @@ export interface SquadMember {
   controller?: string;
   /** co-op scenario enemies: where on the map they start */
   deploy?: Placement;
+  /** co-op scenario team landing apart: which of the side's landing zones (one per person) */
+  zone?: number;
   armor: string; // soldiers only; aliens/HWPs use their own
   items: { type: string; slot: string; x: number; y: number; ammo?: string }[];
 }

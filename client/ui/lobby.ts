@@ -171,7 +171,7 @@ export class LobbyPage {
         el("div", { class: "row" }, el("span", {}, "Invite link:"), el("span", { class: "invite" }, url),
           el("button", { class: "small", onclick: () => navigator.clipboard?.writeText(url) }, "Copy")),
         el("div", { class: "muted", style: { marginTop: "6px" } },
-          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.unitsPerPlayer} units each` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
+          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.seatsPerPlayer} seats each${s.settings.scenario.teamStart === "apart" ? ", landing apart" : ""}` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
           `${s.settings.psionics ? " · psionics" : ""}${s.settings.allowAliens ? " · alien recruits" : ""}${s.settings.allowHWP ? " · tanks" : ""}` +
           `${s.settings.supplyDrops.enabled ? ` · supply drops every ${s.settings.supplyDrops.everyRounds} rounds (${s.settings.supplyDrops.tier})` : ""}${s.settings.turnTimer ? ` · ${s.settings.turnTimer}s turns` : " · no turn timer"}`),
         // the creator's message to everyone joining
@@ -246,7 +246,7 @@ export class LobbyPage {
           el("td", {}, p.name, p.owner ? el("span", { class: "muted" }, " (game master)") : null, p.you ? el("span", { class: "muted" }, " (you)") : null),
           el("td", {}, p.gm ? el("span", { class: "badge dim" }, "Watching") : p.ready ? el("span", { class: "badge" }, "Ready") : p.hasLoadout ? el("span", { class: "badge dim" }, "Equipping") : el("span", { class: "badge red" }, "Not ready")),
         ))),
-        el("div", { class: "hint" }, `Everyone hires and equips up to ${sc.unitsPerPlayer} unit${sc.unitsPerPlayer > 1 ? "s" : ""} with ${money(s.settings.budget)}, and commands them in battle. The whole team moves at once, and you see every move a teammate (or any enemy in sight) makes as it happens. ${turns} ${offline}`),
+        el("div", { class: "hint" }, `Everyone fills up to ${sc.seatsPerPlayer} Skyranger seat${sc.seatsPerPlayer > 1 ? "s" : ""} (tanks and large aliens take 4) with ${money(s.settings.budget)}, and commands those units in battle${sc.teamStart === "apart" ? ", landing in their own zone" : ""}. The whole team moves at once, and you see every move a teammate (or any enemy in sight) makes as it happens. ${turns} ${offline}`),
         s.isOwner && !allReady ? el("div", { class: "hint" }, team.length ? "The battle can start once everyone on the team is ready." : "Send the invite link: the battle can start once someone has joined the team and is ready.") : null,
         this.error ? el("div", { class: "err" }, this.error) : null,
       ),
@@ -351,7 +351,7 @@ export class LobbyPage {
         el("span", {}, `Spent ${money(check.cost)} of ${money(s.settings.budget)}`),
         el("div", { class: "meter" + (check.cost > s.settings.budget ? " over" : "") }, el("div", { style: { width: pct + "%" } })),
         s.settings.mode === "coop"
-          ? el("span", { class: this.loadout.squad.length > s.settings.scenario.unitsPerPlayer ? "bad" : "" }, `Units ${this.loadout.squad.length}/${s.settings.scenario.unitsPerPlayer}`)
+          ? el("span", { class: check.seats > s.settings.scenario.seatsPerPlayer ? "bad" : "" }, `Seats ${check.seats}/${s.settings.scenario.seatsPerPlayer}`)
           : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "" }, `Seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.dirty ? "saving..." : "saved"),
         el("button", { class: s.you!.ready ? "" : "primary", disabled: !check.ok && !s.you!.ready, onclick: () => this.act("ready", { ready: !s.you!.ready }) }, s.you!.ready ? "Not ready" : "Ready"),
@@ -631,7 +631,7 @@ export class LobbyPage {
         el("div", { class: "meter" + (rest < 0 ? " over" : "") }, el("div", { style: { width: Math.min(100, (check.cost / s.settings.budget) * 100) + "%" } })),
         el("span", {}, `${r.name}: ${short(unitCost)}`),
         s.settings.mode === "coop"
-          ? el("span", { class: this.loadout.squad.length > s.settings.scenario.unitsPerPlayer ? "bad" : "muted" }, `units ${this.loadout.squad.length}/${s.settings.scenario.unitsPerPlayer}`)
+          ? el("span", { class: check.seats > s.settings.scenario.seatsPerPlayer ? "bad" : "muted" }, `seats ${check.seats}/${s.settings.scenario.seatsPerPlayer}`)
           : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "muted" }, `seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.loadout.stash.length ? `stores ${short(this.loadout.stash.reduce((a, t) => a + price(t), 0))}` : ""),
       );

@@ -21,7 +21,7 @@ function scenarioSettings(extra: Partial<MatchSettings["scenario"]> = {}): Match
   return sanitizeSettings({
     ...d, mode: "coop", biome: "CULTA", timeOfDay: "day", ufo: "STR_SMALL_SCOUT", mapBlocks: 5, budget: 150_000, maxPlayers: 3,
     scenario: {
-      ...d.scenario, unitsPerPlayer: 2, ...extra,
+      ...d.scenario, seatsPerPlayer: 2, ...extra,
       enemies: extra.enemies ?? [
         { type: "STR_SECTOID_SOLDIER", count: 3, weapon: "standard", grenades: 1, armor: "STR_NONE_UC", placement: "ufo", round: 1 },
         { type: "SOLDIER:3", count: 2, weapon: "STR_LASER_RIFLE", grenades: 0, armor: "STR_PERSONAL_ARMOR_UC", placement: "spread", round: 1 },
@@ -70,7 +70,7 @@ test("the game master's enemy force: types, numbers, weapons and reinforcement w
   // players are limited by units, not seats
   const pool = generatePool(s, 3);
   const l = buildSquad("swarm", { ...s, mode: "ffa" }, pool, new RNG(1));
-  expect(checkLoadout(s, pool, l).errors.join()).toContain("the limit is 2 each");
+  expect(checkLoadout(s, pool, l).errors.join()).toContain("limit is 2 each");
   expect(checkLoadout(s, pool, { ...l, squad: l.squad.slice(0, 2) }).errors).toEqual([]);
 });
 
@@ -147,6 +147,45 @@ test("the enemy isn't beaten while reinforcements are still coming", () => {
   rules.apply(b.current, { c: "endturn" });
   expect(b.phase).toBe(Phase.FINISHED);
   expect(b.winner).toBe(0);
+});
+
+test("each person fills Skyranger seats (a tank takes 4), and older settings carry over", () => {
+  const s = scenarioSettings({ seatsPerPlayer: 4 });
+  expect(sanitizeSettings({ mode: "coop", scenario: { unitsPerPlayer: 6 } as never }).scenario.seatsPerPlayer).toBe(6);
+  const pool = generatePool({ ...s, allowHWP: true }, 5);
+  const tank = pool.find((r) => r.kind === "hwp")!;
+  const soldiers = pool.filter((r) => r.kind === "soldier");
+  const hire = (rs: typeof pool) => ({ squad: rs.map((r) => ({ recruitId: r.id, armor: "STR_NONE_UC", items: [] })), stash: [] });
+  expect(checkLoadout(s, pool, hire([tank])).errors).toEqual([]);
+  expect(checkLoadout(s, pool, hire(soldiers.slice(0, 4))).errors).toEqual([]);
+  expect(checkLoadout(s, pool, hire([tank, soldiers[0]])).errors.join()).toContain("Squad needs 5 seats, limit is 4 each");
+});
+
+test("a team landing apart: each person's units come down in their own zone", () => {
+  const s = scenarioSettings({ teamStart: "apart" });
+  const pool = generatePool(s, 21);
+  const force = buildEnemyForce(s, 21);
+  const hires = buildSquad("swarm", { ...s, mode: "ffa" }, pool, new RNG(4)).squad;
+  const team = hires.slice(0, 6).map((m, i) => ({ ...m, controller: ["ann", "ben", "cat"][i % 3], zone: i % 3 }));
+  const b = createBattle(s, [
+    { userId: "ann", name: "X-COM", loadout: { squad: team, stash: [] }, members: ["ann", "ben", "cat"].map((u) => ({ userId: u, name: u })), landings: 3, zoneStash: [["STR_MEDI_KIT"], [], []] },
+    { userId: "bot:scenario:t", name: "Aliens", loadout: { squad: force.initial, stash: [] }, ai: s.scenario.ai, waves: force.waves },
+  ], [...pool, ...force.recruits], 21, files);
+  expect(b.landingZones.map((z) => z.seat)).toEqual([0, 0, 0, 1]);
+  expect(b.zones[1]).toEqual({ x: b.landingZones[3].x, y: b.landingZones[3].y, w: b.landingZones[3].w, h: b.landingZones[3].h });
+  const centre = (k: number) => ({ x: b.landingZones[k].x + 5, y: b.landingZones[k].y + 5 });
+  const near = (p: { x: number; y: number }, k: number) => Math.max(Math.abs(p.x - centre(k).x), Math.abs(p.y - centre(k).y));
+  ["ann", "ben", "cat"].forEach((who, k) => {
+    const units = b.units.filter((u) => u.owner === 0 && u.controller === who);
+    expect(units.length).toBe(2);
+    // closest to their own zone
+    for (const u of units) for (let j = 0; j < 4; j++) if (j !== k) expect(near(u.pos, k)).toBeLessThan(near(u.pos, j));
+  });
+  // Ann's spare medikit is in Ann's zone
+  const kit = b.items.find((it) => it.type === "STR_MEDI_KIT" && it.tile >= 0)!;
+  expect(near(b.posOf(kit.tile), 0)).toBeLessThan(near(b.posOf(kit.tile), 1));
+  // the landing zones survive saving
+  expect(deserializeBattle(serializeBattle(b), files).landingZones).toEqual(b.landingZones);
 });
 
 test("a co-op scenario on the server: game master, team, lock-ins and the GM's view", async () => {

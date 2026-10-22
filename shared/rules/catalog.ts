@@ -290,10 +290,9 @@ export function checkLoadout(settings: MatchSettings, pool: Recruit[], l: Loadou
     cost += itemPrice(t);
   }
   if (!l.squad.length) errors.push("Hire at least one unit");
-  // co-op scenarios limit how many units each person commands; free-for-all squads are limited by seats
-  if (settings.mode === "coop") {
-    if (l.squad.length > settings.scenario.unitsPerPlayer) errors.push(`${l.squad.length} units hired, the limit is ${settings.scenario.unitsPerPlayer} each`);
-  } else if (seats > settings.squadLimit) errors.push(`Squad needs ${seats} seats, limit is ${settings.squadLimit}`);
+  // co-op scenarios give each person their own share of the Skyranger; free-for-all squads get a whole one
+  const limit = settings.mode === "coop" ? settings.scenario.seatsPerPlayer : settings.squadLimit;
+  if (seats > limit) errors.push(`Squad needs ${seats} seats, limit is ${limit}${settings.mode === "coop" ? " each" : ""}`);
   if (cost > settings.budget) errors.push(`Over budget by $${(cost - settings.budget).toLocaleString()}`);
   return { ok: errors.length === 0, cost, seats, errors };
 }

@@ -433,17 +433,21 @@ export function deleteMatch(id: string, user: UserRow): string | null {
 function scenarioTeam(m: MatchRow, s: MatchSettings, everyone: PlayerRow[], players: PlayerRow[]): SetupPlayer {
   const squad: SquadMember[] = [];
   const stash: string[] = [];
-  for (const p of players) {
+  const apart = s.scenario.teamStart === "apart" && players.length > 1;
+  const zoneStash: string[][] = [];
+  players.forEach((p, i) => {
     const l = JSON.parse(p.loadout!) as Loadout;
-    for (const x of l.squad) squad.push({ ...x, controller: p.user_id });
-    stash.push(...l.stash);
-  }
+    // landing apart, each person's units (and spares) come down in their own zone
+    for (const x of l.squad) squad.push({ ...x, controller: p.user_id, ...(apart ? { zone: i } : {}) });
+    if (apart) zoneStash.push(l.stash);
+    else stash.push(...l.stash);
+  });
   const gm = everyone.find((p) => p.user_id === m.owner);
   const members: NonNullable<SetupPlayer["members"]> = players.map((p) => ({ userId: p.user_id, name: p.name }));
   // the creator leads (and can call off) the mission, playing or not
   if (gm && !players.includes(gm)) members.unshift({ userId: gm.user_id, name: gm.name, observer: true });
   else if (gm) members.sort((a, b) => (a.userId === gm.user_id ? -1 : b.userId === gm.user_id ? 1 : 0));
-  return { userId: members[0].userId, name: s.scenario.teamName, loadout: { squad, stash }, members };
+  return { userId: members[0].userId, name: s.scenario.teamName, loadout: { squad, stash }, members, ...(apart ? { landings: players.length, zoneStash } : {}) };
 }
 
 /** When the turn that just began must end: the turn timer, or a co-op scenario's daily time for the team's turns. */

@@ -87,9 +87,11 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 Pick **Game mode: Co-op scenario** when creating a match and you're the **game master**: everyone who joins plays
 on one team against an enemy force you design, played by the computer.
 
-- **The team**: its name, how many people (1–10) and how many units each may hire and command (say 3 people × 4
-  units, or 10 people × 1). Everyone hires and equips their own units from the budget; in battle each person
-  commands their own, and the whole team moves at once (the same lock-in / give-unit / AFK controls as co-op squads
+- **The team**: its name, how many people (1–10) and how many **Skyranger seats** each fills (soldiers and small
+  aliens take 1, tanks and large aliens 4 — so 4 seats is 4 soldiers or one tank; 10 people × 1 seat works too).
+  Everyone hires and equips their own units from the budget; in battle each person commands their own. The team
+  either **lands together** in one zone, or **apart**, each person in their own zone around the edge of the map
+  like squads in a normal battle (their spare equipment lands with them), and the whole team moves at once (the same lock-in / give-unit / AFK controls as co-op squads
   below). Every move a teammate makes — and every enemy in sight — plays out on everyone's screen as it happens.
 - **The game master** can play on the team too, or only run the game: then they hire nothing, can't give orders,
   and watch the **whole** battlefield (every unit on both sides, the whole map) live. They can call the mission off

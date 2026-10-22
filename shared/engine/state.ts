@@ -206,6 +206,8 @@ export class Battle {
   stats: BattleStats = newStats();
   /** each squad's deployment area, and the landed UFO's (reinforcements arrive in them) */
   zones: Rect[] = [];
+  /** every landing zone on the map and whose it is (a co-op team landing apart has one per person) */
+  landingZones: (Rect & { seat: number })[] = [];
   ufoArea: Rect | null = null;
   /** co-op scenarios: enemies still to arrive */
   waves: Wave[] = [];

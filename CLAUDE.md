@@ -14,7 +14,8 @@ about how to work on it.
 - Free-for-all between squads, last squad standing wins. Sequential async turns, optional turn timer.
 - Co-op scenario mode (2026-10-22, `settings.mode = "coop"`): the creator is a game master who designs the enemy
   (groups by type/count/weapon/placement/arrival round, AI tactics) and the battlefield; 1–10 people form one team,
-  each hiring and commanding `unitsPerPlayer` units. Turn ends on lock-in (default), a daily time, or the timer;
+  each filling `seatsPerPlayer` Skyranger seats (large units take 4) and commanding those units; the team lands
+  together or apart (each person in their own zone, `teamStart`). Turn ends on lock-in (default), a daily time, or the timer;
   offline players' units stay put. A GM who doesn't play watches everything (omniscient view) and commands nothing.
 - Co-op (2026-10-22): up to 10 people can share one squad, each commanding the units dealt to them, all acting
   at once on its turn; the turn ends when everyone locks in (or only on the timer). AFK/offline people's units
