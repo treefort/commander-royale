@@ -77,8 +77,7 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
 - Balance: prices = `value.ts` model × `calibration.json`. The bots are simple (weak with melee monsters and
   psi — those multipliers are floored at 0.2). Real-player data from `match_records` should drive the next
   rebalance; don't hand-tweak calibration without re-running duels.
-- Commit/push/deploy only when the user asks. The repo has **no commits yet** (git initialized, everything
-  untracked). Deployment (`python deploy/deploy-xcom.py --deploy --credentials <client.json> [--admin-email ...]`,
+- Commit/push/deploy only when the user asks. Local git repo on `master`, no remote. Deployment (`python deploy/deploy-xcom.py --deploy --credentials <client.json> [--admin-email ...]`,
   target xcom.evanbooth.com, port 4320) has **never been run**: it's waiting on the user's Google OAuth
   web-client JSON and an explicit go-ahead.
 - The droplet is shared with other sites: be conservative with nginx/system changes. SSH credentials live in a
