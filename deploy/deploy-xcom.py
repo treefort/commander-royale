@@ -6,7 +6,8 @@ an nginx vhost that proxies HTTP + WebSockets to 127.0.0.1:4320, and a certbot w
 
 Usage (explicit go-ahead required):
     bun run build
-    python deploy/deploy-xcom.py --deploy --credentials <google-oauth-web-client.json>
+    python deploy/deploy-xcom.py --deploy --credentials <google-oauth-web-client.json>   # first deploy
+    python deploy/deploy-xcom.py --deploy                                                  # later: keeps the server's secrets
 
 The game data (GAME_DIR) is uploaded once to /opt/xcom/gamedata and only re-sent with --upload-gamedata.
 No credentials are printed.
@@ -127,7 +128,7 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser()
     ap.add_argument("--deploy", action="store_true", required=True)
-    ap.add_argument("--credentials", required=True, help="Google OAuth web client JSON (downloaded from the Cloud console)")
+    ap.add_argument("--credentials", help="Google OAuth web client JSON (downloaded from the Cloud console); needed on the first deploy, or to change the secrets")
     ap.add_argument("--upload-gamedata", action="store_true", help="(re)upload the X-COM data folder")
     ap.add_argument("--gamedata", default=str(ROOT / "gamedata"))
     ap.add_argument("--admin-email", action="append", default=[], help="Google account allowed to download match statistics (repeatable)")
@@ -135,21 +136,26 @@ def main() -> None:
 
     if not (ROOT / "dist" / "main.js").exists():
         raise SystemExit("Run `bun run build` first.")
-    creds = json.loads(Path(args.credentials).read_text())
-    web = creds.get("web") or creds
-    env = {
-        "PORT": str(PORT),
-        "PUBLIC_URL": f"https://{HOST}",
-        "GOOGLE_CLIENT_ID": web["client_id"],
-        "GOOGLE_CLIENT_SECRET": web["client_secret"],
-        "DB_PATH": "/var/lib/xcom/xcom.sqlite",
-        "GAME_DIR": f"{BASE}/gamedata",
-        "DEV_LOGIN": "0",
-        "ADMIN_EMAILS": ",".join(args.admin_email),
-    }
-    if any(c in v for v in env.values() for c in "\n\r\"\\"):
-        raise SystemExit("Unexpected characters in configuration")
-    env_bytes = "".join(f'{k}="{v}"\n' for k, v in env.items()).encode()
+    env_bytes = None
+    if args.credentials:
+        creds = json.loads(Path(args.credentials).read_text())
+        web = creds.get("web") or creds
+        redirect = f"https://{HOST}/auth/google/callback"
+        if redirect not in web.get("redirect_uris", [redirect]):
+            raise SystemExit(f"The OAuth client doesn't list {redirect} as a redirect URI")
+        env = {
+            "PORT": str(PORT),
+            "PUBLIC_URL": f"https://{HOST}",
+            "GOOGLE_CLIENT_ID": web["client_id"],
+            "GOOGLE_CLIENT_SECRET": web["client_secret"],
+            "DB_PATH": "/var/lib/xcom/xcom.sqlite",
+            "GAME_DIR": f"{BASE}/gamedata",
+            "DEV_LOGIN": "0",
+            "ADMIN_EMAILS": ",".join(args.admin_email),
+        }
+        if any(c in v for v in env.values() for c in "\n\r\"\\"):
+            raise SystemExit("Unexpected characters in configuration")
+        env_bytes = "".join(f'{k}="{v}"\n' for k, v in env.items()).encode()
 
     access = load_access()
     if access["host"] != "167.71.26.113" or access["user"] != "gemmarius":
@@ -190,10 +196,12 @@ def main() -> None:
     first = not run(f"test -e {BASE}/current && echo yes || true", sudo=True).strip()
     if first:
         run(f"! ss -ltnH | awk '{{print $4}}' | grep -q ':{PORT}$'", sudo=True)
+    if env_bytes is None and not run("test -s /etc/xcom/environment && echo yes || true", sudo=True).strip():
+        raise SystemExit("No secrets on the server yet: pass --credentials")
 
     print("Uploading release...", flush=True)
     release = put("release.tar.gz", make_tar([ROOT / p for p in RELEASE_FILES], ROOT))
-    envp = put("environment", env_bytes)
+    envp = put("environment", env_bytes) if env_bytes is not None else None
     unit = put("service", SERVICE.encode())
     ngx = put("nginx", NGINX.encode())
     http = put("http", HTTP.encode())
@@ -211,7 +219,7 @@ install -d -m 0700 -o xcom -g xcom /var/lib/xcom
 install -d -m 0700 -o root -g root /etc/xcom
 install -d -m 0755 /var/lib/xcom-acme
 tar -xzf {release} -C {BASE}/releases/{stamp}
-install -m 0600 -o root -g root {envp} /etc/xcom/environment
+{f"install -m 0600 -o root -g root {envp} /etc/xcom/environment" if envp else "true"}
 if [ ! -x {BASE}/runtime/bun ]; then cp /opt/gc-study/runtime/bun {BASE}/runtime/bun; fi
 {BASE}/runtime/bun --version | grep -q '^{BUN_VERSION}$'
 cd {BASE}/releases/{stamp} && {BASE}/runtime/bun install --production --frozen-lockfile
@@ -221,13 +229,17 @@ cd {BASE}/releases/{stamp} && {BASE}/runtime/bun install --production --frozen-l
 
     if first:
         print("First deploy: HTTP vhost + certificate...", flush=True)
-        run(f"install -m 0644 {http} /etc/nginx/sites-available/{HOST} && ln -sf /etc/nginx/sites-available/{HOST} /etc/nginx/sites-enabled/{HOST} && nginx -t && systemctl reload nginx", sudo=True)
+        run(f"""install -m 0644 {http} /etc/nginx/sites-available/{HOST}
+ln -sf /etc/nginx/sites-available/{HOST} /etc/nginx/sites-enabled/{HOST}
+if ! nginx -t; then rm -f /etc/nginx/sites-enabled/{HOST} /etc/nginx/sites-available/{HOST}; exit 1; fi
+systemctl reload nginx""", sudo=True)
         run(f"certbot certonly --webroot -w /var/lib/xcom-acme -d {HOST} --non-interactive --agree-tos --register-unsafely-without-email", sudo=True, timeout=300)
 
     print("Switching to the new release...", flush=True)
     run(f"""cp -a /etc/nginx/sites-available/{HOST} /etc/nginx/sites-available/{HOST}.bak.{stamp} 2>/dev/null || true
 install -m 0644 {ngx} /etc/nginx/sites-available/{HOST}
-nginx -t
+# the box hosts other sites: a config that fails the test never stays in place
+if ! nginx -t; then cp -a /etc/nginx/sites-available/{HOST}.bak.{stamp} /etc/nginx/sites-available/{HOST}; exit 1; fi
 install -m 0644 {unit} /etc/systemd/system/xcom.service
 ln -sfn {BASE}/releases/{stamp} {BASE}/current.new && mv -T {BASE}/current.new {BASE}/current
 systemctl daemon-reload
