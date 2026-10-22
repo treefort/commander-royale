@@ -323,6 +323,9 @@ export class BattleScreen {
         const ours = u.by === this.me.id;
         this.incoming = u.view;
         this.processingOthers = !ours;
+        // something happens where we can see it (shots at us, a move into view...): never play it behind the
+        // "waiting for..." screen
+        if (!ours && this.dialog?.kind === "nextturn" && this.dialog.title === "TURN OVER" && u.events.some((e) => e.t !== "msg")) this.dialog = null;
         await this.animate(u.events);
         this.processingOthers = false;
         this.incoming = null;
@@ -556,11 +559,13 @@ export class BattleScreen {
       }
       case "shot": {
         const shooter = b.unit(e.unit);
-        if (shooter && !this.onScreen(shooter.pos)) this.centerOn(shooter.pos);
-        playSound(e.sound, shooter ? this.pan(shooter.pos) : 0);
         const path = e.path.length === 2 ? voxelLine(e.path[0], e.path[1]) : densify(e.path);
         const end = path[path.length - 1];
         const endTile = { x: end.x >> 4, y: end.y >> 4, z: Math.floor(end.z / 24) };
+        if (shooter && !this.onScreen(shooter.pos)) this.centerOn(shooter.pos);
+        // a shot at us from someone we can't see (in the dark, say): watch it come in where it lands
+        else if (!shooter && !this.onScreen(endTile)) this.centerOn(endTile);
+        playSound(e.sound, this.pan(shooter ? shooter.pos : endTile));
         this.st.projectile = { path, pos: 0, bullet: e.bullet };
         const speed = 8;
         for (let i = 0; i < path.length + 35; i += speed) {
