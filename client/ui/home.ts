@@ -5,6 +5,8 @@ import { budgetGuide } from "../../shared/rules/catalog.ts";
 
 export interface Me {
   user: { id: string; name: string; picture?: string } | null;
+  /** signed in, but the server wants its passkey before this account can play */
+  needsPasskey?: boolean;
   devLogin: boolean;
   google: boolean;
 }
@@ -52,6 +54,35 @@ export function renderLogin(root: HTMLElement, me: Me, next = location.pathname)
     ),
   );
   nameInput.addEventListener("keydown", (e) => e.key === "Enter" && (nameInput.nextSibling as HTMLButtonElement)?.click());
+}
+
+/** The passkey a signed-in account enters once before it can play on this server. */
+export function renderPasskey(root: HTMLElement, me: Me, onUnlocked: () => void) {
+  root.innerHTML = "";
+  root.append(topbar(me));
+  const input = el("input", { type: "password", placeholder: "Passkey", maxlength: 100, autocomplete: "off" }) as HTMLInputElement;
+  const msg = el("div", { class: "err", style: { marginTop: "8px" } });
+  const submit = async () => {
+    msg.textContent = "";
+    try {
+      await api("/api/passkey", { body: { passkey: input.value } });
+      onUnlocked();
+    } catch (e) {
+      msg.textContent = (e as Error).message;
+      input.select();
+    }
+  };
+  input.addEventListener("keydown", (e) => e.key === "Enter" && submit());
+  root.append(
+    el("div", { class: "wrap landing" },
+      el("h1", {}, "X-COM"),
+      el("div", { class: "sub" }, `Welcome, ${me.user!.name}. This server is for invited players: enter the passkey you were given to start playing. You only need it once.`),
+      el("div", { class: "panel", style: { maxWidth: "480px", margin: "0 auto" } },
+        el("div", { class: "row", style: { justifyContent: "center" } }, input, el("button", { class: "primary", onclick: submit }, "Enter")),
+        msg),
+    ),
+  );
+  input.focus();
 }
 
 export async function renderHome(root: HTMLElement, me: Me, go: (path: string) => void) {

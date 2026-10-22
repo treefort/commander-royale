@@ -1,5 +1,5 @@
 import { api } from "./api.ts";
-import { renderHome, renderLogin, type Me } from "./ui/home.ts";
+import { renderHome, renderLogin, renderPasskey, type Me } from "./ui/home.ts";
 import { LobbyPage } from "./ui/lobby.ts";
 import { BattleScreen } from "./battle/screen.ts";
 
@@ -19,6 +19,11 @@ async function route() {
   document.body.classList.remove("battle");
   const path = location.pathname;
   if (!me.user) return renderLogin(root, me, path);
+  // signed in, but this server wants its passkey before anyone plays (then carry on to where they were going)
+  if (me.needsPasskey) return renderPasskey(root, me, async () => {
+    me = await api<Me>("/api/me");
+    await route();
+  });
   const m = path.match(/^\/m\/([A-Za-z0-9]+)/);
   if (m) {
     const id = m[1];

@@ -43,6 +43,18 @@ CREATE TABLE IF NOT EXISTS match_players (
   ready INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (match_id, user_id)
 );
+-- sign-ins and passkey attempts (server/access.ts)
+CREATE TABLE IF NOT EXISTS access_log (
+  id INTEGER PRIMARY KEY,
+  at INTEGER NOT NULL,
+  user_id TEXT,
+  email TEXT,
+  name TEXT,
+  event TEXT NOT NULL,
+  ip TEXT,
+  agent TEXT
+);
+CREATE INDEX IF NOT EXISTS access_log_user ON access_log (user_id, at);
 -- one statistics record per finished match (shared/engine/record.ts), kept even if the match is deleted
 CREATE TABLE IF NOT EXISTS match_records (
   match_id TEXT PRIMARY KEY,
@@ -57,6 +69,8 @@ for (const sql of [
   "ALTER TABLE match_players ADD COLUMN squad_of TEXT",
   // computer squads: AI settings (BotTuning JSON)
   "ALTER TABLE match_players ADD COLUMN ai TEXT",
+  // entered the server's passkey (allowed to play)
+  "ALTER TABLE users ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 0",
 ]) {
   try {
     db.exec(sql);
@@ -65,7 +79,7 @@ for (const sql of [
   }
 }
 
-export interface UserRow { id: string; google_sub: string | null; email: string | null; name: string; picture: string | null; created: number }
+export interface UserRow { id: string; google_sub: string | null; email: string | null; name: string; picture: string | null; created: number; unlocked?: number }
 export interface MatchRow { id: string; owner: string; settings: string; status: string; seed: number; pool: string; battle: string | Uint8Array | null; turn_deadline: number | null; created: number; updated: number }
 export interface PlayerRow { match_id: string; user_id: string; seat: number; name: string; loadout: string | null; ready: number; squad_of: string | null; ai: string | null }
 

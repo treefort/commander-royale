@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { currentUser, googleStart, googleCallback, devLogin, logout, DEV_LOGIN, googleEnabled, renameUser, PUBLIC_URL } from "./auth.ts";
+import { mayPlay, passkeyRequired, tryPasskey, accessLog } from "./access.ts";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
   resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots } from "./game.ts";
@@ -75,6 +76,7 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     if (path === "/ws") {
       const matchId = url.searchParams.get("match") ?? "";
       if (!user) return err("Sign in first", 401);
+      if (!mayPlay(user)) return err("Enter the passkey first", 403);
       if (srv.upgrade(req, { data: { user, matchId } })) return undefined;
       return err("WebSocket upgrade failed");
     }
@@ -86,7 +88,20 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
           if (b.name) renameUser(user.id, b.name);
           return json({ ok: true });
         }
-        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, devLogin: DEV_LOGIN, google: googleEnabled() });
+        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, needsPasskey: !!user && !mayPlay(user), devLogin: DEV_LOGIN, google: googleEnabled() });
+      }
+      if (path === "/api/passkey" && req.method === "POST") {
+        if (!user) return err("Sign in first", 401);
+        const e = tryPasskey(req, user, (await body<{ passkey?: string }>(req)).passkey);
+        return e ? err(e, 403) : json({ ok: true });
+      }
+      // signed in isn't enough to play: with a passkey set, the account has to have entered it
+      if (user && !mayPlay(user)) return json({ error: "Enter the passkey first", passkey: true }, 403);
+      // sign-ins and passkey attempts: admins only
+      if (path === "/api/admin/access-log" && req.method === "GET") {
+        if (!user) return err("Sign in first", 401);
+        if (!isAdmin(user)) return err("Not allowed", 403);
+        return json(accessLog(Number(url.searchParams.get("limit")) || 500));
       }
       // statistics export for balancing (tools/player-stats.ts --json): admins only
       if (path === "/api/admin/match-records" && req.method === "GET") {
@@ -150,6 +165,7 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     // the original game's data files are served only to signed-in players
     if (path.startsWith("/game/")) {
       if (!user) return err("Sign in first", 401);
+      if (!mayPlay(user)) return err("Enter the passkey first", 403);
       let rel: string;
       try {
         rel = decodeURIComponent(path.slice(6));
@@ -175,4 +191,4 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
 
 setInterval(tickTimers, 3000);
 resumeBots();
-console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}`);
+console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}${passkeyRequired() ? " — passkey required to play" : ""}`);
