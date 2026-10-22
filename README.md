@@ -69,7 +69,11 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
 2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby. The creator
    can also add computer squads ("Add AI squad", with a hiring strategy); they hire automatically, are always
-   ready, and play their turns on the server one action at a time so you can watch.
+   ready, and play their turns on the server one action at a time so you can watch. Each computer squad has
+   **AI settings**: aggression (cautious → reckless), how keen it is on explosives, how many rounds it remembers
+   where it saw an enemy, the round after which it knows where everyone is, whether each race plays to type, and
+   a **strength** (25–400% of the budget and seats) to handicap it — e.g. a double-strength alien squad against a
+   team of people.
 3. **Loadout**: every player hires from an identical copy of a randomly generated pool — rookies to veteran
    commanders, every alien race and rank, and tanks. Prices follow ability (time units, health × armor, accuracy,
    reactions, strength, psionics, innate weapons, flight, night vision, special abilities). Buy weapons, ammo,
@@ -77,6 +81,24 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    dropped at your deployment zone.
 4. **Battle**: squads deploy around the map edge. Players take turns in a shuffled order; the game is asynchronous
    (close the tab and come back) unless a turn timer is set. Last squad standing wins.
+
+### Co-op squads
+
+With **Co-op: up to N people per squad** (1–10) set, several people can play one squad together. Once every squad
+slot is taken, the invite link drops newcomers into the first squad with room; in the lobby anyone can also pick
+"Join this squad" or go back to "Field my own squad". The squad's leader hires and equips it and can choose who
+plays which unit ("Played by"); the rest are dealt out evenly when the battle starts.
+
+On the squad's turn everyone acts **at the same time**, each on their own units (teammates' moves animate without
+holding up your clicks; their units show "BOB'S UNIT" and can't be ordered about). **End Turn locks you in**
+(press again to unlock; giving an order also unlocks); the turn ends once everyone has locked in, or — with "turn
+ends on the turn timer" — only when the timer runs out. **G** hands the selected unit to the next teammate (your
+own units, or any as the leader). Only the leader can surrender. The top right lists the squad with who is still
+playing, done, AFK or offline.
+
+**AFK**: Options → "AFK (AI plays)" hands your units to the AI until you switch it off, and it's never waited for.
+With "AI plays for offline players" set, anyone offline for more than 30 s (`AWAY_GRACE_MS`) is played by the AI
+too, until they reconnect. This also works for a one-person squad.
 
 ### Rules notes
 
@@ -105,8 +127,8 @@ terrain you've explored (unexplored ground counts as open).
 Left click selects/moves (click a destination twice: the first click previews the path with TU left), fires once
 an action is chosen; right click turns the unit (or opens the door it faces) and cancels actions. Click a hand
 slot for its actions. Wheel or PgUp/PgDn changes the view level; arrows, WASD, screen edges or middle-drag scroll.
-Tab next unit, K kneel, I inventory, C center, M minimap, 1/2 left/right hand, Enter chat, hold Shift to speed up
-animations.
+Tab next unit, K kneel, I inventory, C center, M minimap, 1/2 left/right hand, G give the unit to a co-op teammate,
+Enter chat, hold Shift to speed up animations.
 
 ## Architecture
 

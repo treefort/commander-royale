@@ -1300,6 +1300,7 @@ export class GameRules {
     const b = this.b;
     b.current = player;
     b.hitBy.clear();
+    for (const m of b.players[player].members ?? []) m.locked = false;
     for (const u of b.units) if (u.owner === player) prepareUnitTurn(b, u);
     calculateUnitLighting(b);
     recalculateAllFOV(b);

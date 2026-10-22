@@ -18,6 +18,7 @@ import { type Pos, UnitStatus, DIR_UP, DIR_DOWN, directionTo, posEq } from "../.
 import { itemRule, tr, BattleType, explosionRadius, armorRule, type SlotId } from "../../shared/rules/index.ts";
 import { actionTUs, firingAccuracy, carriedWeight, roundsLeft } from "../../shared/engine/unitops.ts";
 import { calculateUnitLighting } from "../../shared/engine/tileengine.ts";
+import { memberOf, membersOf, mayCommand, controllerOf, isAfk, isShared, waitingFor } from "../../shared/engine/coop.ts";
 
 type ActionKind = "snap" | "aimed" | "auto" | "throw" | "melee" | "psi" | "probe" | "launch";
 
@@ -55,6 +56,9 @@ const MESSAGES: Record<string, string> = {
   STR_SUPPLY_DROP_INBOUND: "Supply drop inbound in {0} rounds",
   STR_SUPPLY_DROP_LANDED: "Supply drop has landed",
   STR_TURN_TIMER_EXPIRED: "Turn timer expired",
+  STR_TEAMMATES_UNIT: "That unit is a teammate's (G gives yours away)",
+  STR_UNIT_PLAYED_BY_AI: "The AI is playing that unit for an AFK teammate",
+  STR_ONLY_LEADER_SURRENDERS: "Only the squad leader can surrender",
 };
 function msgText(key: string, arg?: string) {
   return (MESSAGES[key] ?? tr(key)).replace("{0}", arg ?? "");
@@ -81,8 +85,10 @@ export class BattleScreen {
   ws: WebSocket | null = null;
   st: MapViewState;
   hud: HudState = { reserve: "none", reserveKneel: false, pressed: null, showLayers: false, warning: "", warningTime: 0, tooltip: "" };
-  queue: { events: BattleEvent[]; view: PlayerView; deadline: number | null }[] = [];
+  queue: { events: BattleEvent[]; view: PlayerView; deadline: number | null; by: string }[] = [];
   processing = false;
+  /** the update being animated is someone else's (a co-op teammate's): it doesn't hold up your own orders */
+  processingOthers = false;
   busy = false;
   seq = 0;
   pending = new Map<number, (r: { ok: boolean; error?: string; private?: any }) => void>();
@@ -173,7 +179,7 @@ export class BattleScreen {
         this.deadline = m.deadline;
         break;
       case "update":
-        this.queue.push({ events: m.events, view: m.view, deadline: m.deadline });
+        this.queue.push({ events: m.events, view: m.view, deadline: m.deadline, by: m.by ?? "" });
         if (this.b) this.processQueue();
         break;
       case "result": {
@@ -202,6 +208,8 @@ export class BattleScreen {
   }
 
   private async onFullView(v: PlayerView) {
+    // updates queued so far are already included in this snapshot; ones that arrive while it loads are not
+    const stale = this.queue.length;
     if (!this.assets) {
       this.loadingText = "LOADING GAME DATA...";
       await preload(battleFileList(v.datasets!), (d, t) => (this.loadingText = `LOADING GAME DATA ${Math.floor((d / t) * 100)}%`));
@@ -211,8 +219,7 @@ export class BattleScreen {
     }
     const first = !this.b;
     this.generation++;
-    // anything queued before this snapshot is already included in it
-    this.queue = [];
+    this.queue.splice(0, stale);
     this.pending.clear();
     this.waitingUpdate = null;
     this.busy = false;
@@ -234,9 +241,15 @@ export class BattleScreen {
       } else this.centerOn({ x: this.b.sx >> 1, y: this.b.sy >> 1, z: 0 });
       if (this.myTurn()) this.showNextTurn();
     }
+    if (this.queue.length) this.processQueue();
   }
 
   private send(cmd: Command): Promise<{ ok: boolean; error?: string; private?: any }> {
+    return this.sendMsg({ t: "cmd", cmd });
+  }
+
+  /** Sends a message that gets a result (and, normally, an update of ours) back. */
+  private sendMsg(msg: Record<string, unknown>): Promise<{ ok: boolean; error?: string; private?: any }> {
     // one command at a time: the server resolves each action fully before the next
     if (this.busy) return Promise.resolve({ ok: false, error: "STR_BUSY" });
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -256,6 +269,8 @@ export class BattleScreen {
       };
       this.pending.set(seq, (r) => {
         gotResult = r;
+        // turned away before anything happened: no update follows
+        if ((r as { noUpdate?: boolean }).noUpdate) gotUpdate = true;
         if (!r.ok && r.error) this.warn(r.error);
         finish();
       });
@@ -273,7 +288,7 @@ export class BattleScreen {
         }
       }, 15000);
       try {
-        this.ws!.send(JSON.stringify({ t: "cmd", seq, cmd }));
+        this.ws!.send(JSON.stringify({ ...msg, seq }));
       } catch {
         clearTimeout(timer);
         this.pending.delete(seq);
@@ -292,8 +307,11 @@ export class BattleScreen {
         const u = this.queue.shift()!;
         const gen = this.generation;
         const wasMyTurn = this.myTurn();
+        const ours = u.by === this.me.id;
         this.incoming = u.view;
+        this.processingOthers = !ours;
         await this.animate(u.events);
+        this.processingOthers = false;
         this.incoming = null;
         if (gen !== this.generation) continue; // a full view arrived meanwhile
         const prevSel = this.st.selected;
@@ -304,15 +322,18 @@ export class BattleScreen {
         this.deadline = u.deadline;
         this.syncSupply();
         const sel = this.b.unit(prevSel);
-        if (!sel || sel.owner !== this.you || isOut(sel)) {
+        if (!sel || sel.owner !== this.you || isOut(sel) || (!this.mayCommand(sel) && this.myUnits().length)) {
           const next = this.myUnits().find((x) => x.tu > 0) ?? this.myUnits()[0];
           if (next) this.select(next);
           else this.st.selected = -1;
         }
         this.refreshPath();
-        const w = this.waitingUpdate;
-        this.waitingUpdate = null;
-        w?.();
+        // only the update our own order caused completes it (teammates act at the same time)
+        if (ours) {
+          const w = this.waitingUpdate;
+          this.waitingUpdate = null;
+          w?.();
+        }
         if (!wasMyTurn && this.myTurn()) {
           // the turn came back round: a quiet chime, in case you're looking at another tab
           playTurnChime();
@@ -352,8 +373,20 @@ export class BattleScreen {
   myTurn() {
     return !!this.b && this.b.current === this.you && this.b.phase === Phase.PLAYING;
   }
+  /** Input waits for our own orders to play out, but not for a co-op teammate's. */
+  inputLocked() {
+    return this.busy || (this.processing && !this.processingOthers);
+  }
+  /** Units you give orders to (in a co-op squad, the ones dealt to you, plus any shared ones). */
   myUnits(): Unit[] {
-    return this.b ? this.b.units.filter((u) => u.owner === this.you && !isOut(u) && u.status !== UnitStatus.IGNORE_ME && u.stats.tu > 0) : [];
+    return this.b ? this.b.units.filter((u) => u.owner === this.you && !isOut(u) && u.status !== UnitStatus.IGNORE_ME && u.stats.tu > 0 && this.mayCommand(u)) : [];
+  }
+  mayCommand(u: Unit): boolean {
+    return !!this.b && mayCommand(this.b, this.me.id, u) === null;
+  }
+  /** Your place in a co-op squad (undefined in battles from before co-op). */
+  member() {
+    return this.b ? memberOf(this.b, this.you, this.me.id) : undefined;
   }
   selectedUnit(): Unit | null {
     const u = this.b?.unit(this.st.selected);
@@ -365,7 +398,7 @@ export class BattleScreen {
     this.st.camera.z = u.pos.z;
   }
   warn(msg: string) {
-    this.hud.warning = tr(msg).toUpperCase();
+    this.hud.warning = msgText(msg).toUpperCase();
     this.hud.warningTime = performance.now();
   }
   private mapH() {
@@ -436,7 +469,7 @@ export class BattleScreen {
         u.dir = e.dir;
         if (!this.onScreen(e.to) && (u.owner !== this.you || u.id === this.st.selected)) this.centerOn(e.to);
         this.st.camera.z = Math.max(this.st.camera.z, Math.min(e.to.z, b.sz - 1));
-        if (u.owner === this.you || u.id === this.st.selected) this.st.camera.z = e.to.z;
+        if ((u.owner === this.you && this.mayCommand(u)) || u.id === this.st.selected) this.st.camera.z = e.to.z;
         const anim = { from: e.from, to: e.to, phase: 0, end };
         this.st.anims.set(u.id, anim);
         const stepMs = fast ? 8 : 28;
@@ -730,16 +763,19 @@ export class BattleScreen {
       banner += `  ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
     }
     drawText(s, A.small, banner, 4, 4, this.myTurn() ? 16 * 4 - 1 : 16 - 1, { contrast: true });
-    // whose turn it is, front and centre, whenever it isn't yours
-    if (b.phase === Phase.PLAYING && (this.endingTurn || !this.myTurn())) {
-      const text = this.endingTurn ? "ENDING TURN..." : `${(cur?.name ?? "").toUpperCase()}'S TURN - WAITING`;
+    // whose turn it is, front and centre, whenever it isn't yours (or you're done with it, in a co-op squad)
+    const coop = this.coopBanner();
+    if (b.phase === Phase.PLAYING && (this.endingTurn || !this.myTurn() || coop)) {
+      const text = this.endingTurn ? "ENDING TURN..." : coop || `${(cur?.name ?? "").toUpperCase()}'S TURN - WAITING`;
       const w = Math.min(this.vw - 8, textWidth(A.big, text) + 16);
       const x = Math.floor((this.vw - w) / 2);
       // below the round/squad list if the screen is too narrow for both side by side
       const y = x < textWidth(A.small, banner) + 12 ? 18 + b.players.length * 9 + 12 : 3;
       drawFrame(s, x, y, w, 20, 16 * 2, 3, 15);
-      drawText(s, A.big, text, x, y + 3, this.st.animFrame % 4 < 2 ? 16 * 2 - 1 : 16 * 2 + 3, { align: "center", width: w, contrast: true });
+      // flashes red/yellow; glyph shades add up to +15 to the base colour, so each base stays 16 below its ramp's end
+      drawText(s, A.big, text, x, y + 3, this.st.animFrame % 4 < 2 ? 16 * 2 - 1 : 16 * 1 - 1, { align: "center", width: w, contrast: true });
     }
+    this.drawSquadMembers();
     // squads
     b.players.forEach((p, i) => {
       const alive = b.units.filter((u) => u.originalOwner === i && !isOut(u)).length;
@@ -799,6 +835,13 @@ export class BattleScreen {
       drawText(s, A.small, this.hud.warning, ix + 48, iy + 40, 16 - 1, { align: "center", width: 224, contrast: true });
     }
     if (this.hud.tooltip) drawText(s, A.small, this.hud.tooltip, ix + 2, iy - 10, 0, { contrast: true });
+    // co-op: whose the selected unit is
+    const selU = this.selectedUnit();
+    if (selU && isShared(b.players[this.you])) {
+      const c = controllerOf(b, selU);
+      const label = !c ? "SHARED UNIT" : c === this.me.id ? "YOUR UNIT" : `${(membersOf(b.players[this.you]).find((m) => m.userId === c)?.name ?? "").toUpperCase()}'S UNIT`;
+      drawText(s, A.small, label, ix + 318 - textWidth(A.small, label), iy - 10, c === this.me.id ? 16 * 4 - 1 : 16 * 3 - 1, { contrast: true });
+    }
     // psi / launch buttons at the top right
     const sel = this.selectedUnit();
     const spicons = A.dat("UFOGRAPH/SPICONS.DAT", 32, 24);
@@ -811,7 +854,7 @@ export class BattleScreen {
       const hint = n >= max ? `${n}/${max} WAYPOINTS - CLICK LAUNCH (TOP RIGHT)` : n ? `WAYPOINT ${n}/${max} SET - CLICK MORE, OR LAUNCH (TOP RIGHT)` : `CLICK UP TO ${max} WAYPOINTS FOR THE BLASTER BOMB (LAST ONE = TARGET)`;
       drawText(s, A.small, hint, 0, iy - 22, 16 * 3, { contrast: true, align: "center", width: this.vw });
     }
-    if (this.busy || this.processing) drawText(s, A.small, "...", this.vw - 16, iy - 10, 0);
+    if (this.inputLocked()) drawText(s, A.small, "...", this.vw - 16, iy - 10, 0);
     if (!this.online.has(this.me.id) && this.ws?.readyState !== 1) drawText(s, A.small, "OFFLINE", this.vw - 40, 4, 32 - 1);
     // battle over: a way back out from the map view
     if (this.b?.phase === Phase.FINISHED) {
@@ -820,6 +863,32 @@ export class BattleScreen {
       drawFrame(s, r.x, r.y, r.w, r.h, hover ? 16 * 4 : 16 * 2, 2, 15);
       drawText(s, A.small, "BACK TO MATCHES", r.x, r.y + 5, hover ? 16 * 4 - 1 : 0, { align: "center", width: r.w, contrast: true });
     }
+  }
+
+  /** Co-op status for the centre banner during your squad's turn ("" when there's nothing to say). */
+  private coopBanner(): string {
+    const b = this.b!, me = this.member();
+    if (!me || !this.myTurn()) return "";
+    if (isAfk(me)) return "AFK - THE AI IS PLAYING YOUR UNITS";
+    if (!me.locked || !isShared(b.players[this.you])) return "";
+    if (b.settings.coop?.turnEnd === "timer" && b.settings.turnTimer > 0) return "LOCKED IN - THE TURN ENDS ON THE TIMER";
+    const n = waitingFor(b, this.you).length;
+    return n ? `LOCKED IN - WAITING FOR ${n} TEAMMATE${n > 1 ? "S" : ""}` : "LOCKED IN - WAITING FOR THE AI";
+  }
+
+  /** Co-op: the people in your squad at the top right, with who has locked in, is AFK or offline. */
+  private drawSquadMembers() {
+    const s = this.surf, A = this.assets, b = this.b!;
+    const members = membersOf(b.players[this.you]);
+    if (members.length < 2) return;
+    const ourTurn = this.myTurn();
+    members.forEach((m, i) => {
+      const units = b.units.filter((u) => u.owner === this.you && !isOut(u) && controllerOf(b, u) === m.userId).length;
+      const status = isAfk(m) ? "AI" : !this.online.has(m.userId) ? "OFFLINE" : ourTurn ? (m.locked ? "DONE" : "PLAYING") : "";
+      const text = `${m.name.toUpperCase()}${m.userId === this.me.id ? " *" : ""} (${units})${status ? " " + status : ""}`;
+      const color = isAfk(m) ? 16 * 3 - 1 : m.locked && ourTurn ? 16 * 4 - 1 : !this.online.has(m.userId) ? 8 : 0;
+      drawText(s, A.small, text, this.vw - 4 - textWidth(A.small, text), 52 + i * 9, color, { contrast: true });
+    });
   }
 
   private canPsi(u: Unit): boolean {
@@ -935,14 +1004,17 @@ export class BattleScreen {
         button(cx + 164, cy + 32, 116, 16, `FX VOLUME: ${Math.round(audioSettings.volume * 100)}%`, () => { audioSettings.volume = step(audioSettings.volume); saveAudioSettings(); });
         button(cx + 40, cy + 50, 116, 16, `MUSIC: ${audioSettings.music ? "ON" : "OFF"}`, () => { audioSettings.music = !audioSettings.music; saveAudioSettings(); applyMusicSettings(); });
         button(cx + 164, cy + 50, 116, 16, `MUSIC VOL: ${Math.round(audioSettings.musicVolume * 100)}%`, () => { audioSettings.musicVolume = step(audioSettings.musicVolume); saveAudioSettings(); applyMusicSettings(); });
-        button(cx + 40, cy + 68, 240, 16, `PATH PREVIEW: ${this.pathPreview ? "ON" : "OFF"}`, () => { this.pathPreview = !this.pathPreview; try { localStorage.setItem("xcom.pathPreview", this.pathPreview ? "1" : "0"); } catch { /* */ } });
+        const me = this.member();
+        button(cx + 40, cy + 68, me ? 116 : 240, 16, `PATH PREVIEW: ${this.pathPreview ? "ON" : "OFF"}`, () => { this.pathPreview = !this.pathPreview; try { localStorage.setItem("xcom.pathPreview", this.pathPreview ? "1" : "0"); } catch { /* */ } });
+        // the AI plays your units while you're away (co-op squads, or a solo squad you want auto-played)
+        if (me) button(cx + 164, cy + 68, 116, 16, `AFK (AI PLAYS): ${me.afk ? "ON" : "OFF"}`, () => this.toggleAfk(), me.afk ? 16 * 2 + 3 : 3);
         const help = [
           "LEFT CLICK: SELECT / MOVE (CLICK TWICE) / FIRE",
           "RIGHT CLICK: TURN OR OPEN DOOR / CANCEL",
           "WHEEL, PGUP/PGDN: VIEW LEVEL",
           "ARROWS, WASD, SCREEN EDGES, MIDDLE DRAG: SCROLL",
           "TAB NEXT UNIT  K KNEEL  I INVENTORY  C CENTER",
-          "M MINIMAP  1/2 USE LEFT/RIGHT HAND",
+          `M MINIMAP  1/2 USE LEFT/RIGHT HAND${isShared(this.b?.players[this.you]) ? "  G GIVE UNIT" : ""}`,
           "ENTER: CHAT  HOLD SHIFT: FAST ANIMATIONS",
         ];
         help.forEach((h, i) => drawText(s, A.small, h, cx, cy + 92 + i * 10, 16 * 4 - 1, { align: "center", width: 320 }));
@@ -1230,6 +1302,8 @@ export class BattleScreen {
       return;
     }
     if (!u || !this.myTurn()) return;
+    // a teammate's unit can be selected (to look, or to hand over with G) but not ordered about
+    if (!this.mayCommand(u)) return this.warn(mayCommand(b, this.me.id, u)!);
     if (this.pathPreview && (!this.pathTarget || !posEq(this.pathTarget, t))) {
       this.pathTarget = t;
       this.refreshPath();
@@ -1287,13 +1361,17 @@ export class BattleScreen {
         if (this.myTurn()) {
           this.cancelAction();
           this.st.path = null;
-          this.endingTurn = true;
+          // in a co-op squad this locks you in (press again to unlock); the turn ends when everyone has
+          const shared = isShared(b.players[this.you]) && !!this.member();
+          this.endingTurn = !shared;
           const r = await this.send({ c: "endturn" });
           this.endingTurn = false;
           // say so: the turn has passed to someone else (unless the battle just ended)
           if (r.ok && this.b && this.b.phase === Phase.PLAYING && !this.myTurn()) {
             const next = this.b.players[this.b.current];
             this.dialog = { kind: "nextturn", title: "TURN OVER", sub: `WAITING FOR ${(next?.name ?? "").toUpperCase()}` };
+          } else if (r.ok && shared && this.myTurn()) {
+            this.say(r.private?.locked ? "Locked in (end turn again to unlock)" : "Unlocked: carry on");
           }
         }
         break;
@@ -1499,7 +1577,7 @@ export class BattleScreen {
       return;
     }
     const viewOnly = ["Escape", "Tab", "c", "m", "PageUp", "PageDown"].includes(e.key);
-    if (!viewOnly && (this.busy || this.processing || e.repeat)) return;
+    if (!viewOnly && (this.inputLocked() || e.repeat)) return;
     switch (e.key) {
       case "Escape": this.cancelAction(); break;
       case "Tab": e.preventDefault(); this.nextUnit(false); break;
@@ -1511,7 +1589,33 @@ export class BattleScreen {
       case "PageDown": this.hudClick("mapDown", false); break;
       case "1": this.hudClick("leftHand", false); break;
       case "2": this.hudClick("rightHand", false); break;
+      case "g": case "G": this.giveUnit(); break;
     }
+  }
+
+  /** Co-op: hands the selected unit to the next person in the squad (yours, or any if you lead it). */
+  private async giveUnit() {
+    const b = this.b, u = this.selectedUnit();
+    const members = b ? membersOf(b.players[this.you]) : [];
+    if (!b || !u || members.length < 2) return;
+    const cur = controllerOf(b, u);
+    const next = members[(members.findIndex((m) => m.userId === cur) + 1) % members.length];
+    const r = await this.sendMsg({ t: "assign", unit: u.id, to: next.userId });
+    if (r.ok) this.say(`${u.name} now answers to ${next.userId === this.me.id ? "you" : next.name}`);
+  }
+
+  /** Toggles AFK: the AI plays your units until you come back. */
+  private async toggleAfk() {
+    const me = this.member();
+    if (!me) return;
+    const on = !me.afk;
+    const r = await this.sendMsg({ t: "afk", on });
+    if (r.ok) this.say(on ? "AFK: the AI plays your units until you come back" : "Welcome back: your units are yours again");
+  }
+
+  /** A line in the message list at the top of the screen. */
+  private say(text: string) {
+    this.messages.push({ text, time: performance.now() });
   }
 
   private scrollStep() {
@@ -1639,11 +1743,11 @@ export class BattleScreen {
       if (btn) {
         this.hud.pressed = btn;
         setTimeout(() => (this.hud.pressed = null), 120);
-        if (!this.busy && !this.processing) await this.hudClick(btn, right);
+        if (!this.inputLocked()) await this.hudClick(btn, right);
       }
       return;
     }
-    if (this.busy || this.processing) return;
+    if (this.inputLocked()) return;
     const c = this.st.cursor;
     if (!c.visible) return;
     await this.mapClick({ x: c.x, y: c.y, z: c.z }, right);

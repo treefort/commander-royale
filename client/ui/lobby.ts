@@ -1,7 +1,7 @@
 // Match lobby: invite link, players, settings, and the loadout builder (hire, buy, equip).
 import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
-import { biomeName, type MatchSettings, type Recruit, type Loadout } from "../../shared/protocol.ts";
+import { biomeName, DEFAULT_BOT_TUNING, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
 import { checkLoadout, budgetGuide, type CatalogEntry } from "../../shared/rules/catalog.ts";
 import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, type SlotId } from "../../shared/rules/index.ts";
 import { InventoryScreen, type InvAdapter, type InvItem } from "./inventory.ts";
@@ -14,9 +14,15 @@ interface LobbyState {
   status: string;
   isOwner: boolean;
   settings: MatchSettings;
-  players: { name: string; seat: number; ready: boolean; hasLoadout: boolean; you: boolean; owner: boolean; bot?: boolean; botId?: string }[];
+  players: {
+    name: string; seat: number; ready: boolean; hasLoadout: boolean; you: boolean; owner: boolean; userId: string;
+    /** co-op: the leader whose squad this player plays in */
+    squadOf: string | null;
+    bot?: boolean; botId?: string; ai?: BotTuning;
+  }[];
   strategies: string[];
-  you: { seat: number; loadout: Loadout | null; ready: boolean } | null;
+  /** co-op members get their leader's loadout (read-only) */
+  you: { seat: number; loadout: Loadout | null; ready: boolean; squadOf: string | null; leaderName: string | null } | null;
   pool: Recruit[];
   catalog: CatalogEntry[];
   armors: { type: string; price: number }[];
@@ -40,6 +46,8 @@ export class LobbyPage {
   settingsEl: HTMLElement | null = null;
   renderDeferred = false;
   botStrategy = "any";
+  /** the computer squad whose AI settings are open */
+  tuning: string | null = null;
 
   constructor(private root: HTMLElement, private matchId: string, private me: Me, private go: (p: string) => void, private onStart: () => void) {
     this.connect();
@@ -166,29 +174,101 @@ export class LobbyPage {
         this.editingSettings && s.isOwner ? this.settingsPanel(s) : null,
       ),
     );
-    // players
-    const allReady = s.players.length >= 2 && s.players.every((p) => p.ready);
-    wrap.append(el("div", { class: "panel" },
-      el("div", { class: "row" }, el("h2", { class: "grow" }, `SQUADS (${s.players.length}/${s.settings.maxPlayers})`),
-        !s.you && s.players.length < s.settings.maxPlayers ? el("button", { class: "primary", onclick: () => this.act("join") }, "Join this match") : null,
-        s.isOwner ? el("button", { class: "primary", disabled: !allReady, onclick: () => this.act("start") }, "Start battle") : null),
-      el("table", {}, ...s.players.map((p) => el("tr", {},
-        el("td", {}, p.name, p.owner ? el("span", { class: "muted" }, " (host)") : null, p.you ? el("span", { class: "muted" }, " (you)") : null, p.bot ? el("span", { class: "muted" }, " (computer)") : null),
+    // squads (in co-op, each with the people sharing it)
+    const leaders = s.players.filter((p) => !p.squadOf);
+    const allReady = leaders.length >= 2 && leaders.every((p) => p.ready);
+    const coop = s.settings.coop.squadSize > 1;
+    const room = (l: LobbyState["players"][number]) => !l.bot && s.players.filter((p) => p.squadOf === l.userId).length + 1 < s.settings.coop.squadSize;
+    const meRow = s.players.find((p) => p.you);
+    const iLead = !!meRow && !meRow.squadOf && s.players.some((p) => p.squadOf === meRow.userId);
+    const rows: HTMLElement[] = [];
+    for (const p of leaders) {
+      const team = s.players.filter((x) => x.squadOf === p.userId);
+      const canJoin = coop && !p.you && room(p) && (!s.you ? true : !iLead && meRow?.squadOf !== p.userId);
+      rows.push(el("tr", {},
+        el("td", {}, p.name, p.owner ? el("span", { class: "muted" }, " (host)") : null, p.you ? el("span", { class: "muted" }, " (you)") : null, p.bot ? el("span", { class: "muted" }, " (computer)") : null,
+          team.length ? el("div", { class: "muted" }, "with ", ...team.flatMap((t, i) => [i ? ", " : "", t.name + (t.you ? " (you)" : "") + (t.owner ? " (host)" : "")])) : null,
+          p.bot && p.ai ? el("div", { class: "muted" }, botSummary(p.ai)) : null),
         el("td", {}, p.ready ? el("span", { class: "badge" }, "Ready") : p.hasLoadout ? el("span", { class: "badge dim" }, "Equipping") : el("span", { class: "badge red" }, "Not ready")),
-        el("td", {}, p.bot && s.isOwner ? el("button", { class: "small danger", onclick: () => this.act("removebot", { botId: p.botId }) }, "Remove") : null),
-      ))),
+        el("td", {},
+          canJoin ? el("button", { class: "small", onclick: () => this.act("join", { squad: p.userId }) }, s.you ? "Join this squad" : "Join as teammate") : null, " ",
+          p.bot && s.isOwner ? el("button", { class: "small", onclick: () => { this.tuning = this.tuning === p.botId ? null : p.botId!; this.render(); } }, this.tuning === p.botId ? "Close AI settings" : "AI settings") : null, " ",
+          p.bot && s.isOwner ? el("button", { class: "small danger", onclick: () => this.act("removebot", { botId: p.botId }) }, "Remove") : null),
+      ));
+      if (p.bot && s.isOwner && this.tuning === p.botId) rows.push(el("tr", {}, el("td", { colspan: 3 }, this.tuningForm(p.ai ?? DEFAULT_BOT_TUNING, (ai) => this.act("tunebot", { botId: p.botId, ai })))));
+    }
+    wrap.append(el("div", { class: "panel" },
+      el("div", { class: "row" }, el("h2", { class: "grow" }, `SQUADS (${leaders.length}/${s.settings.maxPlayers})${coop ? ` · UP TO ${s.settings.coop.squadSize} PEOPLE EACH` : ""}`),
+        !s.you && (leaders.length < s.settings.maxPlayers || (coop && leaders.some(room))) ? el("button", { class: "primary", onclick: () => this.act("join") }, leaders.length < s.settings.maxPlayers ? "Join this match" : "Join as a teammate") : null,
+        s.you?.squadOf ? el("button", { class: "small", disabled: leaders.length >= s.settings.maxPlayers, title: "Leave this squad and hire one of your own", onclick: () => this.act("squad", { leader: "" }) }, "Field my own squad") : null,
+        s.isOwner ? el("button", { class: "primary", disabled: !allReady, onclick: () => this.act("start") }, "Start battle") : null),
+      el("table", {}, ...rows),
       s.isOwner ? this.addBotRow(s) : null,
+      coop ? el("div", { class: "hint" }, `Co-op: people who join a squad play it together — its leader hires and equips it, the units are dealt out between everyone (the leader can pick who gets which), and everyone moves at once on the squad's turn. ${s.settings.coop.turnEnd === "timer" ? "The turn ends when the timer runs out." : "The turn ends once everyone has locked in (End Turn)."}${s.settings.coop.afkAI ? " The AI plays for anyone offline for more than half a minute." : ""}`) : null,
       s.isOwner && !allReady ? el("div", { class: "hint" }, "The battle can start once at least two squads are ready.") : null,
       this.error ? el("div", { class: "err" }, this.error) : null,
     ));
-    if (s.you) wrap.append(this.renderLoadout(s));
+    if (s.you?.squadOf) wrap.append(this.renderTeammateView(s));
+    else if (s.you) wrap.append(this.renderLoadout(s));
     root.querySelectorAll<HTMLElement>(".scroll").forEach((e, i) => (e.scrollTop = inner[i] ?? 0));
     window.scrollTo(0, scrollY);
   }
 
+  /** A co-op member's view: the leader's squad (read-only) and who gets which unit. */
+  private renderTeammateView(s: LobbyState): HTMLElement {
+    const l = s.you!.loadout;
+    const names = new Map(s.players.map((p) => [p.userId, p.name]));
+    const me = s.players.find((p) => p.you)!;
+    const t = el("table", {}, el("tr", {}, el("th", {}, "Unit"), el("th", {}, "Equipment"), el("th", {}, "Played by")));
+    for (const m of l?.squad ?? []) {
+      const r = s.pool.find((p) => p.id === m.recruitId);
+      if (!r) continue;
+      t.append(el("tr", {},
+        el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r))),
+        el("td", {}, m.items.length ? m.items.map((i) => tr(i.type)).join(", ") : el("span", { class: "muted" }, r.kind === "hwp" ? "built-in weapon" : "nothing")),
+        el("td", {}, m.controller ? (m.controller === me.userId ? el("b", {}, "you") : names.get(m.controller) ?? "?") : el("span", { class: "muted" }, "dealt out at the start"))));
+    }
+    return el("div", { class: "panel" },
+      el("h2", {}, `${(s.you!.leaderName ?? "").toUpperCase()}'S SQUAD`),
+      el("div", { class: "hint" }, `${s.you!.leaderName} hires and equips this squad and says when it's ready. In battle you command the units dealt to you; press G to hand the selected unit to a teammate, and End Turn to lock in.`),
+      l?.squad.length ? el("div", { class: "scroll", style: { maxHeight: "360px", marginTop: "8px" } }, t) : el("div", { class: "muted", style: { marginTop: "8px" } }, "Nobody hired yet."));
+  }
+
+  /** A computer squad's AI settings (creator only). */
+  private tuningForm(initial: BotTuning, save: (t: BotTuning) => void): HTMLElement {
+    const t = { ...initial };
+    const num = (k: "intelligence" | "cheatTurn" | "strength", min: number, max: number, step = 1) => {
+      const i = el("input", { type: "number", min, max, step, value: t[k], style: { width: "70px" } }) as HTMLInputElement;
+      i.addEventListener("input", () => (t[k] = Number(i.value)));
+      return i;
+    };
+    const pick = (k: "aggression" | "difficulty", opts: string[]) => {
+      const e = el("select", {}, ...opts.map((o, i) => el("option", { value: i, selected: i === t[k] }, o))) as HTMLSelectElement;
+      e.addEventListener("change", () => (t[k] = Number(e.value)));
+      return e;
+    };
+    const pers = el("input", { type: "checkbox", checked: t.personalities }) as HTMLInputElement;
+    pers.addEventListener("change", () => (t.personalities = pers.checked));
+    return el("div", { class: "tuning" },
+      el("div", { class: "row" },
+        el("label", {}, "Aggression ", pick("aggression", ["Cautious", "Normal", "Bold", "Reckless"])),
+        el("label", {}, "Explosives ", pick("difficulty", ["Rarely", "Sometimes", "Often", "Very often", "Whenever it can"])),
+        el("label", {}, "Remembers enemies for ", num("intelligence", 1, 10), " rounds"),
+      ),
+      el("div", { class: "row" },
+        el("label", {}, "Knows where everyone is after round ", num("cheatTurn", 1, 99)),
+        el("label", {}, pers, " Each race plays to type (Sectoids cautious, Chryssalids reckless...)"),
+      ),
+      el("div", { class: "row" },
+        el("label", {}, "Strength ", num("strength", 25, 400, 25), "% of the budget and seats"),
+        el("button", { class: "small primary", onclick: () => { this.tuning = null; save(sanitizeLocal(t)); } }, "Save AI settings"),
+      ),
+      el("div", { class: "hint" }, "A stronger enemy squad (more budget and seats) evens out a co-op team ganging up on it. Changing the strength rehires the squad."));
+  }
+
   /** Creator only: add a computer-controlled squad that hires with the chosen strategy. */
   private addBotRow(s: LobbyState): HTMLElement {
-    const full = s.players.length >= s.settings.maxPlayers;
+    const full = s.players.filter((p) => !p.squadOf).length >= s.settings.maxPlayers;
     const labels: Record<string, string> = {
       random: "Wildcard (random hires)", swarm: "Swarm (lots of cheap soldiers)", elite: "Elite (few veterans, best gear)", balanced: "Balanced",
       heavy: "Heavy weapons", monster: "Monster (one big alien + troops)", aliens: "Alien legion", tanks: "Armored (tanks)", psi: "Psionic",
@@ -240,7 +320,11 @@ export class LobbyPage {
 
   private squadTable(s: LobbyState): HTMLElement {
     if (!this.loadout.squad.length) return el("div", { class: "muted", style: { marginTop: "8px" } }, "Nobody hired yet — pick recruits from the pool below.");
-    const t = el("table", {}, el("tr", {}, el("th", {}, "Unit"), el("th", {}, "Armor"), el("th", {}, "Equipment"), el("th", {}, "Cost"), el("th", {}, "")));
+    // co-op: the leader picks who plays which unit (unpicked ones are dealt out evenly at the start)
+    const meRow = s.players.find((p) => p.you);
+    const team = meRow ? [meRow, ...s.players.filter((p) => p.squadOf === meRow.userId)] : [];
+    const coop = team.length > 1;
+    const t = el("table", {}, el("tr", {}, el("th", {}, "Unit"), el("th", {}, "Armor"), el("th", {}, "Equipment"), coop ? el("th", {}, "Played by") : null, el("th", {}, "Cost"), el("th", {}, "")));
     this.loadout.squad.forEach((m, idx) => {
       const r = s.pool.find((p) => p.id === m.recruitId);
       if (!r) return;
@@ -259,6 +343,7 @@ export class LobbyPage {
         el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r))),
         el("td", {}, armorSel),
         el("td", {}, r.kind === "hwp" ? el("span", { class: "muted" }, "built-in weapon") : m.items.length ? m.items.map((i) => tr(i.type) + (i.ammo ? ` (${tr(i.ammo)})` : "")).join(", ") : el("span", { class: "muted" }, "nothing")),
+        coop ? el("td", {}, this.controllerSelect(m, team)) : null,
         el("td", { class: "price" }, money(cost)),
         el("td", {}, r.kind !== "hwp" ? el("button", { class: "small primary", onclick: () => this.openEquip(idx) }, "Equip") : null, " ",
           el("button", { class: "small danger", onclick: () => {
@@ -274,6 +359,16 @@ export class LobbyPage {
     return el("div", {},
       el("div", { class: "scroll", style: { maxHeight: "360px", marginTop: "8px" } }, t),
       el("div", { class: "hint", style: { marginTop: "6px" } }, "Buy and fit gear from each unit's Equip screen: drag items onto the soldier, right-click to sell them back. Unequipped stores are dropped at your deployment zone."));
+  }
+
+  private controllerSelect(m: Loadout["squad"][number], team: LobbyState["players"]): HTMLElement {
+    const sel = el("select", {}, el("option", { value: "" }, "Anyone (dealt out)"), ...team.map((p) => el("option", { value: p.userId, selected: p.userId === m.controller }, p.you ? `${p.name} (you)` : p.name))) as HTMLSelectElement;
+    sel.addEventListener("change", () => {
+      if (sel.value) m.controller = sel.value;
+      else delete m.controller;
+      this.scheduleSave();
+    });
+    return sel;
   }
 
   private poolPanel(s: LobbyState, hired: Set<string>): HTMLElement {
@@ -678,6 +773,26 @@ export class LobbyPage {
 }
 
 /** "$950", "$2.2k", "$15k", "$1.2M" */
+/** One line describing a computer squad's AI settings. */
+function botSummary(t: BotTuning): string {
+  const d = DEFAULT_BOT_TUNING;
+  if (JSON.stringify(t) === JSON.stringify(d)) return "standard AI";
+  const parts = [["cautious", "normal", "bold", "reckless"][t.aggression] ?? "normal"];
+  if (t.difficulty !== d.difficulty) parts.push(`explosives ${t.difficulty}/4`);
+  if (t.intelligence !== d.intelligence) parts.push(`memory ${t.intelligence}`);
+  if (t.cheatTurn !== d.cheatTurn) parts.push(`omniscient from round ${t.cheatTurn}`);
+  if (t.personalities) parts.push("races play to type");
+  if (t.strength !== 100) parts.push(`${t.strength}% strength`);
+  return parts.join(" · ");
+}
+
+function sanitizeLocal(t: BotTuning): BotTuning {
+  // the server clamps too; this just keeps empty inputs from saving as 0
+  const out = { ...t };
+  for (const k of ["intelligence", "cheatTurn", "strength"] as const) if (!Number.isFinite(out[k]) || !out[k]) out[k] = DEFAULT_BOT_TUNING[k];
+  return out;
+}
+
 function short(n: number): string {
   const sign = n < 0 ? "-" : "";
   n = Math.abs(n);

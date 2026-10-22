@@ -11,7 +11,10 @@ about how to work on it.
 - Game data: full GOG install at `C:\Program Files (x86)\GOG Galaxy\Games\X-COM UFO Defense`, copied to
   `gamedata/` (gitignored; the repo's `xcom/` folder is only the old demo — ignore it). Assets are served by our
   own server to signed-in players only (private deployment for friends).
-- Free-for-all only, last squad standing wins. Sequential async turns, optional turn timer.
+- Free-for-all between squads, last squad standing wins. Sequential async turns, optional turn timer.
+- Co-op (2026-10-22): up to 10 people can share one squad, each commanding the units dealt to them, all acting
+  at once on its turn; the turn ends when everyone locks in (or only on the timer). AFK/offline people's units
+  are played by the AI. Computer squads have tunable AI (aggression, memory, explosives, cheat round, strength).
 - Hire pool mixes humans, every alien race/rank and tanks, priced by capability; any unit except tanks carries
   items (yes, a Chryssalid with a grenade). Picked-up gear is usable at once (no research).
 - In: psionics/mind control, armor, HWPs. Out: civilians, morale/panic/berserk.
@@ -26,6 +29,7 @@ about how to work on it.
   helpers and previews): `state.ts` (Battle/Unit/Item), `tileengine.ts` (voxel LOS/LOF, lighting, explosions,
   doors, gravity), `pathfinding.ts`, `actions.ts` (`GameRules.apply` — every command goes through here),
   `mapgen.ts`, `setup.ts`, `view.ts` (per-player fog-of-war views/diffs), `ai.ts` (OpenXcom AIModule port),
+  `coop.ts` (co-op squads: who controls which unit, lock-ins, AFK — the engine itself only knows squads),
   `stats.ts`/`record.ts` (per-unit match statistics), `serialize.ts`.
 - `shared/rules/` — `generated.json` (from `tools/convert-rules.ts`, OpenXcom xcom1 rulesets), `catalog.ts`
   (prices, pool generation, loadout validation, budget guide), `value.ts` (price model), `calibration.json`
@@ -71,6 +75,10 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   sources. Prefer the Edit tool for exact multi-line edits; if scripting, normalize `\r\n` first.
 - **Bun/JavaScriptCore does proper tail calls**: accidental self-recursion hangs forever instead of throwing a
   stack overflow (this froze the server once via `armorPrice`). Watch for it after search-and-replace edits.
+- Co-op lives in the server + `coop.ts`: a battle "player" is a squad; `PlayerState.members` are its people,
+  `Unit.controller` who commands a unit. Server-side checks (`mayCommand`) gate commands; "endturn" from a member
+  is a lock-in toggle. Updates carry `by` (who acted) so a client only waits for its own; rejected commands reply
+  `noUpdate`. Bot and AFK play share `runAI` (`turnSteps(rules, only)` plays a subset without ending the turn).
 - Engine changes must keep the fog of war intact: clients only get what `extractView` sends; never leak enemy
   positions/inventories. The AI uses the authoritative battle but only "knows" enemies it has seen (OpenXcom
   rules, including its round-20 cheat).
@@ -89,5 +97,6 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
 Playable end to end locally: lobby (hire/equip shop with drag-and-drop, budget bar, AI squads, settings reuse,
 host message, random environment/time), battlescape (original rules, fog of war, reaction fire, psi, explosives,
 blaster waypoints, supply drops/crates, minimap, exposure readout on move preview, music + sfx toggles, turn
-chime), match statistics + reports, bot tournaments and price calibration. Optional/not done: HUD rank icons,
+chime), match statistics + reports, bot tournaments and price calibration, co-op squads (lock-in turns, AFK →
+AI, unit hand-over) and per-bot AI settings (branch `feature/coop-squads`). Optional/not done: HUD rank icons,
 alien UFOpaedia portraits, a TFTD-style narrower damage roll (offered, not requested).

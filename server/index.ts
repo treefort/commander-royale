@@ -4,7 +4,7 @@ import { existsSync, statSync } from "node:fs";
 import { currentUser, googleStart, googleCallback, devLogin, logout, DEV_LOGIN, googleEnabled, renameUser, PUBLIC_URL } from "./auth.ts";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
-  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, resumeBots } from "./game.ts";
+  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = join(import.meta.dir, "..");
@@ -114,7 +114,11 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
         if (id && req.method === "POST") {
           let e: string | null = null;
           switch (action) {
-            case "join": e = joinMatch(id, user); break;
+            case "join": {
+              const o = await body<{ squad?: string }>(req);
+              e = joinMatch(id, user, o.squad ? String(o.squad) : undefined);
+              break;
+            }
             case "leave": e = leaveMatch(id, user); break;
             case "settings": e = updateSettings(id, user, (await body<{ settings?: object }>(req)).settings ?? {}); break;
             case "loadout": {
@@ -123,7 +127,17 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
             }
             case "ready": e = setReady(id, user, !!(await body<{ ready?: boolean }>(req)).ready); break;
             case "start": e = startMatch(id, user); break;
-            case "addbot": e = addBot(id, user, String((await body<{ strategy?: string }>(req)).strategy ?? "random")); break;
+            case "addbot": {
+              const o = await body<{ strategy?: string; ai?: object }>(req);
+              e = addBot(id, user, String(o.strategy ?? "random"), o.ai);
+              break;
+            }
+            case "tunebot": {
+              const o = await body<{ botId?: string; ai?: object }>(req);
+              e = tuneBot(id, user, String(o.botId ?? ""), o.ai);
+              break;
+            }
+            case "squad": e = joinSquad(id, user, String((await body<{ leader?: string }>(req)).leader ?? "")); break;
             case "removebot": e = removeBot(id, user, String((await body<{ botId?: string }>(req)).botId ?? "")); break;
             default: return err("Unknown action", 404);
           }

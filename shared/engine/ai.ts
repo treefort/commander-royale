@@ -24,6 +24,7 @@ import { BattleType, DamageType, itemRule, armorRule, explosionRadius, UNITS, IN
 import { canStand } from "./mapgen.ts";
 import { type GameRules, type Command, type Hand } from "./actions.ts";
 import { RNG } from "./rng.ts";
+import type { BotTuning } from "../protocol.ts";
 
 export interface AIOptions {
   /** after this round every bot knows where all enemies are (OpenXcom's "cheat turn", default 20) */
@@ -42,6 +43,12 @@ export interface AIOptions {
 export const DEFAULT_AI: AIOptions = {
   cheatTurn: 20, difficulty: 4, grenadeTurn: 3, blasterTurn: 3, personalities: false, intelligence: 4, aggression: 1,
 };
+
+/** A computer squad's lobby settings as AI options. */
+export function aiOptionsFor(t: BotTuning | undefined): AIOptions {
+  if (!t) return DEFAULT_AI;
+  return { ...DEFAULT_AI, aggression: t.aggression, intelligence: t.intelligence, difficulty: t.difficulty, cheatTurn: t.cheatTurn, personalities: t.personalities };
+}
 
 const enum Mode { PATROL = 0, AMBUSH = 1, COMBAT = 2, ESCAPE = 3 }
 
@@ -133,8 +140,11 @@ export class AIPlayer {
     for (const _ of this.turnSteps(rules));
   }
 
-  /** The same turn, one action at a time (the server paces bot turns so people can watch). */
-  *turnSteps(rules: Pick<GameRules, "apply">): Generator<void> {
+  /**
+   * The same turn, one action at a time (the server paces bot turns so people can watch). With `only`, just
+   * those units are played and the turn is left running (the AI standing in for AFK co-op players).
+   */
+  *turnSteps(rules: Pick<GameRules, "apply">, only?: (u: Unit) => boolean): Generator<void> {
     const b = this.b;
     if (b.phase !== Phase.PLAYING || b.current !== this.player) return;
     this.observe();
@@ -147,11 +157,11 @@ export class AIPlayer {
     const done = new Set<number>();
     const stillOurs = () => b.phase === Phase.PLAYING && b.current === this.player;
     for (let pass = 0; pass < 2 && stillOurs(); pass++) {
-      const units = b.units.filter((u) => u.owner === this.player && !isOut(u)).sort((a, c) => a.id - c.id);
+      const units = b.units.filter((u) => u.owner === this.player && !isOut(u) && (!only || only(u))).sort((a, c) => a.id - c.id);
       for (const u of units) {
         let counter = 0;
         for (let guard = 0; guard < 10 && counter < 2 && !done.has(u.id); guard++) {
-          if (!stillOurs() || isOut(u) || u.owner !== this.player || !unitCanAct(u)) break;
+          if (!stillOurs() || isOut(u) || u.owner !== this.player || !unitCanAct(u) || (only && !only(u))) break;
           if (u.tu <= 5) {
             done.add(u.id);
             break;
@@ -175,7 +185,7 @@ export class AIPlayer {
         }
       }
     }
-    if (stillOurs()) rules.apply(this.player, { c: "endturn" });
+    if (stillOurs() && !only) rules.apply(this.player, { c: "endturn" });
   }
 
   private apply(rules: Pick<GameRules, "apply">, cmd: Command): boolean {

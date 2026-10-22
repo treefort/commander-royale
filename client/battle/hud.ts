@@ -112,7 +112,7 @@ export function drawHud(s: Surface, ox: number, oy: number, A: Assets, b: Battle
       // terror units' built-in attacks have no inventory picture in UFO: label the slot so it's clear what to click
       const label = INNATE_LABEL[it.type] ?? (r.battleType === 3 ? "ATTACK" : "WEAPON");
       drawText(s, A.small, label, ox + x, oy + 20, 16 * 4 - 1, { align: "center", width: 32, contrast: true });
-      drawText(s, A.small, "(CLICK)", ox + x, oy + 30, 16 * 7 + 6, { align: "center", width: 32, contrast: true });
+      drawText(s, A.small, "(CLICK)", ox + x, oy + 30, 16 * 7 - 1, { align: "center", width: 32, contrast: true });
     }
     const rounds = roundsLeft(b, it);
     if (r.battleType === 1 && rounds !== Infinity) drawTinyText(s, String(rounds), ox + x + 6, oy + 6, 2);

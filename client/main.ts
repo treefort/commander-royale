@@ -25,9 +25,9 @@ async function route() {
     try {
       const state = await api(`/api/matches/${id}`);
       if (state.status === "lobby") {
-        // following an invite link joins the match automatically
-        if (!state.you && state.players.length < state.settings.maxPlayers) await api(`/api/matches/${id}/join`, { body: {} });
-        else if (!state.you) throw new Error("this match is full");
+        // following an invite link joins the match automatically (with a squad of your own if there's a slot,
+        // else as a teammate in a co-op squad with room; the server says if it's full)
+        if (!state.you) await api(`/api/matches/${id}/join`, { body: {} });
         current = new LobbyPage(root, id, me, go, () => route());
       } else {
         if (!state.you) throw new Error("this battle has already started without you");

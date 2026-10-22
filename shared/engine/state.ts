@@ -3,7 +3,7 @@ import { type MapData, TilePart, parseMcd, parseLoftemps } from "../formats/terr
 import { type Pos, UnitStatus, DIR_UP } from "./defs.ts";
 import { RNG } from "./rng.ts";
 import type { Stats, SlotId } from "../rules/index.ts";
-import type { MatchSettings } from "../protocol.ts";
+import type { MatchSettings, BotTuning } from "../protocol.ts";
 import { newStats, type BattleStats } from "./stats.ts";
 
 /** Supplies raw game files (server: from disk, client: from the asset cache). */
@@ -95,6 +95,8 @@ export interface Unit {
   value: number; // hire price, for scoring
   recruitId: string; // pool entry the unit was hired from ("spawn" for zombies etc.)
   hwp: boolean;
+  /** co-op: user id of the squad member who commands this unit ("" or missing: anyone in the squad) */
+  controller?: string;
 }
 
 export interface Item {
@@ -120,6 +122,21 @@ export interface PlayerState {
   eliminated: boolean;
   surrendered: boolean;
   endedTurnCount: number;
+  /** the people sharing this squad, its leader (userId) first; missing for computer squads and old saves */
+  members?: SquadMemberState[];
+  /** a computer squad's AI settings */
+  ai?: BotTuning;
+}
+
+export interface SquadMemberState {
+  userId: string;
+  name: string;
+  /** done for this turn (cleared when the squad's next turn begins) */
+  locked: boolean;
+  /** asked the AI to play their units */
+  afk: boolean;
+  /** offline long enough that the AI plays their units (only with the co-op "afkAI" setting) */
+  away: boolean;
 }
 
 export interface SupplyDrop {

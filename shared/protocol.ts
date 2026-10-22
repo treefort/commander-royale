@@ -28,6 +28,54 @@ export interface MatchSettings {
   psionics: boolean;
   supplyDrops: { enabled: boolean; everyRounds: number; warningRounds: number; tier: LootTier };
   turnTimer: number; // seconds per turn, 0 = unlimited
+  coop: CoopSettings;
+}
+
+/** Several people sharing one squad: each controls some of its units, and they all act at once on its turn. */
+export interface CoopSettings {
+  /** people per squad (1 = everyone fields their own squad) */
+  squadSize: number;
+  /** a shared squad's turn ends once every member has locked in, or only when the turn timer runs out */
+  turnEnd: "lockin" | "timer";
+  /** the AI plays the units of people who have been offline for a while (anyone can also go AFK by hand) */
+  afkAI: boolean;
+}
+
+export const MAX_SQUAD_SIZE = 10;
+
+/** How a computer squad plays (the lobby's "AI settings"), mapped onto the AI's options on the server. */
+export interface BotTuning {
+  /** 0 cautious (aimed shots, retreats) .. 3 reckless (snap shots, charges) */
+  aggression: number;
+  /** rounds it remembers where it last saw an enemy */
+  intelligence: number;
+  /** 0..4: how keen it is on grenades and other explosives */
+  difficulty: number;
+  /** after this round it knows where every enemy is */
+  cheatTurn: number;
+  /** each race plays with its own temperament (Sectoids cautious, Chryssalids reckless...) */
+  personalities: boolean;
+  /** budget and seats, as a percentage of the match's (handicap the enemy for co-op games) */
+  strength: number;
+}
+
+export const DEFAULT_BOT_TUNING: BotTuning = { aggression: 1, intelligence: 4, difficulty: 4, cheatTurn: 20, personalities: false, strength: 100 };
+
+export function sanitizeBotTuning(raw: unknown): BotTuning {
+  const t = (raw && typeof raw === "object" ? raw : {}) as Partial<BotTuning>;
+  const d = DEFAULT_BOT_TUNING;
+  const clamp = (v: unknown, lo: number, hi: number, def: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : def;
+  };
+  return {
+    aggression: clamp(t.aggression, 0, 3, d.aggression),
+    intelligence: clamp(t.intelligence, 1, 10, d.intelligence),
+    difficulty: clamp(t.difficulty, 0, 4, d.difficulty),
+    cheatTurn: clamp(t.cheatTurn, 1, 99, d.cheatTurn),
+    personalities: t.personalities === undefined ? d.personalities : !!t.personalities,
+    strength: clamp(t.strength, 25, 400, d.strength),
+  };
 }
 
 export const BIOMES: { id: Biome; name: string; levels: number }[] = [
@@ -102,6 +150,7 @@ export function defaultSettings(): MatchSettings {
     psionics: true,
     supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed" },
     turnTimer: 0,
+    coop: { squadSize: 1, turnEnd: "lockin", afkAI: false },
   };
 }
 
@@ -112,6 +161,8 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : def;
   };
   const sd = s.supplyDrops ?? d.supplyDrops;
+  const co: Partial<CoopSettings> = s.coop ?? d.coop;
+  const turnTimer = clamp(s.turnTimer, 0, 3600, 0);
   return {
     name: String(s.name ?? d.name).slice(0, 40) || d.name,
     notes: String(s.notes ?? "").split(String.fromCharCode(13)).join("").slice(0, 1000),
@@ -135,7 +186,13 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
       warningRounds: clamp(sd.warningRounds, 0, 10, 2),
       tier: (["basic", "advanced", "alien", "mixed"] as const).includes(sd.tier as LootTier) ? sd.tier : "mixed",
     },
-    turnTimer: clamp(s.turnTimer, 0, 3600, 0),
+    turnTimer,
+    coop: {
+      squadSize: clamp(co.squadSize, 1, MAX_SQUAD_SIZE, 1),
+      // "end on the timer" needs a timer
+      turnEnd: co.turnEnd === "timer" && turnTimer > 0 ? "timer" : "lockin",
+      afkAI: !!co.afkAI,
+    },
   };
 }
 
@@ -156,6 +213,8 @@ export interface Recruit {
 /** One unit of a player's squad as configured in the loadout screen. */
 export interface SquadMember {
   recruitId: string;
+  /** co-op: user id of the squad member who controls this unit in battle (unset: dealt out in turn) */
+  controller?: string;
   armor: string; // soldiers only; aliens/HWPs use their own
   items: { type: string; slot: string; x: number; y: number; ammo?: string }[];
 }

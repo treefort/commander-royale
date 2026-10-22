@@ -1,5 +1,5 @@
 import { api, el, money } from "../api.ts";
-import { BIOMES, UFO_CHOICES, defaultSettings, recommendedMapBlocks, biomeName, type MatchSettings } from "../../shared/protocol.ts";
+import { BIOMES, UFO_CHOICES, MAX_SQUAD_SIZE, defaultSettings, recommendedMapBlocks, biomeName, type MatchSettings } from "../../shared/protocol.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
 
 export interface Me {
@@ -127,6 +127,7 @@ function settingsSummary(s: MatchSettings): string {
 /** The match settings form (create + edit). Budget guidance updates live. */
 export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings) => Promise<void>, submitLabel: string, readOnly = false): HTMLElement {
   const s: MatchSettings = structuredClone(initial);
+  s.coop ??= defaultSettings().coop; // settings of matches from before co-op
   let mapTouched = s.mapBlocks !== recommendedMapBlocks(s.maxPlayers, s.budget);
   const f = el("div", { class: "form" });
   const err = el("div", { class: "err full" });
@@ -170,6 +171,12 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   notesInput.addEventListener("input", () => (s.notes = notesInput.value));
   field("Message for players", notesInput);
   field("Players", num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 2, 8), "2–8 squads, free-for-all");
+  field("Co-op", el("div", { class: "row" },
+    el("span", {}, "up to"), Object.assign(num(() => s.coop.squadSize, (v) => (s.coop.squadSize = v), 1, MAX_SQUAD_SIZE), { style: "width: 60px" }),
+    el("span", {}, "people per squad; turn ends"),
+    sel([{ id: "lockin", name: "when everyone locks in" }, { id: "timer", name: "on the turn timer" }] as const, () => s.coop.turnEnd, (v) => (s.coop.turnEnd = v)),
+    check(() => s.coop.afkAI, (v) => (s.coop.afkAI = v), "AI plays for offline players")),
+    "Several people can share a squad, each commanding some of its units, all moving at once on its turn. Team up against computer squads!");
   field("Environment", sel([{ id: "RANDOM" as const, name: "Random (rolled when the battle starts)" }, ...BIOMES.map((b) => ({ id: b.id, name: b.name }))], () => s.biome, (v) => (s.biome = v)));
   field("Time of day", sel([{ id: "random", name: "Random (rolled when the battle starts)" }, { id: "day", name: "Day" }, { id: "dusk", name: "Dusk" }, { id: "night", name: "Night" }] as const, () => s.timeOfDay, (v) => (s.timeOfDay = v)), "At night humans see 9 tiles unless an area is lit; aliens see in the dark");
   field("Landed UFO", sel(UFO_CHOICES, () => s.ufo, (v) => (s.ufo = v)), "Placed in the middle of the map");
@@ -191,7 +198,7 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     el("span", {}, "rounds, announced"), num(() => s.supplyDrops.warningRounds, (v) => (s.supplyDrops.warningRounds = v), 0, 10),
     el("span", {}, "rounds ahead")));
   field("Drop contents", sel([{ id: "basic", name: "Basic (rifles, grenades, medikits)" }, { id: "advanced", name: "Advanced (cannons, lasers, scanners)" }, { id: "alien", name: "Alien tech (plasma, blasters, psi)" }, { id: "mixed", name: "Mixed (weighted random)" }] as const, () => s.supplyDrops.tier, (v) => (s.supplyDrops.tier = v)));
-  field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously)");
+  field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Co-op squads ending on the timer need one");
   f.append(err);
   if (!readOnly) {
     f.append(el("div", { class: "full" }, el("button", { class: "primary", onclick: async (e: Event) => {

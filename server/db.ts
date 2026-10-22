@@ -51,9 +51,23 @@ CREATE TABLE IF NOT EXISTS match_records (
 );
 `);
 
+// columns added after the first release
+for (const sql of [
+  // co-op: user id of the squad leader this player helps (NULL: leads their own squad)
+  "ALTER TABLE match_players ADD COLUMN squad_of TEXT",
+  // computer squads: AI settings (BotTuning JSON)
+  "ALTER TABLE match_players ADD COLUMN ai TEXT",
+]) {
+  try {
+    db.exec(sql);
+  } catch {
+    /* already there */
+  }
+}
+
 export interface UserRow { id: string; google_sub: string | null; email: string | null; name: string; picture: string | null; created: number }
 export interface MatchRow { id: string; owner: string; settings: string; status: string; seed: number; pool: string; battle: string | Uint8Array | null; turn_deadline: number | null; created: number; updated: number }
-export interface PlayerRow { match_id: string; user_id: string; seat: number; name: string; loadout: string | null; ready: number }
+export interface PlayerRow { match_id: string; user_id: string; seat: number; name: string; loadout: string | null; ready: number; squad_of: string | null; ai: string | null }
 
 export function randomId(len = 12): string {
   const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";

@@ -1,5 +1,5 @@
 // Turning a configured match (settings, players, loadouts) into a running battle.
-import { type Battle, type FileSource, Phase } from "./state.ts";
+import { type Battle, type FileSource, type Unit, Phase } from "./state.ts";
 import { generateMap, canStand } from "./mapgen.ts";
 import { createUnit, giveItem, spawnGroundItem } from "./units.ts";
 import { directionTo, type Pos } from "./defs.ts";
@@ -7,12 +7,16 @@ import { recalcAllLighting, recalculateAllFOV } from "./tileengine.ts";
 import { GameRules } from "./actions.ts";
 import { BattleEvents } from "./events.ts";
 import { armorRule, unitRule, itemRule, fitsSlot, livingWeaponFor, type PlacedItem } from "../rules/index.ts";
-import type { MatchSettings, Recruit, Loadout } from "../protocol.ts";
+import type { MatchSettings, Recruit, Loadout, BotTuning } from "../protocol.ts";
+import { dealUnits } from "./coop.ts";
 
 export interface SetupPlayer {
   userId: string;
   name: string;
   loadout: Loadout;
+  /** the people playing this squad, leader first (co-op); omitted for computer squads */
+  members?: { userId: string; name: string }[];
+  ai?: BotTuning;
 }
 
 function standZ(b: Battle, x: number, y: number, size: number): number {
@@ -22,7 +26,11 @@ function standZ(b: Battle, x: number, y: number, size: number): number {
 
 export function createBattle(settings: MatchSettings, players: SetupPlayer[], pool: Recruit[], seed: number, files: FileSource): Battle {
   const { battle: b, zones } = generateMap(settings, players.length, seed, files);
-  b.players = players.map((p, i) => ({ index: i, userId: p.userId, name: p.name, eliminated: false, surrendered: false, endedTurnCount: 0 }));
+  b.players = players.map((p, i) => ({
+    index: i, userId: p.userId, name: p.name, eliminated: false, surrendered: false, endedTurnCount: 0,
+    ...(p.members ? { members: p.members.map((m) => ({ userId: m.userId, name: m.name, locked: false, afk: false, away: false })) } : {}),
+    ...(p.ai ? { ai: p.ai } : {}),
+  }));
   const center = { x: b.sx / 2, y: b.sy / 2, z: 0 };
   players.forEach((p, pi) => {
     const zone = zones[pi];
@@ -41,6 +49,8 @@ export function createBattle(settings: MatchSettings, players: SetupPlayer[], po
     // big units first so they find room
     members.sort((a, c) => sizeOf(c.r) - sizeOf(a.r));
     let first: Pos | null = null;
+    const created: Unit[] = [];
+    const picks: (string | undefined)[] = [];
     for (const { m, r } of members) {
       const size = sizeOf(r);
       let placed: Pos | null = null;
@@ -52,6 +62,8 @@ export function createBattle(settings: MatchSettings, players: SetupPlayer[], po
       }
       if (!placed) continue;
       const u = createUnit(b, r, m.armor, pi, placed, directionTo(placed, center));
+      created.push(u);
+      picks.push(m.controller);
       if (!first) first = placed;
       if (u.hasInventory) {
         const innate = r.kind === "alien" ? livingWeaponFor(unitRule(r.type)) : null;
@@ -64,6 +76,11 @@ export function createBattle(settings: MatchSettings, players: SetupPlayer[], po
           giveItem(b, u, it.type, it.slot, it.x, it.y, it.ammo);
         }
       }
+    }
+    // co-op: everyone in the squad gets units of their own (in hiring order, so the deal is predictable)
+    if (p.members) {
+      const order = created.map((u, i) => ({ u, i, k: p.loadout.squad.findIndex((x) => x.recruitId === u.recruitId) })).sort((a, c) => a.k - c.k);
+      dealUnits(order.map((o) => o.u), p.members.map((x) => x.userId), order.map((o) => picks[o.i]));
     }
     // spare equipment lies on the ground where the squad lands
     if (first) {
