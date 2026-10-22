@@ -145,7 +145,7 @@ export function listMatches(user: UserRow) {
         const cur = meta.players[meta.current];
         turnOf = cur?.name ?? null;
         // co-op: it's still "your turn" until you've locked in
-        const mine = cur?.members ? cur.members.some((x) => x.userId === user.id && !x.locked && !(x as { observer?: boolean }).observer) : cur?.userId === user.id;
+        const mine = cur?.members ? cur.members.some((x) => x.userId === user.id && !x.locked && !(x as { observer?: boolean; aiThisTurn?: boolean }).observer && !(x as { aiThisTurn?: boolean }).aiThisTurn) : cur?.userId === user.id;
         yourTurn = mine && m.status === "playing";
         round = meta.round;
         winner = meta.winner >= 0 ? meta.players[meta.winner]?.name ?? null : null;
@@ -542,7 +542,8 @@ function sendFullView(ws: Sock) {
   // keep the player's memory of the map across reconnects (only a server restart forgets it)
   const m = getMatch(h.id)!;
   const gm = isObserver(h.battle, seat, ws.data.user.id);
-  send(ws, { t: "view", view: extractView(h.battle, seat, sentFor(h, seat, gm), true, gm), deadline: m.turn_deadline });
+  // the host may have the AI play for whoever holds up a turn
+  send(ws, { t: "view", view: extractView(h.battle, seat, sentFor(h, seat, gm), true, gm), deadline: m.turn_deadline, host: m.owner === ws.data.user.id });
 }
 
 export function wsClose(ws: Sock) {
@@ -602,9 +603,12 @@ export function wsMessage(ws: Sock, raw: string) {
     for (const s of sockets.get(ws.data.matchId) ?? []) send(s, { t: "chat", from: ws.data.user.name, text });
     return;
   }
-  if (msg.t === "afk" || msg.t === "assign") {
+  if (msg.t === "afk" || msg.t === "assign" || msg.t === "aiplay") {
     const h = loadHost(ws.data.matchId);
-    const error = !h ? "STR_NO_BATTLE" : msg.t === "afk" ? setAfk(h, ws.data.user.id, !!msg.on) : assignUnit(h, ws.data.user.id, Number(msg.unit), String(msg.to ?? ""));
+    const error = !h ? "STR_NO_BATTLE"
+      : msg.t === "afk" ? setAfk(h, ws.data.user.id, !!msg.on)
+      : msg.t === "aiplay" ? hostAiPlay(h, ws.data.user.id)
+      : assignUnit(h, ws.data.user.id, Number(msg.unit), String(msg.to ?? ""));
     send(ws, { t: "result", seq: msg.seq, ok: !error, error: error ?? undefined, noUpdate: !!error });
     return;
   }
@@ -656,8 +660,34 @@ function setAfk(h: Host, userId: string, on: boolean): string | null {
   if (!me || b.phase !== Phase.PLAYING) return "STR_NOT_IN_BATTLE";
   if (me.observer) return "STR_GAME_MASTER_WATCHES";
   me.afk = on;
-  if (!on) me.away = false;
+  // coming back takes your units over again, also from an AI the host called in for this turn
+  if (!on) {
+    me.away = false;
+    delete me.aiThisTurn;
+  }
   publish(h, new BattleEvents(b), false, userId);
+  return null;
+}
+
+/**
+ * The host (match creator / game master) keeps a stalled game moving: the AI plays the rest of this turn for
+ * everyone the current turn is waiting on, and the turn then goes on as if they'd locked in.
+ */
+function hostAiPlay(h: Host, userId: string): string | null {
+  const b = h.battle;
+  if (getMatch(h.id)?.owner !== userId) return "STR_HOST_ONLY";
+  if (b.phase !== Phase.PLAYING) return "STR_GAME_OVER";
+  const p = b.players[b.current];
+  if (!p || isBot(p.userId)) return "STR_AI_ALREADY_PLAYING";
+  if (!p.members) return "STR_NOT_SUPPORTED_IN_OLD_BATTLES";
+  // the host never hands themselves over this way (that's AFK, in Options)
+  const waiting = waitingFor(b, b.current).filter((m) => m.userId !== userId);
+  if (!waiting.length) return "STR_NOBODY_TO_WAIT_FOR";
+  for (const m of waiting) m.aiThisTurn = true;
+  const ev = new BattleEvents(b);
+  ev.msg("STR_HOST_HANDED_TO_AI", ev.all(), waiting.map((m) => m.name).join(", "));
+  // publishing starts the AI on their units; when it's done the turn ends like any other
+  publish(h, ev, false, userId);
   return null;
 }
 

@@ -139,6 +139,8 @@ export interface SquadMemberState {
   away: boolean;
   /** a co-op scenario's game master who isn't playing: sees the whole battle, commands nothing */
   observer?: boolean;
+  /** the host had the AI play this person's moves for the rest of this turn (cleared when the squad's next turn begins) */
+  aiThisTurn?: boolean;
 }
 
 export interface SupplyDrop {

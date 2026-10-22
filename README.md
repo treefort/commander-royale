@@ -135,6 +135,11 @@ ends on the turn timer" — only when the timer runs out. **G** hands the select
 own units, or any as the leader). Only the leader can surrender. The top right lists the squad with who is still
 playing, done, AFK or offline.
 
+**Keeping a game moving**: whenever a turn is waiting on someone, the host (the match creator / game master) gets
+an **"AI: play this turn for ..."** button under the waiting banner. The AI plays the rest of that turn for whoever
+hasn't moved or locked in, then the game moves on; next turn they're back in charge (or straight away, by switching
+AFK off in Options).
+
 **AFK**: Options → "AFK (AI plays)" hands your units to the AI until you switch it off, and it's never waited for.
 With "AI plays for offline players" set, anyone offline for more than 30 s (`AWAY_GRACE_MS`) is played by the AI
 too, until they reconnect. This also works for a one-person squad.

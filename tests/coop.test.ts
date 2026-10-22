@@ -207,3 +207,56 @@ test("computer squads take AI settings, and their strength scales what they hire
   expect(seatsOf()).toBeGreaterThan(before);
   expect(game.joinMatch(id, fay, bot.botId!)).toBe("Computer squads don't take teammates");
 });
+
+test("the host can have the AI play the turn of someone who isn't responding", async () => {
+  if (!process.env.DB_PATH) process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), "xcom-coop-")), "test.sqlite");
+  const { db } = await import("../server/db.ts");
+  const game = await import("../server/game.ts");
+  const mkUser = (id: string) => {
+    db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
+    return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
+  };
+  const [hal, ivy] = ["ha_hal", "ha_ivy"].map(mkUser);
+  const { id } = game.createMatch(hal, { budget: 150_000, biome: "CULTA", timeOfDay: "day" });
+  expect(game.joinMatch(id, ivy)).toBeNull();
+  const lobby = game.lobbyState(id, hal)!;
+  for (const [u, seed] of [[hal, 1], [ivy, 2]] as const) {
+    expect(game.saveLoadout(id, u, buildSquad("swarm", lobby.settings, lobby.pool, new RNG(seed))).error).toBeUndefined();
+    expect(game.setReady(id, u, true)).toBeNull();
+  }
+  expect(game.startMatch(id, hal)).toBeNull();
+  const sockets = [hal, ivy].map((user) => ({ data: { user, matchId: id }, sent: [] as string[], send(m: string) { this.sent.push(m); }, close() {} }));
+  for (const s of sockets) game.wsOpen(s as never);
+  const [sh, si] = sockets;
+  const msgs = (s: typeof sh) => s.sent.map((m) => JSON.parse(m));
+  const lastView = (s: typeof sh) => msgs(s).filter((m) => m.view).at(-1)!.view;
+  const result = (s: typeof sh, seq: number) => msgs(s).find((m) => m.t === "result" && m.seq === seq);
+  const send = (s: typeof sh, msg: object) => game.wsMessage(s as never, JSON.stringify(msg));
+  expect(msgs(sh).find((m) => m.t === "view").host).toBe(true);
+  expect(msgs(si).find((m) => m.t === "view").host).toBe(false);
+  const halSeat = lastView(sh).you, ivySeat = lastView(si).you;
+  // make it Ivy's turn
+  if (lastView(sh).current === halSeat) send(sh, { t: "cmd", seq: 1, cmd: { c: "endturn" } });
+  expect(lastView(sh).current).toBe(ivySeat);
+  const round = lastView(sh).round;
+  // only the host may, and only while someone is holding the turn up
+  send(si, { t: "aiplay", seq: 2 });
+  expect(result(si, 2)).toMatchObject({ ok: false, error: "STR_HOST_ONLY" });
+  send(sh, { t: "aiplay", seq: 3 });
+  expect(result(sh, 3).ok).toBe(true);
+  expect(msgs(si).some((m) => m.t === "update" && m.events.some((e: { text?: string }) => e.text === "STR_HOST_HANDED_TO_AI"))).toBe(true);
+  // the AI plays Ivy's units and hands the turn on
+  const t0 = Date.now();
+  while (Date.now() - t0 < 60_000 && lastView(sh).current === ivySeat) await Bun.sleep(200);
+  expect(lastView(sh).current).toBe(halSeat);
+  expect(msgs(sh).some((m) => m.t === "update" && m.by === "" && m.events.length)).toBe(true);
+  // just for that turn: next time it's Ivy's again, she's back in charge
+  send(sh, { t: "cmd", seq: 4, cmd: { c: "endturn" } });
+  expect(lastView(si).current).toBe(ivySeat);
+  expect(lastView(si).round).toBeGreaterThan(round);
+  expect(lastView(si).players[ivySeat].members[0].aiThisTurn).toBeUndefined();
+  // and with nobody to wait for (it's Hal's own call), there's nothing to hand over
+  send(si, { t: "cmd", seq: 5, cmd: { c: "endturn" } });
+  send(sh, { t: "aiplay", seq: 6 });
+  expect(result(sh, 6).error).toBe("STR_NOBODY_TO_WAIT_FOR");
+}, 120_000);

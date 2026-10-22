@@ -61,6 +61,9 @@ const MESSAGES: Record<string, string> = {
   STR_ONLY_LEADER_SURRENDERS: "Only the squad leader can surrender",
   STR_GAME_MASTER_WATCHES: "The game master watches: the team gives the orders",
   STR_REINFORCEMENTS_ARRIVED: "{0}: reinforcements have arrived!",
+  STR_HOST_HANDED_TO_AI: "The host had the AI play this turn for {0}",
+  STR_HOST_ONLY: "Only the host can do that",
+  STR_NOBODY_TO_WAIT_FOR: "Nobody is holding up this turn",
 };
 function msgText(key: string, arg?: string) {
   return (MESSAGES[key] ?? tr(key)).replace("{0}", arg ?? "");
@@ -91,6 +94,10 @@ export class BattleScreen {
   processing = false;
   /** the update being animated is someone else's (a co-op teammate's): it doesn't hold up your own orders */
   processingOthers = false;
+  /** the match creator: may have the AI play for whoever holds up a turn */
+  isHost = false;
+  /** where the host's "AI: play for ..." button was drawn this frame (null: not shown) */
+  private hostAiRect: { x: number; y: number; w: number; h: number } | null = null;
   busy = false;
   seq = 0;
   pending = new Map<number, (r: { ok: boolean; error?: string; private?: any }) => void>();
@@ -177,6 +184,7 @@ export class BattleScreen {
   private async onMessage(m: any) {
     switch (m.t) {
       case "view":
+        this.isHost = !!m.host;
         await this.onFullView(m.view as PlayerView);
         this.deadline = m.deadline;
         break;
@@ -779,7 +787,8 @@ export class BattleScreen {
       drawFrame(s, x, y, w, 20, 16 * 2, 3, 15);
       // flashes red/yellow; glyph shades add up to +15 to the base colour, so each base stays 16 below its ramp's end
       drawText(s, A.big, text, x, y + 3, this.st.animFrame % 4 < 2 ? 16 * 2 - 1 : 16 * 1 - 1, { align: "center", width: w, contrast: true });
-    }
+      this.drawHostAiButton(y + 24);
+    } else this.drawHostAiButton(3);
     this.drawSquadMembers();
     // squads
     b.players.forEach((p, i) => {
@@ -1015,7 +1024,7 @@ export class BattleScreen {
         const afkable = me && !me.observer;
         button(cx + 40, cy + 68, afkable ? 116 : 240, 16, `PATH PREVIEW: ${this.pathPreview ? "ON" : "OFF"}`, () => { this.pathPreview = !this.pathPreview; try { localStorage.setItem("xcom.pathPreview", this.pathPreview ? "1" : "0"); } catch { /* */ } });
         // the AI plays your units while you're away (co-op squads, or a solo squad you want auto-played)
-        if (afkable) button(cx + 164, cy + 68, 116, 16, `AFK (AI PLAYS): ${me.afk ? "ON" : "OFF"}`, () => this.toggleAfk(), me.afk ? 16 * 2 + 3 : 3);
+        if (afkable) button(cx + 164, cy + 68, 116, 16, `AFK (AI PLAYS): ${isAfk(me) ? "ON" : "OFF"}`, () => this.toggleAfk(), isAfk(me) ? 16 * 2 + 3 : 3);
         const help = [
           "LEFT CLICK: SELECT / MOVE (CLICK TWICE) / FIRE",
           "RIGHT CLICK: TURN OR OPEN DOOR / CANCEL",
@@ -1616,7 +1625,8 @@ export class BattleScreen {
   private async toggleAfk() {
     const me = this.member();
     if (!me) return;
-    const on = !me.afk;
+    // also how you take your units back from an AI the host called in for this turn
+    const on = !isAfk(me);
     const r = await this.sendMsg({ t: "afk", on });
     if (r.ok) this.say(on ? "AFK: the AI plays your units until you come back" : "Welcome back: your units are yours again");
   }
@@ -1655,6 +1665,37 @@ export class BattleScreen {
       this.st.camera.y += dy;
       this.updateHover();
     }
+  }
+
+  /** People the current turn is waiting on, other than you (what the host's AI button would play for). */
+  private stalledOn(): string[] {
+    const b = this.b;
+    if (!b || b.phase !== Phase.PLAYING) return [];
+    const p = b.players[b.current];
+    if (!p || p.userId.startsWith("bot:") || !p.members) return [];
+    // another squad's units are mostly hidden by the fog of war: go by who hasn't locked in (the server checks properly)
+    const waiting = b.current === this.you ? waitingFor(b, b.current) : p.members.filter((m) => !m.locked && !isAfk(m) && !m.observer);
+    return waiting.filter((m) => m.userId !== this.me.id).map((m) => m.name);
+  }
+
+  /** The host's way to keep a stalled game moving: the AI plays the rest of this turn for whoever isn't responding. */
+  private drawHostAiButton(y: number) {
+    this.hostAiRect = null;
+    const names = this.isHost ? this.stalledOn() : [];
+    if (!names.length) return;
+    const who = names.length > 2 ? `${names.length} PLAYERS` : names.join(" & ").toUpperCase();
+    const label = `AI: PLAY THIS TURN FOR ${who}`;
+    const w = Math.min(this.vw - 8, textWidth(this.assets.small, label) + 16), h = 14;
+    const r = { x: Math.floor((this.vw - w) / 2), y, w, h };
+    const hover = inRect(this.mouse.x, this.mouse.y, r.x, r.y, r.w, r.h);
+    drawFrame(this.surf, r.x, r.y, r.w, r.h, hover ? 16 * 4 : 16 * 0 + 3, 2, 15);
+    drawText(this.surf, this.assets.small, label, r.x, r.y + 3, hover ? 16 * 4 - 1 : 0, { align: "center", width: r.w, contrast: true });
+    this.hostAiRect = r;
+  }
+
+  private async hostAiPlay() {
+    // everyone (the host included) gets the server's "the host had the AI play..." message
+    if (this.stalledOn().length) await this.sendMsg({ t: "aiplay" });
   }
 
   private exitButtonRect() {
@@ -1723,6 +1764,11 @@ export class BattleScreen {
     if (this.b?.phase === Phase.FINISHED) {
       const r = this.exitButtonRect();
       if (inRect(x, y, r.x, r.y, r.w, r.h)) return this.onExit();
+    }
+    const ai = this.hostAiRect;
+    if (ai && inRect(x, y, ai.x, ai.y, ai.w, ai.h)) {
+      if (!this.inputLocked()) await this.hostAiPlay();
+      return;
     }
     // psi / launch buttons
     const sel = this.selectedUnit();

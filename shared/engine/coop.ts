@@ -19,7 +19,7 @@ export function memberOf(b: Battle, seat: number, userId: string): SquadMemberSt
 
 /** The AI plays this person's units (they went AFK, or have been offline too long). */
 export function isAfk(m: SquadMemberState): boolean {
-  return m.afk || m.away;
+  return m.afk || m.away || !!m.aiThisTurn;
 }
 
 /**
