@@ -1,0 +1,175 @@
+# X-COM: Battlescape (multiplayer)
+
+A browser port of the X-COM: UFO Defense battlescape, rebuilt for 2–8 player free-for-all squad battles. It uses
+the original game's graphics, maps, terrain and sounds (loaded from your copy of the game) and the original rules
+(time units, accuracy, reaction fire, voxel line of fire, destructible terrain, fire, smoke, night lighting,
+psionics...), with a multiplayer layer on top: Google sign-in, lobbies with invite links, a shared recruit pool
+priced by ability, a budget-based armory and supply drops.
+
+## Running locally
+
+Requirements: [Bun](https://bun.sh) 1.3+ and an X-COM: UFO Defense install (GOG/Steam).
+
+```sh
+bun install
+# copy the game data folders into ./gamedata (or point GAME_DIR at your install)
+cp -r "<X-COM install>/"{GEODATA,GEOGRAPH,MAPS,ROUTES,SOUND,TERRAIN,UFOGRAPH,UNITS} gamedata/
+bun tools/render-music.ts   # renders the General MIDI battle music to gamedata/MUSIC (needs ffmpeg)
+bun run dev          # builds the client and starts http://localhost:3000
+```
+
+Browsers can't play MIDI, so `render-music.ts` synthesizes the original battle tracks (GMTACTIC, GMENBASE,
+GMMARS, GMWIN, GMLOSE) once with spessasynth_core and the GeneralUser GS soundfont (downloaded to
+`tools/.cache` on first run) and encodes them as Ogg Opus. They're served like the other game files and deployed
+with the rest of `gamedata`. Music and sound effects can each be switched off, and their volumes set, from the
+battlescape's Options screen.
+
+Without Google credentials the server offers a **dev login** (type any name). To test multiplayer locally, open a
+second browser profile/incognito window and sign in under another name.
+
+Environment variables:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | 3000 | HTTP port |
+| `PUBLIC_URL` | `http://localhost:3000` | External URL (used for the OAuth redirect and secure cookies) |
+| `GAME_DIR` | `./gamedata` | Folder with the original game's data directories |
+| `DB_PATH` | `./data/xcom.sqlite` | SQLite database (accounts, sessions, matches, battle state) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | — | Enables "Sign in with Google" |
+| `DEV_LOGIN` | on when Google isn't configured | `0` disables the dev login (always do this in production) |
+
+### Google sign-in
+
+1. Google Cloud console → APIs & Services → Credentials → *Create OAuth client ID* → *Web application*.
+2. Authorized redirect URIs: `https://xcom.evanbooth.com/auth/google/callback` (and
+   `http://localhost:3000/auth/google/callback` for local testing).
+3. Download the client JSON; pass its `client_id`/`client_secret` as the environment variables above, or give the file
+   to the deploy script.
+
+## Deploying (DigitalOcean droplet)
+
+`deploy/deploy-xcom.py` follows the same pattern as gc.evanbooth.com (isolated `xcom` system user, pinned Bun,
+`/opt/xcom/releases/<timestamp>` + `current` symlink, hardened systemd unit, nginx proxy with WebSockets, certbot
+webroot certificate, state in `/var/lib/xcom/xcom.sqlite`):
+
+```sh
+bun run build
+python deploy/deploy-xcom.py --deploy --credentials path/to/client_secret.json
+```
+
+The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back up `/var/lib/xcom/xcom.sqlite` and
+`/etc/xcom/environment` along with the rest of the host.
+
+## How a match works
+
+1. **Create a match**: number of squads (2–8), environment (urban, farmland, forest, jungle, desert, mountains,
+   polar, Mars, alien base), time of day, optional landed UFO, map size (a recommendation is computed from the
+   player count and budget, and can be overridden), budget, seat limit, recruit pool size, technology level,
+   alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table) and an
+   optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
+2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby. The creator
+   can also add computer squads ("Add AI squad", with a hiring strategy); they hire automatically, are always
+   ready, and play their turns on the server one action at a time so you can watch.
+3. **Loadout**: every player hires from an identical copy of a randomly generated pool — rookies to veteran
+   commanders, every alien race and rank, and tanks. Prices follow ability (time units, health × armor, accuracy,
+   reactions, strength, psionics, innate weapons, flight, night vision, special abilities). Buy weapons, ammo,
+   explosives, equipment and armor, then kit out each unit on the original inventory screen. Unequipped gear is
+   dropped at your deployment zone.
+4. **Battle**: squads deploy around the map edge. Players take turns in a shuffled order; the game is asynchronous
+   (close the tab and come back) unless a turn timer is set. Last squad standing wins.
+
+### Rules notes
+
+- Original mechanics throughout: TU costs, snap/aimed/auto fire, the original accuracy spread, voxel line-of-fire,
+  armor facing, fatal wounds, stun, explosions that destroy terrain, fire and smoke spread, doors, UFO doors,
+  multi-level maps, flying, grenade fuses (they explode at the end of a turn), proximity grenades, flares, medikits,
+  motion scanner, mind probe, blaster bomb waypoints.
+- Reaction fire comes from any other squad's units that can see the moving unit.
+- Aliens see in the dark; humans see 9 tiles at night beyond lit areas. Each squad's units light the map only for
+  their own player.
+- Any unit except tanks can carry items (yes, you can give a Chryssalid a grenade). Chryssalid victims rise as
+  zombies for the Chryssalid's owner.
+- Mind control (Psi-Amp or innate alien psionics) hands a unit to the attacker until their next turn begins.
+- Picked-up equipment is usable at once — there's no research.
+- **Supply drops**: every N rounds a drop is announced to everyone with its map position and countdown; when it
+  lands, the crate's contents lie on the ground like a corpse pile — stand on it and open the inventory to grab gear.
+- Removed from the original on purpose: civilians, morale/panic/berserk.
+
+### Controls
+
+The move preview also shows how exposed the destination is: **EXP** is the share of sightlines from 6 and 12 tiles
+around (16 directions) that would reach your unit there, **KNEEL** the same if a soldier kneels, and **SEEN BY**
+how many enemies in view would have a line of fire. It uses the same voxel line-of-fire test as real shots, on the
+terrain you've explored (unexplored ground counts as open).
+
+Left click selects/moves (click a destination twice: the first click previews the path with TU left), fires once
+an action is chosen; right click turns the unit (or opens the door it faces) and cancels actions. Click a hand
+slot for its actions. Wheel or PgUp/PgDn changes the view level; arrows, WASD, screen edges or middle-drag scroll.
+Tab next unit, K kneel, I inventory, C center, M minimap, 1/2 left/right hand, Enter chat, hold Shift to speed up
+animations.
+
+## Architecture
+
+- `shared/engine` — the battle simulation (port of the original rules via OpenXcom's reference implementation):
+  map generation from the original map blocks, pathfinding, vision, voxel tracing, explosions, actions, turns.
+  Runs authoritatively on the server; the client uses the same code for rendering helpers and path previews.
+- `shared/formats` — decoders for the original PCK/TAB, SPK, SCR, MCD, MAP, LOFTEMPS and font files.
+- `shared/rules` — unit/item/armor/terrain data and the multiplayer catalog, pricing and budget guide.
+- `server` — Bun HTTP + WebSocket server, Google OAuth, SQLite persistence, lobby and battle hosting. Every action
+  is resolved on the server and each player receives only the events and map knowledge their units can see.
+- `client` — the lobby (HTML) and the battlescape, rendered in the original 8-bit palette onto a canvas.
+
+`bun test` runs headless random battles in several environments as a regression check.
+
+## Computer players and balance testing
+
+`shared/engine/ai.ts` is a port of OpenXcom's alien AI (patrol / ambush / combat / escape modes, fire-point
+search, reaction-aware retreats, psi, grenade and blaster-bomb targeting) adapted to free-for-all. Bots issue the
+same commands as players through `GameRules.apply`, so they can't cheat the rules; like OpenXcom's aliens they
+remember enemies they've seen for a few turns and, after round 20, know where everyone is. Additions over the
+original: no route nodes (our maps are generated), so patrols explore and hunt known enemies; bots reload, ready
+weapons from the backpack, pick up guns, and throw flares at night. It is not a strong player: it doesn't spread
+out, focus fire, heal, or use cover deliberately, so treat balance numbers as "what a simple, consistent player
+gets out of a purchase".
+
+`shared/rules/squads.ts` builds legal squads with a strategy (swarm, elite, balanced, heavy, monster, aliens,
+tanks, psi, random), spending leftovers on armor and better guns like a player would.
+
+- `bun tools/balance.ts --games 300 [--budget 400000,1000000] [--strategies a,b] [--biome URBAN] [--time night]`
+  plays strategy-vs-strategy tournaments in parallel worker threads and reports win rates, a head-to-head table
+  and value for money per hire type and weapon.
+- `bun tools/duels.ts [--kits] [--calibrate]` measures prices directly: equal-budget duels between a squad made of
+  copies of one hire (or one weapon/armor on the same soldier) and a mixed reference platoon. A fairly priced
+  class wins about half the time. `--calibrate` nudges `shared/rules/calibration.json` towards even (damped; run
+  it a few times), `--trace` plays one duel per class and summarises what the bots did.
+
+### Match statistics from real games
+
+Every battle records per-unit statistics as it's played (`shared/engine/stats.ts`, saved with the battle):
+commands used, TU spent, tiles moved, rounds fired and hits by weapon (hits armor stopped included), damage
+dealt and taken, friendly fire, reaction shots, throws, melee, psi attempts and successes, times mind
+controlled, and when the unit went down. When a match finishes the server stores a match record
+(`shared/engine/record.ts`, table `match_records`): settings, seats, who won and who surrendered, every hire with
+its kit, armor, price and gear cost, kills and the value of what it killed, its fate and full statistics, and
+what happened to the supply drops. Records are kept even if the match is later deleted. Bot matches produce the
+same records, so tournament and real-game numbers compare directly.
+
+- `bun tools/player-stats.ts --db /var/lib/xcom/xcom.sqlite [--since 2026-11-01] [--csv units.csv]` prints the
+  real-game balance report: turn-order advantage, budget use, matches by map/time/budget, squad shape vs win
+  rate, value for money by hire, armor and weapon, weapon accuracy and damage, tactics (movement, reaction fire,
+  psi success, friendly fire, supply-drop looting) and a per-player table. `--csv` writes one row per unit for
+  spreadsheets.
+- Accounts listed in `ADMIN_EMAILS` (comma separated; `deploy-xcom.py --admin-email you@example.com`) can download
+  everything as JSON from `/api/admin/match-records` (optionally `?since=2026-11-01`) and run the report locally
+  with `--json match-records.json`.
+
+To rebalance from real data: look for hires and weapons whose exchange rate or win share stands out with enough
+games behind it, adjust `shared/rules/calibration.json` (unit multipliers, weapon and armor prices) or the value
+model, and re-check with the duels so bot-measured prices and player experience agree.
+
+### How prices are set
+
+Prices come from `shared/rules/value.ts`: a unit's combat value is offense (expected damage per turn) times
+durability (health times how much its armor cuts damage from a typical mix of guns). Squad strength grows with
+the square of numbers, so price scales with the square root of combat value, anchored at a median rookie with a
+rifle. `calibration.json` then holds the per-type corrections and the weapon/armor prices measured by the duels.

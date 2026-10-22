@@ -1,0 +1,10 @@
+node_modules/
+gamedata/
+xcom/
+data/
+dist/
+*.sqlite
+*.sqlite-*
+.env
+tools/.cache/
+.playwright-mcp/
