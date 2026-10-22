@@ -128,6 +128,35 @@ test("a scenario battle: one team against the game master's enemies, placed as s
   expect(b.units.filter((u) => u.owner === 1 && u.type === "STR_CHRYSSALID_TERRORIST").length).toBe(2);
 });
 
+test("scattered enemies start well away from the team's landing zone and out of its sight", () => {
+  // like a real match that went badly: a forest at night, where a scattered Sectoid could see the landing zone
+  for (const seed of [198781643, 1, 2, 3, 4, 5]) {
+    const s = scenarioSettings({
+      teamStart: "together",
+      enemies: [{ type: "STR_SECTOID_SOLDIER", count: 8, weapon: "STR_LASER_RIFLE", grenades: 0, armor: "STR_NONE_UC", placement: "spread", round: 1 }],
+    });
+    Object.assign(s, { biome: "FOREST", timeOfDay: "night", ufo: "none", mapBlocks: 7 });
+    const pool = generatePool(s, seed);
+    const force = buildEnemyForce(s, seed);
+    const team = buildSquad("swarm", { ...s, mode: "ffa" }, pool, new RNG(seed)).squad.slice(0, 4).map((m) => ({ ...m, controller: "ann" }));
+    const b = createBattle(s, [
+      { userId: "ann", name: "X-COM", loadout: { squad: team, stash: [] }, members: [{ userId: "ann", name: "Ann" }] },
+      { userId: "bot:scenario:t", name: "Aliens", loadout: { squad: force.initial, stash: [] }, ai: s.scenario.ai },
+    ], [...pool, ...force.recruits], seed, files);
+    const z = b.zones[0];
+    const mine = b.units.filter((u) => u.owner === 0);
+    const theirs = b.units.filter((u) => u.owner === 1);
+    expect(theirs.length).toBe(8);
+    for (const u of theirs) {
+      // a third of the 70-tile map away from the landing zone's centre
+      expect(Math.max(Math.abs(u.pos.x - (z.x + z.w / 2)), Math.abs(u.pos.y - (z.y + z.h / 2)))).toBeGreaterThanOrEqual(23);
+      // nobody has anyone in their sights at the start, either way
+      expect([seed, u.id, u.visibleUnits.filter((id) => mine.some((m) => m.id === id))]).toEqual([seed, u.id, []]);
+    }
+    for (const m of mine) expect(m.visibleUnits).toEqual([]);
+  }
+});
+
 test("the enemy isn't beaten while reinforcements are still coming", () => {
   const { b } = scenarioBattle(12);
   const rules = new GameRules(b);

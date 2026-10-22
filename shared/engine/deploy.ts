@@ -3,7 +3,8 @@
 import { type Battle, type Unit, type Rect, isOut } from "./state.ts";
 import { canStand, openSkyTiles } from "./mapgen.ts";
 import { createUnit, giveItem } from "./units.ts";
-import { directionTo, type Pos } from "./defs.ts";
+import { directionTo, VoxelType, MAX_VIEW_DISTANCE, type Pos } from "./defs.ts";
+import { calculateLine } from "./tileengine.ts";
 import { armorRule, unitRule, itemRule, fitsSlot, livingWeaponFor, type PlacedItem } from "../rules/index.ts";
 import type { Recruit, SquadMember, Placement } from "../protocol.ts";
 
@@ -26,6 +27,29 @@ function around(b: Battle, cx: number, cy: number, maxR: number): Pos[] {
   return spots;
 }
 
+/** Eye-level voxels the other sides watch from: their landing zones (centre and corners) and their units. */
+function watchers(b: Battle, seat: number, zones: Rect[]): Pos[] {
+  const eye = (x: number, y: number, z: number): Pos => ({ x: x * 16 + 8, y: y * 16 + 8, z: z * 24 + 20 });
+  const out: Pos[] = [];
+  for (const zn of zones)
+    for (const [x, y] of [[zn.x + zn.w / 2, zn.y + zn.h / 2], [zn.x + 1, zn.y + 1], [zn.x + zn.w - 2, zn.y + 1], [zn.x + 1, zn.y + zn.h - 2], [zn.x + zn.w - 2, zn.y + zn.h - 2]]) {
+      const tx = Math.floor(x), ty = Math.floor(y);
+      out.push(eye(tx, ty, Math.max(0, standZ(b, tx, ty, 1))));
+    }
+  for (const u of b.units) if (u.owner !== seat && !isOut(u)) out.push(eye(u.pos.x, u.pos.y, u.pos.z));
+  return out;
+}
+
+/** A clear line from `eye` to a unit standing at `p`, within the furthest anyone can see (20 tiles). */
+function inSight(b: Battle, eye: Pos, p: Pos): boolean {
+  const dx = (eye.x >> 4) - p.x, dy = (eye.y >> 4) - p.y;
+  if (dx * dx + dy * dy > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE) return false;
+  const z = standZ(b, p.x, p.y, 1);
+  if (z < 0) return false;
+  const target = { x: p.x * 16 + 8, y: p.y * 16 + 8, z: z * 24 + 16 };
+  return calculateLine(b, eye, target, false, null, { excludeAllUnits: true }) === VoxelType.EMPTY;
+}
+
 /** Where `seat`'s units may land, best first (`zone`: one of the side's landing zones, by its map-wide index). */
 export function deploySpots(b: Battle, seat: number, how: Placement | undefined, zone?: number): Pos[] {
   if (how === "ufo" && b.ufoArea) {
@@ -34,12 +58,19 @@ export function deploySpots(b: Battle, seat: number, how: Placement | undefined,
   }
   if (how === "ufo" || how === "center") return around(b, b.sx / 2, b.sy / 2, 22);
   if (how === "spread") {
-    // anywhere, but not on top of anyone else's landing zone
-    const others = b.landingZones.filter((z) => z.seat !== seat).map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 }));
+    // anywhere, but well away from everyone else's landing zone (further on bigger maps), and out of sight of it
+    // and of their units: nobody should start the battle (or see reinforcements land) already in someone's sights
+    const zones = b.landingZones.filter((z) => z.seat !== seat);
+    const others = zones.map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 }));
+    const minDist = Math.max(14, Math.round(Math.max(b.sx, b.sy) / 3));
     const all: Pos[] = [];
     for (let x = 1; x < b.sx - 1; x++)
-      for (let y = 1; y < b.sy - 1; y++) if (others.every((o) => Math.max(Math.abs(o.x - x), Math.abs(o.y - y)) >= 14)) all.push({ x, y, z: 0 });
-    return b.rng.shuffle(all);
+      for (let y = 1; y < b.sy - 1; y++) if (others.every((o) => Math.max(Math.abs(o.x - x), Math.abs(o.y - y)) >= minDist)) all.push({ x, y, z: 0 });
+    const eyes = watchers(b, seat, zones);
+    const hidden = new Set(all.filter((p) => !eyes.some((e) => inSight(b, e, p))));
+    // a map too small or open to hide in: out of sight where possible, then the rest
+    const seen = all.filter((p) => !hidden.has(p));
+    return [...b.rng.shuffle([...hidden]), ...b.rng.shuffle(seen)];
   }
   const z = (zone !== undefined ? b.landingZones[zone] : undefined) ?? b.zones[seat] ?? { x: b.sx / 2 - 5, y: b.sy / 2 - 5, w: 10, h: 10 };
   return around(b, z.x + z.w / 2, z.y + z.h / 2, 18);
