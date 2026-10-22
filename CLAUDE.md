@@ -96,9 +96,13 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   psi — those multipliers are floored at 0.2). Real-player data from `match_records` should drive the next
   rebalance; don't hand-tweak calibration without re-running duels.
 - Commit/push/deploy only when the user asks. Git: `master`, remote `origin` = github.com/treefort/xcom-battlescape (**private**). Never commit the
-  original game's files: `gamedata/` (incl. rendered music) stays gitignored, as do `data/` and `tools/.cache/`. Deployment (`python deploy/deploy-xcom.py --deploy --credentials <client.json> [--admin-email ...]`,
-  target xcom.evanbooth.com, port 4320) has **never been run**: it's waiting on the user's Google OAuth
-  web-client JSON and an explicit go-ahead.
+  original game's files: `gamedata/` (incl. rendered music) stays gitignored, as do `data/` and `tools/.cache/`. **Deployed** 2026-10-22 to https://xcom.evanbooth.com
+  (port 4320, `/opt/xcom/releases/<stamp>` + `current`, `xcom.service`, secrets in `/etc/xcom/environment`, data in
+  `/var/lib/xcom/xcom.sqlite`). Routine deploy (the user ships small changes often; keep it fast):
+  `bun test && bun run build && python deploy/deploy-xcom.py --deploy` — no credentials needed, keeps the server's
+  secrets. `--credentials <json> --passkey <...>` rewrites the secrets (both together); `--setup` redoes nginx /
+  certificate / unit; `--upload-gamedata` re-sends game files. Signing in is Google-only; playing needs the
+  `PASSKEY` (entered once per account, `server/access.ts`); sign-ins and passkey attempts are in `access_log`.
 - The droplet is shared with other sites: be conservative with nginx/system changes. SSH credentials live in a
   local file referenced by `~/Documents/ai/hosting/AGENTS.md` — treat it as secret; never print or commit it.
 
