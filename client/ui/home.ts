@@ -243,14 +243,18 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   nameInput.addEventListener("input", () => (s.name = nameInput.value));
 
   // the game mode is a pair of tabs over the rest of the form
+  // squads (free-for-all) and people (co-op) are different counts: each tab keeps its own, so flipping between
+  // the tabs never changes the number that was set (by hand, a link or an earlier match)
+  const playersBy: Record<GameMode, number> = { ffa: 2, coop: 4, [s.mode]: s.maxPlayers };
   const MODES: { id: GameMode; name: string; blurb: string }[] = [
     { id: "ffa", name: "Free-for-all", blurb: "2–8 squads fight it out; last squad standing wins. Computer squads can join, and with “Co-op squads” set above 1, several people can share a squad." },
     { id: "coop", name: "Co-op scenario", blurb: "You're the game master: set up the mission and the enemy, and everyone who joins plays on one team against it." },
   ];
   const tabButtons = MODES.map((m) => el("button", { type: "button", class: "tab", disabled: readOnly && m.id !== s.mode, onclick: () => {
     if (readOnly || s.mode === m.id) return;
+    playersBy[s.mode] = s.maxPlayers;
     s.mode = m.id;
-    s.maxPlayers = m.id === "coop" ? Math.min(Math.max(s.maxPlayers, 4), MAX_COOP_PLAYERS) : Math.min(Math.max(s.maxPlayers, 2), 8);
+    s.maxPlayers = playersBy[m.id];
     if (m.id !== "coop" && s.coop.turnEnd === "daily") s.coop.turnEnd = "lockin";
     if (s.coop.turnEnd === "daily") s.coop.timeZone = browserTimeZone();
     refresh();
