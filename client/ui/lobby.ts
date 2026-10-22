@@ -2,6 +2,7 @@
 import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
 import { biomeName, DEFAULT_BOT_TUNING, MAX_SIDES, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
+import { autoSquad } from "../../shared/rules/squads.ts";
 import { checkLoadout, budgetGuide, COURSES, MAX_SESSIONS, trainedStats, trainingCost, trainedRecruit, type CatalogEntry } from "../../shared/rules/catalog.ts";
 import { forceSummary } from "../../shared/rules/scenario.ts";
 import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, SOLDIER, type SlotId } from "../../shared/rules/index.ts";
@@ -62,6 +63,9 @@ export class LobbyPage {
   tuning: string | null = null;
   /** the hired soldier whose training is open (recruit id) */
   training: string | null = null;
+  /** what the auto-configure button just did (until the next edit) */
+  notice = "";
+  private keepNotice = false;
 
   constructor(private root: HTMLElement, private matchId: string, private me: Me, private go: (p: string) => void, private onStart: () => void) {
     this.connect();
@@ -125,6 +129,8 @@ export class LobbyPage {
   }
 
   private scheduleSave() {
+    if (!this.keepNotice) this.notice = "";
+    this.keepNotice = false;
     this.dirty = true;
     this.edits++;
     if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -402,16 +408,37 @@ export class LobbyPage {
           ? el("span", { class: check.seats > s.settings.scenario.seatsPerPlayer ? "bad" : "" }, `Seats ${check.seats}/${s.settings.scenario.seatsPerPlayer}`)
           : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "" }, `Seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.dirty ? "saving..." : "saved"),
+        el("button", { class: "small", title: "Hire and equip the strongest squad your budget and seats allow (you can still change anything after)", onclick: () => this.autoConfigure(s) }, "Auto-configure squad"),
         s.battle
           ? el("button", { class: "primary", disabled: !check.ok, title: "Land in the battle now", onclick: () => this.act("ready", { ready: true }) }, "Deploy")
           : el("button", { class: s.you!.ready ? "" : "primary", disabled: !check.ok && !s.you!.ready, onclick: () => this.act("ready", { ready: !s.you!.ready }) }, s.you!.ready ? "Not ready" : "Ready"),
       ),
       check.errors.length ? el("div", { class: "warn" }, check.errors.join(" · ")) : null,
+      this.notice ? el("div", { class: "hint" }, this.notice) : !this.loadout.squad.length ? el("div", { class: "hint" }, "New to X-COM? Auto-configure squad hires and equips a strong squad for this match in one click; you can change anything after.") : null,
       el("details", { class: "guide" }, el("summary", {}, "Budget rules of thumb"), el("ul", {}, ...guide.examples.map((x) => el("li", {}, x))), el("div", { class: "hint" }, guide.prices.join(" "))),
       this.squadTable(s),
     ));
     box.append(this.poolPanel(s, hiredIds));
     return box;
+  }
+
+  /** The easy button: a whole squad, hired and kitted out for this match, replacing the current one. */
+  private autoConfigure(s: LobbyState) {
+    if (this.loadout.squad.length && !confirm("Replace your squad with an automatically configured one?")) return;
+    const { loadout } = autoSquad(s.settings, s.pool);
+    this.loadout = loadout;
+    this.training = null;
+    // say what was hired, e.g. "4 soldiers and a tank"
+    const kinds = loadout.squad.map((m) => s.pool.find((p) => p.id === m.recruitId)?.kind);
+    const count = (k: string, one: string, many: string) => {
+      const n = kinds.filter((x) => x === k).length;
+      return n === 0 ? [] : [n === 1 ? `1 ${one}` : `${n} ${many}`];
+    };
+    const parts = [...count("soldier", "soldier", "soldiers"), ...count("alien", "alien", "aliens"), ...count("hwp", "tank", "tanks")];
+    const cost = checkLoadout(s.settings, s.pool, loadout).cost;
+    this.notice = `Configured ${parts.join(" and ")}, armed and kitted out for ${money(cost)} of your ${money(s.settings.budget)}. Change anything you like, then press ${s.battle ? "Deploy" : "Ready"}.`;
+    this.keepNotice = true;
+    this.scheduleSave();
   }
 
   private squadTable(s: LobbyState): HTMLElement {

@@ -3,7 +3,7 @@
 import { itemRule, unitRule, livingWeaponFor, fitsSlot, INVENTORY_SLOTS, type PlacedItem, type SlotId } from "./index.ts";
 import { catalogFor, armorsFor, itemPrice, armorPrice, seatsFor, checkLoadout } from "./catalog.ts";
 import type { MatchSettings, Recruit, Loadout, SquadMember } from "../protocol.ts";
-import type { RNG } from "../engine/rng.ts";
+import { RNG } from "../engine/rng.ts";
 
 export const STRATEGIES = ["swarm", "elite", "balanced", "heavy", "monster", "aliens", "tanks", "psi", "random"] as const;
 export type Strategy = (typeof STRATEGIES)[number];
@@ -152,6 +152,80 @@ class Builder {
 }
 
 const byPrice = (a: Recruit, b: Recruit) => a.price - b.price;
+
+/**
+ * The "auto-configure" button: the strongest squad the hiring strategies can put together for this match (pool,
+ * budget, seats, tech, time of day), trying them in the order they fare in bot tournaments, plus a medikit or two
+ * for a person to use. A co-op scenario fills the player's own Skyranger seats.
+ */
+export function autoSquad(s: MatchSettings, pool: Recruit[]): { loadout: Loadout; strategy: Strategy } {
+  const settings: MatchSettings = s.mode === "coop" ? { ...s, mode: "ffa", squadLimit: s.scenario.seatsPerPlayer } : s;
+  // the first strategy, in tournament order, that makes real use of the money here (the others may not be
+  // possible with these settings: no soldiers in the pool, aliens or tanks off, a tiny budget...)
+  // ...with enough bodies that one lucky shot doesn't end the match
+  const minUnits = Math.min(4, settings.squadLimit);
+  let pick: { loadout: Loadout; strategy: Strategy; spent: number } | null = null;
+  const enough = (l: Loadout) => l.squad.length >= minUnits;
+  const better = (l: Loadout, spent: number) => {
+    if (!pick) return true;
+    if (enough(l) !== enough(pick.loadout)) return enough(l);
+    // short of bodies either way: the most bodies
+    if (!enough(l) && l.squad.length !== pick.loadout.squad.length) return l.squad.length > pick.loadout.squad.length;
+    return spent > pick.spent;
+  };
+  for (const [rank, strategy] of AUTO_ORDER.entries()) {
+    if (strategy === "tanks" && !s.allowHWP) continue;
+    if (strategy === "aliens" && !s.allowAliens) continue;
+    let l: Loadout;
+    try {
+      l = buildSquad(strategy, settings, pool, new RNG(pool.length * 31 + rank));
+    } catch {
+      continue;
+    }
+    const chk = checkLoadout(settings, pool, l);
+    const spent = chk.cost / settings.budget;
+    if (better(l, spent)) pick = { loadout: l, strategy, spent };
+    if ((spent >= 0.8 || chk.seats >= settings.squadLimit) && l.squad.length >= minUnits) break;
+  }
+  if (!pick) return { loadout: buildSquad("swarm", settings, pool, new RNG(1)), strategy: "swarm" };
+  // the strategies spend everything: build again with the medikits' money set aside, then hand them out
+  const soldiers = pick.loadout.squad.filter((m) => pool.find((p) => p.id === m.recruitId)?.kind === "soldier").length;
+  const kits = catalogFor(settings).some((c) => c.type === "STR_MEDI_KIT") ? Math.ceil(soldiers / 5) : 0;
+  let loadout = pick.loadout;
+  if (kits) {
+    try {
+      const rank = AUTO_ORDER.indexOf(pick.strategy);
+      const lighter = buildSquad(pick.strategy, { ...settings, budget: settings.budget - kits * itemPrice("STR_MEDI_KIT") }, pool, new RNG(pool.length * 31 + rank));
+      // a medikit isn't worth a soldier
+      if (lighter.squad.length >= loadout.squad.length) loadout = lighter;
+    } catch {
+      /* keep the squad as it was */
+    }
+    addMedikits(settings, pool, loadout, kits);
+  }
+  return { loadout, strategy: pick.strategy };
+}
+
+/**
+ * Strategies best first, from a `tools/balance.ts --games 300 --budget 200000,400000,1000000` tournament (2026-10-22):
+ * elite won 71% / 76% / 70% at the three budgets, balanced 71 / 40 / 56, aliens 65 / 70 / 83 (strong but
+ * erratic, and a hard squad for a newcomer to play), heavy 33 / 44 / 65, tanks 46 / 34 / 54, swarm 18 / 29 / 13.
+ */
+export const AUTO_ORDER: Strategy[] = ["elite", "balanced", "heavy", "aliens", "tanks", "swarm"];
+
+/** `want` medikits (one for every five soldiers), carried by the best-protected soldiers with room for one. */
+function addMedikits(s: MatchSettings, pool: Recruit[], l: Loadout, want: number) {
+  const soldiers = l.squad.filter((m) => pool.find((p) => p.id === m.recruitId)?.kind === "soldier");
+  let left = s.budget - checkLoadout(s, pool, l).cost;
+  for (const m of [...soldiers].sort((a, b) => armorPrice(b.armor) - armorPrice(a.armor))) {
+    if (want <= 0 || left < itemPrice("STR_MEDI_KIT")) break;
+    const spot = freeSpot([...m.items], "STR_MEDI_KIT", STORAGE);
+    if (!spot) continue;
+    m.items.push(spot);
+    left -= itemPrice("STR_MEDI_KIT");
+    want--;
+  }
+}
 
 /** Builds a squad for `strategy` from the shared pool within the match's budget and seat limit. */
 export function buildSquad(strategy: Strategy, s: MatchSettings, pool: Recruit[], rng: RNG): Loadout {
