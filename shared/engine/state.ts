@@ -3,7 +3,7 @@ import { type MapData, TilePart, parseMcd, parseLoftemps } from "../formats/terr
 import { type Pos, UnitStatus, DIR_UP } from "./defs.ts";
 import { RNG } from "./rng.ts";
 import type { Stats, SlotId } from "../rules/index.ts";
-import type { MatchSettings, BotTuning } from "../protocol.ts";
+import type { MatchSettings, BotTuning, Recruit, SquadMember } from "../protocol.ts";
 import { newStats, type BattleStats } from "./stats.ts";
 
 /** Supplies raw game files (server: from disk, client: from the asset cache). */
@@ -137,6 +137,8 @@ export interface SquadMemberState {
   afk: boolean;
   /** offline long enough that the AI plays their units (only with the co-op "afkAI" setting) */
   away: boolean;
+  /** a co-op scenario's game master who isn't playing: sees the whole battle, commands nothing */
+  observer?: boolean;
 }
 
 export interface SupplyDrop {
@@ -149,6 +151,21 @@ export interface SupplyDrop {
   /** client only (from the view): the landed crate still holds something, and where it lies */
   stocked?: boolean;
   at?: Pos;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Co-op scenario reinforcements: units that join `seat` at the start of `round`. */
+export interface Wave {
+  round: number;
+  seat: number;
+  recruits: Recruit[];
+  members: SquadMember[];
 }
 
 export const enum Phase { DEPLOY = 0, PLAYING = 1, FINISHED = 2 }
@@ -187,6 +204,11 @@ export class Battle {
   hitBy = new Map<number, Set<number>>();
   /** per-unit statistics for balance analysis (saved with the battle) */
   stats: BattleStats = newStats();
+  /** each squad's deployment area, and the landed UFO's (reinforcements arrive in them) */
+  zones: Rect[] = [];
+  ufoArea: Rect | null = null;
+  /** co-op scenarios: enemies still to arrive */
+  waves: Wave[] = [];
   /** the item doing the damage right now, for statistics (not saved) */
   actingWeapon = "";
 

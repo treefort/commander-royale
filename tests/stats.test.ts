@@ -74,7 +74,8 @@ test("the server stores a record when a real match finishes", async () => {
   for (const s of sockets) game.wsOpen(s as never);
   // Bob gives up
   game.wsMessage(sockets[1] as never, JSON.stringify({ t: "cmd", seq: 1, cmd: { c: "surrender" } }));
-  const recs = game.matchRecords();
+  // other test files may have stored records in the same database
+  const recs = game.matchRecords().filter((r) => r.id === id);
   expect(recs.length).toBe(1);
   const rec = recs[0];
   expect(rec.source).toBe("human");
@@ -84,7 +85,7 @@ test("the server stores a record when a real match finishes", async () => {
   expect(rec.units.filter((u) => u.outcome === "evacuated").length).toBeGreaterThan(0);
   // no duplicate when the finished match is published again
   game.wsMessage(sockets[0] as never, JSON.stringify({ t: "cmd", seq: 2, cmd: { c: "endturn" } }));
-  expect(game.matchRecords().length).toBe(1);
+  expect(game.matchRecords().filter((r) => r.id === id).length).toBe(1);
 }, 120_000);
 
 test("an AI squad joins a lobby ready, and plays its turn on the server", async () => {

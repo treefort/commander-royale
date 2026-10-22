@@ -30,6 +30,7 @@ export function serializeBattle(b: Battle): string {
     settings: b.settings, supply: b.supply, winner: b.winner, terrainName: b.terrainName,
     hitBy: [...b.hitBy].map(([k, v]) => [k, [...v]]),
     stats: b.stats,
+    zones: b.zones, ufoArea: b.ufoArea, waves: b.waves,
   });
 }
 
@@ -60,6 +61,9 @@ export function deserializeBattle(json: string, files: FileSource): Battle {
   b.winner = o.winner;
   b.terrainName = o.terrainName;
   b.stats = o.stats ?? newStats();
+  b.zones = o.zones ?? [];
+  b.ufoArea = o.ufoArea ?? null;
+  b.waves = o.waves ?? [];
   b.hitBy = new Map((o.hitBy ?? []).map(([k, v]: [number, number[]]) => [k, new Set(v)]));
   b.rebuildUnitIndex();
   b.rebuildItemIndex();

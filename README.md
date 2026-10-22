@@ -1,6 +1,6 @@
 # X-COM: Battlescape (multiplayer)
 
-A browser port of the X-COM: UFO Defense battlescape, rebuilt for 2–8 player free-for-all squad battles. It uses
+A browser port of the X-COM: UFO Defense battlescape, rebuilt for 2–8 player free-for-all squad battles and co-op scenarios (up to 10 people against an enemy a game master sets up). It uses
 the original game's graphics, maps, terrain and sounds (loaded from your copy of the game) and the original rules
 (time units, accuracy, reaction fire, voxel line of fire, destructible terrain, fire, smoke, night lighting,
 psionics...), with a multiplayer layer on top: Google sign-in, lobbies with invite links, a shared recruit pool
@@ -81,6 +81,31 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    dropped at your deployment zone.
 4. **Battle**: squads deploy around the map edge. Players take turns in a shuffled order; the game is asynchronous
    (close the tab and come back) unless a turn timer is set. Last squad standing wins.
+
+### Co-op scenarios (game mode)
+
+Pick **Game mode: Co-op scenario** when creating a match and you're the **game master**: everyone who joins plays
+on one team against an enemy force you design, played by the computer.
+
+- **The team**: its name, how many people (1–10) and how many units each may hire and command (say 3 people × 4
+  units, or 10 people × 1). Everyone hires and equips their own units from the budget; in battle each person
+  commands their own, and the whole team moves at once (the same lock-in / give-unit / AFK controls as co-op squads
+  below). Every move a teammate makes — and every enemy in sight — plays out on everyone's screen as it happens.
+- **The game master** can play on the team too, or only run the game: then they hire nothing, can't give orders,
+  and watch the **whole** battlefield (every unit on both sides, the whole map) live. They can call the mission off
+  with Surrender.
+- **The enemy**: any number of groups, each with a unit type (every alien race and rank, terror units, tanks, or
+  human soldiers of a rank), a count, a weapon ("standard" picks by rank and tech level: plasma pistol / rifle /
+  heavy plasma for alien tech, lasers or conventional arms otherwise), grenades, armor for soldiers, where they
+  start (far side, at the UFO, the middle, scattered) and the round they arrive — anything after round 1 is a
+  reinforcement wave. The enemy isn't beaten while reinforcements are still on the way. Its tactics (aggression,
+  explosives, memory, the round it knows where everyone is, races playing to type) are set the same way.
+- Plus the usual environment, time of day, landed UFO, map size (recommended from the number of units), budget,
+  tech level, supply drops...
+- **Turns**: the team moves first. Its turn ends when everyone has locked in (the default — players set the pace),
+  or **at a set time every day** in the game master's time zone (or earlier if everyone has locked in; a turn that
+  starts less than an hour before that time runs to the next day's), or on the turn timer. Offline players' units
+  just stay where they are, unless "AI plays for offline players" is on.
 
 ### Co-op squads
 

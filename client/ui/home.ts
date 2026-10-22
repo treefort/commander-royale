@@ -1,5 +1,6 @@
 import { api, el, money } from "../api.ts";
-import { BIOMES, UFO_CHOICES, MAX_SQUAD_SIZE, defaultSettings, recommendedMapBlocks, biomeName, type MatchSettings } from "../../shared/protocol.ts";
+import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_COOP_PLAYERS, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
+import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
 
 export interface Me {
@@ -121,23 +122,37 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
 function settingsSummary(s: MatchSettings): string {
   const drops = s.supplyDrops.enabled ? `drops every ${s.supplyDrops.everyRounds} (${s.supplyDrops.tier})` : "no drops";
   const env = s.randomBiome ? "Random" : biomeName(s.biome);
+  if (s.mode === "coop") {
+    const foes = s.scenario.enemies.reduce((a, g) => a + g.count, 0);
+    return `Co-op scenario: up to ${s.maxPlayers} × ${s.scenario.unitsPerPlayer} units vs ${foes} enemies, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${drops}`;
+  }
   return `${s.maxPlayers} squads, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${s.techLevel} tech, ${drops}`;
 }
 
 /** The match settings form (create + edit). Budget guidance updates live. */
 export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings) => Promise<void>, submitLabel: string, readOnly = false): HTMLElement {
   const s: MatchSettings = structuredClone(initial);
-  s.coop ??= defaultSettings().coop; // settings of matches from before co-op
-  let mapTouched = s.mapBlocks !== recommendedMapBlocks(s.maxPlayers, s.budget);
+  // settings of matches from before co-op and scenarios
+  const d = defaultSettings();
+  s.coop = { ...d.coop, ...s.coop };
+  s.mode ??= "ffa";
+  s.scenario ??= d.scenario;
+  const recommended = () => (s.mode === "coop" ? recommendedScenarioBlocks(s) : recommendedMapBlocks(s.maxPlayers, s.budget));
+  let mapTouched = s.mapBlocks !== recommended();
   const f = el("div", { class: "form" });
   const err = el("div", { class: "err full" });
   const guide = el("div", { class: "guide full" });
   const mapHint = el("span", { class: "hint" });
-  const field = (label: string, input: HTMLElement, hint?: string | HTMLElement) => {
-    f.append(el("div", {}, label), el("div", { class: "row" }, input, hint ? (typeof hint === "string" ? el("span", { class: "hint" }, hint) : hint) : null));
+  /** rows shown in only one mode */
+  const only: { mode: GameMode; els: HTMLElement[] }[] = [];
+  const field = (label: string, input: HTMLElement, hint?: string | HTMLElement, mode?: GameMode) => {
+    const els = [el("div", {}, label), el("div", { class: "row" }, input, hint ? (typeof hint === "string" ? el("span", { class: "hint" }, hint) : hint) : null)];
+    f.append(...els);
+    if (mode) only.push({ mode, els });
+    return els;
   };
-  const num = (get: () => number, set: (v: number) => void, min: number, max: number, step = 1) => {
-    const i = el("input", { type: "number", min, max, step, value: get(), disabled: readOnly, style: { width: "130px" } }) as HTMLInputElement;
+  const num = (get: () => number, set: (v: number) => void, min: number, max: number, step = 1, width = "130px") => {
+    const i = el("input", { type: "number", min, max, step, value: get(), disabled: readOnly, style: { width } }) as HTMLInputElement;
     i.addEventListener("input", () => {
       set(Number(i.value));
       refresh();
@@ -161,22 +176,79 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     });
     return el("label", {}, c, text);
   };
+  const text = (get: () => string, set: (v: string) => void, max = 30) => {
+    const i = el("input", { value: get(), maxlength: max, disabled: readOnly, style: { width: "160px" } }) as HTMLInputElement;
+    i.addEventListener("input", () => set(i.value));
+    return i;
+  };
   const mapInput = num(() => s.mapBlocks, (v) => { s.mapBlocks = v; mapTouched = true; }, 4, 10);
   const nameInput = el("input", { value: s.name, maxlength: 40, disabled: readOnly }) as HTMLInputElement;
   nameInput.addEventListener("input", () => (s.name = nameInput.value));
 
+  field("Game mode", sel([
+    { id: "ffa", name: "Free-for-all: squads fight it out" },
+    { id: "coop", name: "Co-op scenario: everyone against your enemy" },
+  ] as const, () => s.mode, (v) => {
+    s.mode = v;
+    s.maxPlayers = v === "coop" ? Math.min(Math.max(s.maxPlayers, 4), MAX_COOP_PLAYERS) : Math.min(Math.max(s.maxPlayers, 2), 8);
+    if (v !== "coop" && s.coop.turnEnd === "daily") s.coop.turnEnd = "lockin";
+    if (s.coop.turnEnd === "daily") s.coop.timeZone = browserTimeZone();
+  }), el("span", { class: "hint" }, "In a co-op scenario you're the game master: you set up the mission and the enemy, and everyone who joins plays on one team"));
   field("Match name", nameInput);
   const notesInput = el("textarea", { rows: 3, maxlength: 1000, disabled: readOnly, placeholder: "Optional: house rules, when you'll play, what to expect... everyone who joins sees this", class: "notes-input" }) as HTMLTextAreaElement;
   notesInput.value = s.notes ?? "";
   notesInput.addEventListener("input", () => (s.notes = notesInput.value));
   field("Message for players", notesInput);
-  field("Players", num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 2, 8), "2–8 squads, free-for-all");
-  field("Co-op", el("div", { class: "row" },
-    el("span", {}, "up to"), Object.assign(num(() => s.coop.squadSize, (v) => (s.coop.squadSize = v), 1, MAX_SQUAD_SIZE), { style: "width: 60px" }),
+
+  // ---- free-for-all ----
+  const squadsInput = num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 2, 8);
+  field("Players", squadsInput, "2–8 squads, free-for-all", "ffa");
+  field("Co-op squads", el("div", { class: "row" },
+    el("span", {}, "up to"), num(() => s.coop.squadSize, (v) => (s.coop.squadSize = v), 1, MAX_SQUAD_SIZE, 1, "60px"),
     el("span", {}, "people per squad; turn ends"),
-    sel([{ id: "lockin", name: "when everyone locks in" }, { id: "timer", name: "on the turn timer" }] as const, () => s.coop.turnEnd, (v) => (s.coop.turnEnd = v)),
+    sel([{ id: "lockin", name: "when everyone locks in" }, { id: "timer", name: "on the turn timer" }] as const, () => (s.coop.turnEnd === "timer" ? "timer" : "lockin"), (v) => (s.coop.turnEnd = v)),
     check(() => s.coop.afkAI, (v) => (s.coop.afkAI = v), "AI plays for offline players")),
-    "Several people can share a squad, each commanding some of its units, all moving at once on its turn. Team up against computer squads!");
+    "Several people can share a squad, each commanding some of its units, all moving at once on its turn", "ffa");
+
+  // ---- co-op scenario: the team ----
+  const teamInput = num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 1, MAX_COOP_PLAYERS, 1, "60px");
+  field("The team", el("div", { class: "row" },
+    text(() => s.scenario.teamName, (v) => (s.scenario.teamName = v)),
+    el("span", {}, "up to"), teamInput,
+    el("span", {}, "people, each commanding up to"), num(() => s.scenario.unitsPerPlayer, (v) => (s.scenario.unitsPerPlayer = v), 1, 20, 1, "60px"),
+    el("span", {}, "units")),
+    "e.g. 3 people with 4 units each, or 10 people with 1 each. Everyone hires and equips their own units", "coop");
+  field("Game master", check(() => s.scenario.gmPlays, (v) => (s.scenario.gmPlays = v), "I play on the team too"),
+    "If not, you hire nothing and watch the whole battle — every unit, both sides — as it happens", "coop");
+  const dailyRow = el("span", { class: "row" });
+  field("Turns end", el("div", { class: "row" },
+    sel([
+      { id: "lockin", name: "When everyone has locked in (players set the pace)" },
+      { id: "daily", name: "At a set time every day (or when everyone locks in)" },
+      { id: "timer", name: "On the turn timer" },
+    ] as const, () => s.coop.turnEnd, (v) => {
+      s.coop.turnEnd = v;
+      if (v === "daily") s.coop.timeZone = browserTimeZone();
+    }),
+    dailyRow,
+    check(() => s.coop.afkAI, (v) => (s.coop.afkAI = v), "AI plays for offline players")),
+    "Offline players' units otherwise just stay where they are", "coop");
+  const dailyInput = el("input", { type: "time", value: s.coop.dailyAt, disabled: readOnly }) as HTMLInputElement;
+  dailyInput.addEventListener("input", () => {
+    s.coop.dailyAt = dailyInput.value || "20:00";
+    s.coop.timeZone = browserTimeZone();
+  });
+  dailyRow.append(el("span", {}, "at"), dailyInput, el("span", { class: "hint" }, `(${browserTimeZone()})`));
+
+  // ---- co-op scenario: the enemy ----
+  field("The enemy", el("div", { class: "row" }, text(() => s.scenario.enemyName, (v) => (s.scenario.enemyName = v)),
+    el("span", { class: "hint" }, "played by the computer")), undefined, "coop");
+  const groupsBox = el("div", { class: "full enemy-groups" });
+  f.append(groupsBox);
+  only.push({ mode: "coop", els: [groupsBox] });
+  field("Enemy tactics", aiControls(s.scenario.ai, readOnly), "Bold and reckless enemies charge; cautious ones take aimed shots and fall back", "coop");
+
+  // ---- the battlefield (both modes) ----
   field("Environment", sel([{ id: "RANDOM" as const, name: "Random (rolled when the battle starts)" }, ...BIOMES.map((b) => ({ id: b.id, name: b.name }))], () => s.biome, (v) => (s.biome = v)));
   field("Time of day", sel([{ id: "random", name: "Random (rolled when the battle starts)" }, { id: "day", name: "Day" }, { id: "dusk", name: "Dusk" }, { id: "night", name: "Night" }] as const, () => s.timeOfDay, (v) => (s.timeOfDay = v)), "At night humans see 9 tiles unless an area is lit; aliens see in the dark");
   field("Landed UFO", sel(UFO_CHOICES, () => s.ufo, (v) => (s.ufo = v)), "Placed in the middle of the map");
@@ -184,9 +256,10 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   const budgetInput = num(() => s.budget, (v) => (s.budget = v), 50_000, 5_000_000, 10_000);
   field("Budget per player", budgetInput);
   f.append(guide);
-  field("Squad seats", num(() => s.squadLimit, (v) => (s.squadLimit = v), 1, 30), "A Skyranger holds 14; tanks and other large units take 4");
+  field("Squad seats", num(() => s.squadLimit, (v) => (s.squadLimit = v), 1, 30), "A Skyranger holds 14; tanks and other large units take 4", "ffa");
   field("Recruit pool size", num(() => s.poolSize, (v) => (s.poolSize = v), 10, 80), "Everyone hires from an identical copy of this pool");
-  field("Technology", sel([{ id: "conventional", name: "Conventional only" }, { id: "laser", name: "Up to lasers" }, { id: "alien", name: "Everything (plasma, blasters...)" }] as const, () => s.techLevel, (v) => (s.techLevel = v)));
+  field("Technology", sel([{ id: "conventional", name: "Conventional only" }, { id: "laser", name: "Up to lasers" }, { id: "alien", name: "Everything (plasma, blasters...)" }] as const, () => s.techLevel, (v) => (s.techLevel = v)),
+    "What can be bought, and what \"standard\" enemy weapons are");
   field("Units", el("div", { class: "row" },
     check(() => s.allowAliens, (v) => (s.allowAliens = v), "Alien recruits"),
     check(() => s.allowHWP, (v) => (s.allowHWP = v), "Tanks (HWPs)"),
@@ -198,7 +271,7 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     el("span", {}, "rounds, announced"), num(() => s.supplyDrops.warningRounds, (v) => (s.supplyDrops.warningRounds = v), 0, 10),
     el("span", {}, "rounds ahead")));
   field("Drop contents", sel([{ id: "basic", name: "Basic (rifles, grenades, medikits)" }, { id: "advanced", name: "Advanced (cannons, lasers, scanners)" }, { id: "alien", name: "Alien tech (plasma, blasters, psi)" }, { id: "mixed", name: "Mixed (weighted random)" }] as const, () => s.supplyDrops.tier, (v) => (s.supplyDrops.tier = v)));
-  field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Co-op squads ending on the timer need one");
+  field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Squads ending on the timer need one");
   f.append(err);
   if (!readOnly) {
     f.append(el("div", { class: "full" }, el("button", { class: "primary", onclick: async (e: Event) => {
@@ -215,13 +288,66 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     } }, submitLabel)));
   }
 
+  const forceCount = el("b", {});
+  /** The enemy groups: who, how many, armed with what, where, and when they arrive. */
+  function renderGroups() {
+    const types = enemyTypeChoices();
+    const groups = [...new Set(types.map((t) => t.group))];
+    const weapons = weaponChoices();
+    const armors = [{ id: "STR_NONE_UC", name: "None" }, { id: "STR_PERSONAL_ARMOR_UC", name: "Personal" }, { id: "STR_POWER_SUIT_UC", name: "Power suit" }, { id: "STR_FLYING_SUIT_UC", name: "Flying suit" }];
+    const t = el("table", { class: "compact" }, el("tr", {}, ...["Enemy", "Count", "Weapon", "Grenades", "Armor", "Starts", "Round", ""].map((h) => el("th", {}, h))));
+    s.scenario.enemies.forEach((g, i) => {
+      const typeSel = el("select", { disabled: readOnly }, ...groups.map((grp) => el("optgroup", { label: grp }, ...types.filter((x) => x.group === grp).map((x) => el("option", { value: x.id, selected: x.id === g.type }, x.name))))) as HTMLSelectElement;
+      typeSel.addEventListener("change", () => {
+        g.type = typeSel.value;
+        renderGroups();
+        refresh();
+      });
+      const soldier = g.type.startsWith("SOLDIER:");
+      t.append(el("tr", {},
+        el("td", {}, typeSel),
+        el("td", {}, num(() => g.count, (v) => (g.count = v), 1, 40, 1, "60px")),
+        el("td", {}, sel(weapons, () => g.weapon, (v) => (g.weapon = v))),
+        el("td", {}, num(() => g.grenades, (v) => (g.grenades = v), 0, 6, 1, "50px")),
+        el("td", {}, soldier ? sel(armors, () => g.armor, (v) => (g.armor = v)) : el("span", { class: "muted" }, "natural")),
+        el("td", {}, sel(PLACEMENTS, () => g.placement, (v) => (g.placement = v))),
+        el("td", {}, num(() => g.round, (v) => (g.round = v), 1, 99, 1, "60px")),
+        el("td", {}, readOnly ? null : el("button", { class: "small danger", disabled: s.scenario.enemies.length < 2, onclick: () => {
+          s.scenario.enemies.splice(i, 1);
+          renderGroups();
+          refresh();
+        } }, "Remove")),
+      ));
+    });
+    groupsBox.replaceChildren(
+      el("div", { class: "title", style: { fontSize: "12px" } }, "ENEMY FORCE"),
+      el("div", { class: "scroll" }, t),
+      el("div", { class: "row", style: { marginTop: "6px" } },
+        readOnly ? null : el("button", { class: "small", disabled: s.scenario.enemies.length >= 20, onclick: () => {
+          s.scenario.enemies.push({ type: "STR_SECTOID_SOLDIER", count: 3, weapon: "standard", grenades: 0, armor: "STR_NONE_UC", placement: "edge", round: 1 });
+          renderGroups();
+          refresh();
+        } }, "Add a group"),
+        el("span", { class: "hint" }, forceCount, ` Groups arriving after round 1 are reinforcements. "Far side" is their own landing zone across the map; "At the UFO" needs a landed UFO (otherwise they start in the middle). The battle is won when every enemy is down and no more are coming.`)));
+  }
+  renderGroups();
+
   function refresh() {
-    const rec = recommendedMapBlocks(s.maxPlayers, s.budget);
+    for (const o of only) for (const e of o.els) e.style.display = o.mode === s.mode ? "" : "none";
+    const atStart = s.scenario.enemies.filter((g) => g.round <= 1).reduce((a, g) => a + g.count, 0);
+    const later = s.scenario.enemies.filter((g) => g.round > 1).reduce((a, g) => a + g.count, 0);
+    forceCount.textContent = `${atStart} on the map at the start${later ? `, ${later} more as reinforcements` : ""}.`;
+    dailyRow.style.display = s.coop.turnEnd === "daily" ? "" : "none";
+    dailyInput.value = s.coop.dailyAt;
+    // the mode switch clamps the head count differently
+    squadsInput.value = teamInput.value = String(s.maxPlayers);
+    const rec = recommended();
     if (!mapTouched) {
       s.mapBlocks = rec;
       mapInput.value = String(rec);
     }
-    mapHint.textContent = `${s.mapBlocks * 10}x${s.mapBlocks * 10} tiles. Recommended for ${s.maxPlayers} players: ${rec} (${rec * 10}x${rec * 10})${mapTouched && s.mapBlocks !== rec ? " — overridden" : ""}`;
+    const who = s.mode === "coop" ? "this scenario" : `${s.maxPlayers} players`;
+    mapHint.textContent = `${s.mapBlocks * 10}x${s.mapBlocks * 10} tiles. Recommended for ${who}: ${rec} (${rec * 10}x${rec * 10})${mapTouched && s.mapBlocks !== rec ? " — overridden" : ""}`;
     const g = budgetGuide(s);
     guide.replaceChildren(
       el("div", { class: "title", style: { fontSize: "12px" } }, `WHAT ${money(s.budget)} BUYS`),
@@ -231,4 +357,34 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   }
   refresh();
   return f;
+}
+
+/** The enemy AI's temperament (co-op scenarios). */
+function aiControls(t: BotTuning, readOnly: boolean): HTMLElement {
+  const pick = (k: "aggression" | "difficulty", opts: string[]) => {
+    const e = el("select", { disabled: readOnly }, ...opts.map((o, i) => el("option", { value: i, selected: i === t[k] }, o))) as HTMLSelectElement;
+    e.addEventListener("change", () => (t[k] = Number(e.value)));
+    return e;
+  };
+  const n = (k: "intelligence" | "cheatTurn", min: number, max: number) => {
+    const i = el("input", { type: "number", min, max, value: t[k], disabled: readOnly, style: { width: "60px" } }) as HTMLInputElement;
+    i.addEventListener("input", () => (t[k] = Number(i.value) || t[k]));
+    return i;
+  };
+  const pers = el("input", { type: "checkbox", checked: t.personalities, disabled: readOnly }) as HTMLInputElement;
+  pers.addEventListener("change", () => (t.personalities = pers.checked));
+  return el("div", { class: "row" },
+    el("label", {}, "aggression ", pick("aggression", ["Cautious", "Normal", "Bold", "Reckless"])),
+    el("label", {}, "explosives ", pick("difficulty", ["Rarely", "Sometimes", "Often", "Very often", "Whenever it can"])),
+    el("label", {}, "remembers you for ", n("intelligence", 1, 10), " rounds"),
+    el("label", {}, "knows where you are after round ", n("cheatTurn", 1, 99)),
+    el("label", {}, pers, " races play to type"));
+}
+
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }

@@ -20,6 +20,7 @@ import {
   ITEMS, type SlotId, type ItemRule, tr,
 } from "../rules/index.ts";
 import { createUnit, spawnGroundItem } from "./units.ts";
+import { deployAll } from "./deploy.ts";
 import { openSkyTiles, canStand } from "./mapgen.ts";
 import { rollSupplyDrop } from "../rules/catalog.ts";
 import { recordCommand, recordEvents } from "./stats.ts";
@@ -1130,7 +1131,8 @@ export class GameRules {
     if (b.phase !== Phase.PLAYING) return;
     for (const p of b.players) {
       if (p.eliminated) continue;
-      const alive = b.units.some((u) => u.originalOwner === p.index && !isOut(u) && u.health > 0);
+      // co-op scenarios: a side with reinforcements on the way isn't beaten yet
+      const alive = b.units.some((u) => u.originalOwner === p.index && !isOut(u) && u.health > 0) || b.waves.some((w) => w.seat === p.index);
       if (!alive) {
         p.eliminated = true;
         this.releaseControlled(p.index);
@@ -1272,7 +1274,25 @@ export class GameRules {
     calculateTerrainLighting(b);
     for (const u of b.units) if (u.status === UnitStatus.UNCONSCIOUS) this.revive(u, ev);
     this.supplyDrops(ev);
+    this.reinforcements(ev);
     this.settle(ev);
+  }
+
+  /** Co-op scenarios: enemy waves due this round land where the game master put them. */
+  private reinforcements(ev: BattleEvents) {
+    const b = this.b;
+    const due = b.waves.filter((w) => w.round <= b.round);
+    if (!due.length) return;
+    b.waves = b.waves.filter((w) => w.round > b.round);
+    for (const w of due) {
+      const p = b.players[w.seat];
+      if (!p || p.eliminated) continue;
+      const entries = w.members.map((m) => ({ m, r: w.recruits.find((r) => r.id === m.recruitId)! })).filter((e) => e.r);
+      const n = deployAll(b, w.seat, entries).length;
+      if (n) ev.msg("STR_REINFORCEMENTS_ARRIVED", ev.all(), p.name);
+    }
+    calculateUnitLighting(b);
+    recalculateAllFOV(b);
   }
 
   /** Units standing in fire burn; smoke knocks people out (Tile::prepareNewTurn). */

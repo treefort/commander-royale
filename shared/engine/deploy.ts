@@ -1,0 +1,94 @@
+// Putting units on the map: a squad's landing zone, or (co-op scenario enemies) the UFO, the middle of the
+// map or anywhere, at the start or as reinforcements later on.
+import { type Battle, type Unit } from "./state.ts";
+import { canStand } from "./mapgen.ts";
+import { createUnit, giveItem } from "./units.ts";
+import { directionTo, type Pos } from "./defs.ts";
+import { armorRule, unitRule, itemRule, fitsSlot, livingWeaponFor, type PlacedItem } from "../rules/index.ts";
+import type { Recruit, SquadMember, Placement } from "../protocol.ts";
+
+function standZ(b: Battle, x: number, y: number, size: number): number {
+  for (let z = 0; z < b.sz; z++) if (canStand(b, { x, y, z }, size)) return z;
+  return -1;
+}
+
+/** Tiles in rings around a point, nearest first. */
+function around(b: Battle, cx: number, cy: number, maxR: number): Pos[] {
+  const spots: Pos[] = [];
+  for (let r = 0; r < maxR; r++)
+    for (let dx = -r; dx <= r; dx++)
+      for (let dy = -r; dy <= r; dy++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = Math.floor(cx + dx), y = Math.floor(cy + dy);
+        if (x < 0 || y < 0 || x >= b.sx || y >= b.sy) continue;
+        spots.push({ x, y, z: 0 });
+      }
+  return spots;
+}
+
+/** Where `seat`'s units may land, best first. */
+export function deploySpots(b: Battle, seat: number, how: Placement | undefined): Pos[] {
+  if (how === "ufo" && b.ufoArea) {
+    const a = b.ufoArea;
+    return around(b, a.x + a.w / 2, a.y + a.h / 2, Math.max(a.w, a.h) / 2 + 14);
+  }
+  if (how === "ufo" || how === "center") return around(b, b.sx / 2, b.sy / 2, 22);
+  if (how === "spread") {
+    // anywhere, but not on top of anyone else's landing zone
+    const others = b.zones.filter((_, i) => i !== seat).map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 }));
+    const all: Pos[] = [];
+    for (let x = 1; x < b.sx - 1; x++)
+      for (let y = 1; y < b.sy - 1; y++) if (others.every((o) => Math.max(Math.abs(o.x - x), Math.abs(o.y - y)) >= 14)) all.push({ x, y, z: 0 });
+    return b.rng.shuffle(all);
+  }
+  const zone = b.zones[seat] ?? { x: b.sx / 2 - 5, y: b.sy / 2 - 5, w: 10, h: 10 };
+  return around(b, zone.x + zone.w / 2, zone.y + zone.h / 2, 18);
+}
+
+export function sizeOf(r: Recruit): number {
+  if (r.kind === "soldier") return 1;
+  return armorRule(unitRule(r.type).armor).size;
+}
+
+/** Creates a squad member's unit on the first free spot, carrying its kit. Null if there's no room. */
+export function deployMember(b: Battle, r: Recruit, m: SquadMember, seat: number, spots: Pos[]): Unit | null {
+  const size = sizeOf(r);
+  let at: Pos | null = null;
+  for (const s of spots) {
+    const z = standZ(b, s.x, s.y, size);
+    if (z < 0) continue;
+    at = { x: s.x, y: s.y, z };
+    break;
+  }
+  if (!at) return null;
+  const u = createUnit(b, r, m.armor, seat, at, directionTo(at, { x: b.sx / 2, y: b.sy / 2, z: 0 }));
+  if (u.hasInventory) {
+    const innate = r.kind === "alien" ? livingWeaponFor(unitRule(r.type)) : null;
+    const placed: PlacedItem[] = innate ? [{ type: innate, slot: "STR_RIGHT_HAND", x: 0, y: 0 }] : [];
+    for (const it of m.items) {
+      // only items that really fit are carried (the loadout check already rejects the rest)
+      if (it.slot === "STR_GROUND" || !fitsSlot(placed, it.type, it.slot, it.x, it.y)) continue;
+      if (it.ammo && !itemRule(it.type).compatibleAmmo.includes(it.ammo)) continue;
+      placed.push(it);
+      giveItem(b, u, it.type, it.slot, it.x, it.y, it.ammo);
+    }
+  }
+  return u;
+}
+
+/** Deploys members grouped by where they go (big units first, so they find room). */
+export function deployAll(b: Battle, seat: number, entries: { r: Recruit; m: SquadMember }[]): { unit: Unit; m: SquadMember }[] {
+  const out: { unit: Unit; m: SquadMember }[] = [];
+  const spotsBy = new Map<string, Pos[]>();
+  const sorted = [...entries].sort((a, c) => sizeOf(c.r) - sizeOf(a.r));
+  for (const { r, m } of sorted) {
+    const key = m.deploy ?? "edge";
+    let spots = spotsBy.get(key);
+    if (!spots) spotsBy.set(key, (spots = deploySpots(b, seat, m.deploy)));
+    // scattered units each take the next random spot rather than crowding the first one
+    const u = deployMember(b, r, m, seat, spots);
+    if (key === "spread" && u) spotsBy.set(key, spots.filter((p) => Math.max(Math.abs(p.x - u.pos.x), Math.abs(p.y - u.pos.y)) >= 4));
+    if (u) out.push({ unit: u, m });
+  }
+  return out;
+}

@@ -59,6 +59,8 @@ const MESSAGES: Record<string, string> = {
   STR_TEAMMATES_UNIT: "That unit is a teammate's (G gives yours away)",
   STR_UNIT_PLAYED_BY_AI: "The AI is playing that unit for an AFK teammate",
   STR_ONLY_LEADER_SURRENDERS: "Only the squad leader can surrender",
+  STR_GAME_MASTER_WATCHES: "The game master watches: the team gives the orders",
+  STR_REINFORCEMENTS_ARRIVED: "{0}: reinforcements have arrived!",
 };
 function msgText(key: string, arg?: string) {
   return (MESSAGES[key] ?? tr(key)).replace("{0}", arg ?? "");
@@ -459,7 +461,8 @@ export class BattleScreen {
   }
 
   private async playEvent(b: Battle, e: BattleEvent) {
-    const fast = this.keys.has("Shift") || this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+    // teammates acting at once can queue up moves faster than they play out: catch up rather than lag behind
+    const fast = this.keys.has("Shift") || this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.queue.length > 1;
     switch (e.t) {
       case "move": {
         const u = this.ensureUnit(b, e);
@@ -757,10 +760,12 @@ export class BattleScreen {
     const s = this.surf, A = this.assets, b = this.b!;
     // turn banner
     const cur = b.players[b.current];
-    let banner = b.phase === Phase.FINISHED ? "BATTLE OVER" : `ROUND ${b.round}: ${(cur?.name ?? "").toUpperCase()}${this.myTurn() ? " (YOU)" : ""}`;
+    let banner = b.phase === Phase.FINISHED ? "BATTLE OVER" : `ROUND ${b.round}: ${(cur?.name ?? "").toUpperCase()}${this.myTurn() ? (this.member()?.observer ? " (GM VIEW)" : " (YOU)") : ""}`;
     if (this.deadline && b.phase === Phase.PLAYING) {
       const secs = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000));
-      banner += `  ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+      // daily turn ends can be hours away
+      const hms = secs >= 3600 ? `${Math.floor(secs / 3600)}:${String(Math.floor(secs / 60) % 60).padStart(2, "0")}` : `${Math.floor(secs / 60)}`;
+      banner += `  ${hms}:${String(secs % 60).padStart(2, "0")}`;
     }
     drawText(s, A.small, banner, 4, 4, this.myTurn() ? 16 * 4 - 1 : 16 - 1, { contrast: true });
     // whose turn it is, front and centre, whenever it isn't yours (or you're done with it, in a co-op squad)
@@ -782,7 +787,8 @@ export class BattleScreen {
       const text = `${p.name.toUpperCase()}${p.eliminated ? " (OUT)" : ""}${i === this.you ? " *" : ""}`;
       const y = 14 + i * 9;
       s.fillRect(4, y + 1, 5, 5, TEAM_COLORS[i] + 3);
-      drawText(s, A.small, text, 12, y, p.eliminated ? 8 : 0, { contrast: true });
+      // dimmed text without contrast: with it, base 8's shades would run on into the next colour ramp
+      drawText(s, A.small, text, 12, y, p.eliminated ? 8 : 0, { contrast: !p.eliminated });
       void alive;
     });
     // supply drops off screen: a pointer at the edge of the view, towards the beacon
@@ -884,10 +890,11 @@ export class BattleScreen {
     const ourTurn = this.myTurn();
     members.forEach((m, i) => {
       const units = b.units.filter((u) => u.owner === this.you && !isOut(u) && controllerOf(b, u) === m.userId).length;
-      const status = isAfk(m) ? "AI" : !this.online.has(m.userId) ? "OFFLINE" : ourTurn ? (m.locked ? "DONE" : "PLAYING") : "";
+      const status = m.observer ? "GM" : isAfk(m) ? "AI" : !this.online.has(m.userId) ? "OFFLINE" : ourTurn ? (m.locked ? "DONE" : "PLAYING") : "";
       const text = `${m.name.toUpperCase()}${m.userId === this.me.id ? " *" : ""} (${units})${status ? " " + status : ""}`;
-      const color = isAfk(m) ? 16 * 3 - 1 : m.locked && ourTurn ? 16 * 4 - 1 : !this.online.has(m.userId) ? 8 : 0;
-      drawText(s, A.small, text, this.vw - 4 - textWidth(A.small, text), 52 + i * 9, color, { contrast: true });
+      const offline = !m.observer && !isAfk(m) && !this.online.has(m.userId);
+      const color = isAfk(m) ? 16 * 3 - 1 : m.locked && ourTurn ? 16 * 4 - 1 : offline ? 8 : 0;
+      drawText(s, A.small, text, this.vw - 4 - textWidth(A.small, text), 52 + i * 9, color, { contrast: !offline });
     });
   }
 
@@ -1005,9 +1012,10 @@ export class BattleScreen {
         button(cx + 40, cy + 50, 116, 16, `MUSIC: ${audioSettings.music ? "ON" : "OFF"}`, () => { audioSettings.music = !audioSettings.music; saveAudioSettings(); applyMusicSettings(); });
         button(cx + 164, cy + 50, 116, 16, `MUSIC VOL: ${Math.round(audioSettings.musicVolume * 100)}%`, () => { audioSettings.musicVolume = step(audioSettings.musicVolume); saveAudioSettings(); applyMusicSettings(); });
         const me = this.member();
-        button(cx + 40, cy + 68, me ? 116 : 240, 16, `PATH PREVIEW: ${this.pathPreview ? "ON" : "OFF"}`, () => { this.pathPreview = !this.pathPreview; try { localStorage.setItem("xcom.pathPreview", this.pathPreview ? "1" : "0"); } catch { /* */ } });
+        const afkable = me && !me.observer;
+        button(cx + 40, cy + 68, afkable ? 116 : 240, 16, `PATH PREVIEW: ${this.pathPreview ? "ON" : "OFF"}`, () => { this.pathPreview = !this.pathPreview; try { localStorage.setItem("xcom.pathPreview", this.pathPreview ? "1" : "0"); } catch { /* */ } });
         // the AI plays your units while you're away (co-op squads, or a solo squad you want auto-played)
-        if (me) button(cx + 164, cy + 68, 116, 16, `AFK (AI PLAYS): ${me.afk ? "ON" : "OFF"}`, () => this.toggleAfk(), me.afk ? 16 * 2 + 3 : 3);
+        if (afkable) button(cx + 164, cy + 68, 116, 16, `AFK (AI PLAYS): ${me.afk ? "ON" : "OFF"}`, () => this.toggleAfk(), me.afk ? 16 * 2 + 3 : 3);
         const help = [
           "LEFT CLICK: SELECT / MOVE (CLICK TWICE) / FIRE",
           "RIGHT CLICK: TURN OR OPEN DOOR / CANCEL",

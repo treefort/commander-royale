@@ -3,6 +3,7 @@ import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
 import { biomeName, DEFAULT_BOT_TUNING, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
 import { checkLoadout, budgetGuide, type CatalogEntry } from "../../shared/rules/catalog.ts";
+import { forceSummary } from "../../shared/rules/scenario.ts";
 import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, type SlotId } from "../../shared/rules/index.ts";
 import { InventoryScreen, type InvAdapter, type InvItem } from "./inventory.ts";
 import { Assets, battleFileList } from "../render/assets.ts";
@@ -13,11 +14,15 @@ interface LobbyState {
   id: string;
   status: string;
   isOwner: boolean;
+  /** co-op scenario: you run it without playing */
+  gameMaster?: boolean;
   settings: MatchSettings;
   players: {
     name: string; seat: number; ready: boolean; hasLoadout: boolean; you: boolean; owner: boolean; userId: string;
     /** co-op: the leader whose squad this player plays in */
     squadOf: string | null;
+    /** a co-op scenario's game master who only watches */
+    gm?: boolean;
     bot?: boolean; botId?: string; ai?: BotTuning;
   }[];
   strategies: string[];
@@ -166,7 +171,7 @@ export class LobbyPage {
         el("div", { class: "row" }, el("span", {}, "Invite link:"), el("span", { class: "invite" }, url),
           el("button", { class: "small", onclick: () => navigator.clipboard?.writeText(url) }, "Copy")),
         el("div", { class: "muted", style: { marginTop: "6px" } },
-          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)} · ${s.settings.squadLimit} seats · tech: ${s.settings.techLevel}` +
+          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.unitsPerPlayer} units each` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
           `${s.settings.psionics ? " · psionics" : ""}${s.settings.allowAliens ? " · alien recruits" : ""}${s.settings.allowHWP ? " · tanks" : ""}` +
           `${s.settings.supplyDrops.enabled ? ` · supply drops every ${s.settings.supplyDrops.everyRounds} rounds (${s.settings.supplyDrops.tier})` : ""}${s.settings.turnTimer ? ` · ${s.settings.turnTimer}s turns` : " · no turn timer"}`),
         // the creator's message to everyone joining
@@ -174,6 +179,13 @@ export class LobbyPage {
         this.editingSettings && s.isOwner ? this.settingsPanel(s) : null,
       ),
     );
+    if (s.settings.mode === "coop") {
+      wrap.append(this.renderScenario(s));
+      if (s.you && !s.gameMaster) wrap.append(this.renderLoadout(s));
+      root.querySelectorAll<HTMLElement>(".scroll").forEach((e, i) => (e.scrollTop = inner[i] ?? 0));
+      window.scrollTo(0, scrollY);
+      return;
+    }
     // squads (in co-op, each with the people sharing it)
     const leaders = s.players.filter((p) => !p.squadOf);
     const allReady = leaders.length >= 2 && leaders.every((p) => p.ready);
@@ -212,6 +224,38 @@ export class LobbyPage {
     else if (s.you) wrap.append(this.renderLoadout(s));
     root.querySelectorAll<HTMLElement>(".scroll").forEach((e, i) => (e.scrollTop = inner[i] ?? 0));
     window.scrollTo(0, scrollY);
+  }
+
+  /** Co-op scenario: the team, the mission briefing (the enemy the game master set up) and how turns work. */
+  private renderScenario(s: LobbyState): HTMLElement {
+    const sc = s.settings.scenario;
+    const team = s.players.filter((p) => !p.gm);
+    const allReady = team.length >= 1 && team.every((p) => p.ready);
+    const co = s.settings.coop;
+    const turns = co.turnEnd === "daily" ? `The team's turn ends at ${co.dailyAt} (${co.timeZone}) every day, or as soon as everyone has locked in (End Turn).`
+      : co.turnEnd === "timer" && s.settings.turnTimer ? `The team's turn ends when the ${s.settings.turnTimer}s timer runs out.`
+      : "The team's turn ends once everyone has locked in (End Turn) — you set the pace.";
+    const offline = co.afkAI ? "The AI plays for anyone offline for more than half a minute." : "Offline players' units stay where they are.";
+    return el("div", {},
+      el("div", { class: "panel" },
+        el("div", { class: "row" },
+          el("h2", { class: "grow" }, `THE TEAM: ${sc.teamName.toUpperCase()} (${team.length}/${s.settings.maxPlayers})`),
+          !s.you && team.length < s.settings.maxPlayers ? el("button", { class: "primary", onclick: () => this.act("join") }, "Join the team") : null,
+          s.isOwner ? el("button", { class: "primary", disabled: !allReady, onclick: () => this.act("start") }, "Start battle") : null),
+        el("table", {}, ...s.players.map((p) => el("tr", {},
+          el("td", {}, p.name, p.owner ? el("span", { class: "muted" }, " (game master)") : null, p.you ? el("span", { class: "muted" }, " (you)") : null),
+          el("td", {}, p.gm ? el("span", { class: "badge dim" }, "Watching") : p.ready ? el("span", { class: "badge" }, "Ready") : p.hasLoadout ? el("span", { class: "badge dim" }, "Equipping") : el("span", { class: "badge red" }, "Not ready")),
+        ))),
+        el("div", { class: "hint" }, `Everyone hires and equips up to ${sc.unitsPerPlayer} unit${sc.unitsPerPlayer > 1 ? "s" : ""} with ${money(s.settings.budget)}, and commands them in battle. The whole team moves at once, and you see every move a teammate (or any enemy in sight) makes as it happens. ${turns} ${offline}`),
+        s.isOwner && !allReady ? el("div", { class: "hint" }, team.length ? "The battle can start once everyone on the team is ready." : "Send the invite link: the battle can start once someone has joined the team and is ready.") : null,
+        this.error ? el("div", { class: "err" }, this.error) : null,
+      ),
+      el("div", { class: "panel" },
+        el("h2", {}, `MISSION BRIEFING: ${sc.enemyName.toUpperCase()}`),
+        el("ul", {}, ...forceSummary(s.settings).map((x) => el("li", {}, x))),
+        el("div", { class: "muted" }, `Tactics: ${botSummary({ ...sc.ai, strength: 100 })}. Victory when every enemy is down and no more are coming.`),
+        s.gameMaster ? el("div", { class: "hint", style: { marginTop: "6px" } }, `You're the game master: change the scenario with Edit settings, start the battle when the team is ready, and watch the whole battlefield — both sides — as it plays out. You can call off the mission from the battlescape (Surrender).`) : null,
+      ));
   }
 
   /** A co-op member's view: the leader's squad (read-only) and who gets which unit. */
@@ -306,7 +350,9 @@ export class LobbyPage {
         el("h2", { class: "grow" }, "YOUR SQUAD"),
         el("span", {}, `Spent ${money(check.cost)} of ${money(s.settings.budget)}`),
         el("div", { class: "meter" + (check.cost > s.settings.budget ? " over" : "") }, el("div", { style: { width: pct + "%" } })),
-        el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "" }, `Seats ${check.seats}/${s.settings.squadLimit}`),
+        s.settings.mode === "coop"
+          ? el("span", { class: this.loadout.squad.length > s.settings.scenario.unitsPerPlayer ? "bad" : "" }, `Units ${this.loadout.squad.length}/${s.settings.scenario.unitsPerPlayer}`)
+          : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "" }, `Seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.dirty ? "saving..." : "saved"),
         el("button", { class: s.you!.ready ? "" : "primary", disabled: !check.ok && !s.you!.ready, onclick: () => this.act("ready", { ready: !s.you!.ready }) }, s.you!.ready ? "Not ready" : "Ready"),
       ),
@@ -584,7 +630,9 @@ export class LobbyPage {
         el("span", { class: "muted" }, ` of ${short(s.settings.budget)}`),
         el("div", { class: "meter" + (rest < 0 ? " over" : "") }, el("div", { style: { width: Math.min(100, (check.cost / s.settings.budget) * 100) + "%" } })),
         el("span", {}, `${r.name}: ${short(unitCost)}`),
-        el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "muted" }, `seats ${check.seats}/${s.settings.squadLimit}`),
+        s.settings.mode === "coop"
+          ? el("span", { class: this.loadout.squad.length > s.settings.scenario.unitsPerPlayer ? "bad" : "muted" }, `units ${this.loadout.squad.length}/${s.settings.scenario.unitsPerPlayer}`)
+          : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "muted" }, `seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.loadout.stash.length ? `stores ${short(this.loadout.stash.reduce((a, t) => a + price(t), 0))}` : ""),
       );
     };

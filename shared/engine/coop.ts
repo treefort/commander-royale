@@ -38,7 +38,9 @@ export function controllerOf(b: Battle, u: Unit): string {
 
 /** Whether `userId` may give orders to `u` right now (it's still the squad's turn check that decides when). */
 export function mayCommand(b: Battle, userId: string, u: Unit): string | null {
-  if (memberOf(b, u.owner, userId) === undefined && b.players[u.owner]?.userId !== userId) return "STR_INVALID_UNIT";
+  const me = memberOf(b, u.owner, userId);
+  if (me === undefined && b.players[u.owner]?.userId !== userId) return "STR_INVALID_UNIT";
+  if (me?.observer) return "STR_GAME_MASTER_WATCHES";
   const c = controllerOf(b, u);
   if (!c || c === userId) return null;
   const m = memberOf(b, u.owner, c)!;
@@ -58,12 +60,17 @@ export function waitingFor(b: Battle, seat: number): SquadMemberState[] {
     else shared = true;
   }
   // anyone may move the shared units, so everyone present has a say; otherwise only people with units do
-  return members.filter((m) => !m.locked && !isAfk(m) && (shared || active.has(m.userId)));
+  return members.filter((m) => !m.locked && !isAfk(m) && !m.observer && (shared || active.has(m.userId)));
 }
 
 /** A squad played by more than one person (lock-ins and the "timer" turn end apply). */
 export function isShared(p: PlayerState | undefined): boolean {
-  return membersOf(p).length > 1;
+  return membersOf(p).filter((m) => !m.observer).length > 1;
+}
+
+/** Whether `userId` watches `seat`'s side as a game master (everything is visible to them). */
+export function isObserver(b: Battle, seat: number, userId: string): boolean {
+  return !!memberOf(b, seat, userId)?.observer;
 }
 
 /** Deals a squad's units out to its members: explicit picks first, then the rest in turn (fewest first). */
@@ -93,5 +100,5 @@ export function playedByAI(b: Battle, u: Unit): boolean {
   if (!members.length) return false;
   const c = controllerOf(b, u);
   if (c) return isAfk(memberOf(b, u.owner, c)!);
-  return members.every(isAfk);
+  return members.every((m) => m.observer || isAfk(m));
 }

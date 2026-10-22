@@ -17,10 +17,10 @@ import type { UserRow } from "../server/db.ts";
 
 test("co-op settings and AI tuning are sanitized", () => {
   const d = defaultSettings();
-  expect(d.coop).toEqual({ squadSize: 1, turnEnd: "lockin", afkAI: false });
-  expect(sanitizeSettings({ coop: { squadSize: 50, turnEnd: "timer", afkAI: true } }).coop).toEqual({ squadSize: 10, turnEnd: "lockin", afkAI: true });
+  expect(d.coop).toEqual({ squadSize: 1, turnEnd: "lockin", dailyAt: "20:00", timeZone: "UTC", afkAI: false });
+  expect(sanitizeSettings({ coop: { ...d.coop, squadSize: 50, turnEnd: "timer", afkAI: true } }).coop).toMatchObject({ squadSize: 10, turnEnd: "lockin", afkAI: true });
   // ending on the timer needs one
-  expect(sanitizeSettings({ turnTimer: 90, coop: { squadSize: 3, turnEnd: "timer", afkAI: false } }).coop.turnEnd).toBe("timer");
+  expect(sanitizeSettings({ turnTimer: 90, coop: { ...d.coop, squadSize: 3, turnEnd: "timer" } }).coop.turnEnd).toBe("timer");
   // settings saved before co-op existed
   expect(sanitizeSettings({ name: "old" }).coop.squadSize).toBe(1);
   expect(sanitizeBotTuning({ aggression: 9, strength: 10, intelligence: "x" })).toEqual({ ...DEFAULT_BOT_TUNING, aggression: 3, strength: 25 });
@@ -115,7 +115,7 @@ test("co-op on the server: joining a squad, lock-ins, AFK and AI tuning", async 
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const [ann, ben, dot, eli] = ["co_ann", "co_ben", "co_dot", "co_eli"].map(mkUser);
-  const { id } = game.createMatch(ann, { budget: 200_000, biome: "CULTA", timeOfDay: "day", maxPlayers: 2, coop: { squadSize: 2, turnEnd: "lockin", afkAI: false } });
+  const { id } = game.createMatch(ann, { budget: 200_000, biome: "CULTA", timeOfDay: "day", maxPlayers: 2, coop: { ...defaultSettings().coop, squadSize: 2 } });
   expect(game.joinMatch(id, ben)).toBeNull();
   // every squad slot is taken: Dot joins the first squad with room
   expect(game.joinMatch(id, dot)).toBeNull();
@@ -124,7 +124,7 @@ test("co-op on the server: joining a squad, lock-ins, AFK and AI tuning", async 
   expect(lobby.players.find((p) => p.userId === dot.id)!.squadOf).toBe(ann.id);
   expect(lobby.you!.leaderName).toBe(ann.id);
   expect(game.setReady(id, dot, true)).toBe("Your squad leader readies the squad");
-  expect(game.updateSettings(id, ann, { ...lobby.settings, coop: { squadSize: 1, turnEnd: "lockin", afkAI: false } })).toContain("split up");
+  expect(game.updateSettings(id, ann, { ...lobby.settings, coop: { ...lobby.settings.coop, squadSize: 1 } })).toContain("split up");
   const loadout = buildSquad("swarm", lobby.settings, lobby.pool, new RNG(5));
   loadout.squad[0].controller = dot.id;
   expect(game.saveLoadout(id, dot, loadout).error).toBe("Your squad leader hires and equips the squad");

@@ -203,6 +203,19 @@ function makeNonHuman(rng: RNG, id: string, u: UnitRule, kind: "alien" | "hwp", 
   return { id, kind, type: u.type, name: tr(u.type), rank: u.rank ? tr(u.rank) : kind === "hwp" ? "HWP" : "", gender: 0, look: 0, stats: s, price: pi.price, notes: pi.notes };
 }
 
+/** Unit types a co-op scenario's enemy can field: every alien race and rank, terror units and tanks. */
+export const ENEMY_UNIT_TYPES = [...ALIEN_TYPES, ...HWP_TYPES].map((u) => u.type);
+
+/** One enemy for a co-op scenario: `type` is a unit rule type or "SOLDIER:<rank 0-5>". */
+export function scenarioRecruit(type: string, rng: RNG, id: string, settings: MatchSettings): Recruit | null {
+  const time = pricingTime(settings.timeOfDay);
+  const soldier = /^SOLDIER:([0-5])$/.exec(type);
+  if (soldier) return makeSoldier(rng, id, Number(soldier[1]), settings.psionics, time);
+  const u = UNITS.get(type);
+  if (!u || !ENEMY_UNIT_TYPES.includes(type)) return null;
+  return makeNonHuman(rng, id, u, HWP_TYPES.includes(u) ? "hwp" : "alien", settings.psionics, time);
+}
+
 /** The shared hiring pool for a match (every player gets an identical copy). */
 export function generatePool(settings: MatchSettings, seed: number): Recruit[] {
   const rng = new RNG(seed ^ 0x9001);
@@ -277,7 +290,10 @@ export function checkLoadout(settings: MatchSettings, pool: Recruit[], l: Loadou
     cost += itemPrice(t);
   }
   if (!l.squad.length) errors.push("Hire at least one unit");
-  if (seats > settings.squadLimit) errors.push(`Squad needs ${seats} seats, limit is ${settings.squadLimit}`);
+  // co-op scenarios limit how many units each person commands; free-for-all squads are limited by seats
+  if (settings.mode === "coop") {
+    if (l.squad.length > settings.scenario.unitsPerPlayer) errors.push(`${l.squad.length} units hired, the limit is ${settings.scenario.unitsPerPlayer} each`);
+  } else if (seats > settings.squadLimit) errors.push(`Squad needs ${seats} seats, limit is ${settings.squadLimit}`);
   if (cost > settings.budget) errors.push(`Over budget by $${(cost - settings.budget).toLocaleString()}`);
   return { ok: errors.length === 0, cost, seats, errors };
 }

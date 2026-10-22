@@ -5,10 +5,15 @@ export type TimeOfDay = "day" | "dusk" | "night";
 export type TechLevel = "conventional" | "laser" | "alien";
 export type LootTier = "basic" | "advanced" | "alien" | "mixed";
 
+/** "ffa": squads fight each other; "coop": everyone on one team against a force the creator sets up. */
+export type GameMode = "ffa" | "coop";
+
 export interface MatchSettings {
+  mode: GameMode;
   name: string;
   /** optional message from the creator, shown to everyone in the lobby (house rules, schedule...) */
   notes: string;
+  /** free-for-all: squads; co-op scenario: people on the team (not counting a game master who only watches) */
   maxPlayers: number;
   biome: Biome | "RANDOM"; // RANDOM is decided when the battle starts
   /** set when a "Random" environment was rolled at the start, so reusing these settings rolls again */
@@ -29,19 +34,144 @@ export interface MatchSettings {
   supplyDrops: { enabled: boolean; everyRounds: number; warningRounds: number; tier: LootTier };
   turnTimer: number; // seconds per turn, 0 = unlimited
   coop: CoopSettings;
+  /** co-op scenario mode: the creator's setup of the team and the enemy */
+  scenario: Scenario;
 }
 
 /** Several people sharing one squad: each controls some of its units, and they all act at once on its turn. */
 export interface CoopSettings {
   /** people per squad (1 = everyone fields their own squad) */
   squadSize: number;
-  /** a shared squad's turn ends once every member has locked in, or only when the turn timer runs out */
-  turnEnd: "lockin" | "timer";
+  /**
+   * when a shared squad's turn ends: once every member has locked in; only when the turn timer runs out; or
+   * (co-op scenarios) at `dailyAt` every day, or earlier if everyone has locked in
+   */
+  turnEnd: "lockin" | "timer" | "daily";
+  /** "HH:MM" in `timeZone` (the creator's) */
+  dailyAt: string;
+  timeZone: string;
   /** the AI plays the units of people who have been offline for a while (anyone can also go AFK by hand) */
   afkAI: boolean;
 }
 
 export const MAX_SQUAD_SIZE = 10;
+export const MAX_COOP_PLAYERS = 10;
+
+export type Placement = "edge" | "ufo" | "center" | "spread";
+
+/** A group of identical enemies in a co-op scenario; groups arriving after round 1 are reinforcements. */
+export interface EnemyGroup {
+  /** a unit rule type (alien race/rank, terror unit, tank) or "SOLDIER:<0-5>" for human soldiers of a rank */
+  type: string;
+  count: number;
+  /** "standard" (by rank and tech level), "none", or a weapon item type */
+  weapon: string;
+  grenades: number;
+  /** soldiers only */
+  armor: string;
+  placement: Placement;
+  /** the round it arrives (1 = there from the start) */
+  round: number;
+}
+
+export interface Scenario {
+  /** the players' side */
+  teamName: string;
+  enemyName: string;
+  /** units each person may hire and command */
+  unitsPerPlayer: number;
+  /** the creator hires units and plays too; otherwise they run the game and watch everything */
+  gmPlays: boolean;
+  enemies: EnemyGroup[];
+  /** how the enemy plays (strength is unused: the groups say what it fields) */
+  ai: BotTuning;
+}
+
+export const PLACEMENTS: { id: Placement; name: string }[] = [
+  { id: "edge", name: "Far side" },
+  { id: "ufo", name: "At the UFO" },
+  { id: "center", name: "Middle" },
+  { id: "spread", name: "Scattered" },
+];
+
+export function defaultScenario(): Scenario {
+  return {
+    teamName: "X-COM",
+    enemyName: "Aliens",
+    unitsPerPlayer: 4,
+    gmPlays: true,
+    enemies: [
+      { type: "STR_SECTOID_SOLDIER", count: 6, weapon: "standard", grenades: 0, armor: "STR_NONE_UC", placement: "edge", round: 1 },
+      { type: "STR_SECTOID_LEADER", count: 1, weapon: "standard", grenades: 1, armor: "STR_NONE_UC", placement: "edge", round: 1 },
+      { type: "STR_CYBERDISC_TERRORIST", count: 1, weapon: "standard", grenades: 0, armor: "STR_NONE_UC", placement: "spread", round: 4 },
+    ],
+    ai: { ...DEFAULT_BOT_TUNING },
+  };
+}
+
+function sanitizeScenario(raw: unknown): Scenario {
+  const s = (raw && typeof raw === "object" ? raw : {}) as Partial<Scenario>;
+  const d = defaultScenario();
+  const clamp = (v: unknown, lo: number, hi: number, def: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : def;
+  };
+  const str = (v: unknown, def: string, max = 30) => String(v ?? def).slice(0, max).trim() || def;
+  const groups = Array.isArray(s.enemies) ? s.enemies : d.enemies;
+  const enemies: EnemyGroup[] = groups.filter((g) => g && typeof g === "object").slice(0, 20).map((g) => ({
+    type: /^(STR_[A-Z_]+|SOLDIER:[0-5])$/.test(String(g.type)) ? String(g.type) : "STR_SECTOID_SOLDIER",
+    count: clamp(g.count, 1, 40, 1),
+    weapon: /^(standard|none|STR_[A-Z_]+)$/.test(String(g.weapon)) ? String(g.weapon) : "standard",
+    grenades: clamp(g.grenades, 0, 6, 0),
+    armor: /^STR_[A-Z_]+$/.test(String(g.armor)) ? String(g.armor) : "STR_NONE_UC",
+    placement: PLACEMENTS.some((p) => p.id === g.placement) ? g.placement : "edge",
+    round: clamp(g.round, 1, 99, 1),
+  }));
+  return {
+    teamName: str(s.teamName, d.teamName),
+    enemyName: str(s.enemyName, d.enemyName),
+    unitsPerPlayer: clamp(s.unitsPerPlayer, 1, 20, d.unitsPerPlayer),
+    gmPlays: s.gmPlays === undefined ? d.gmPlays : !!s.gmPlays,
+    // the enemy needs someone there from the start
+    enemies: enemies.some((g) => g.round === 1) ? enemies : d.enemies,
+    ai: sanitizeBotTuning(s.ai),
+  };
+}
+
+function validTimeZone(tz: unknown): string {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: String(tz) });
+    return String(tz);
+  } catch {
+    return "UTC";
+  }
+}
+
+/** The ms offset of `timeZone`'s wall clock from UTC at instant `t`. */
+function zoneOffset(t: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(t));
+  const get = (k: string) => Number(parts.find((p) => p.type === k)?.value ?? 0);
+  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - Math.floor(t / 1000) * 1000;
+}
+
+/** A turn that starts less than this before the daily time runs until the next day's instead. */
+export const DAILY_MIN_TURN_MS = 60 * 60 * 1000;
+
+/** The next time it's `at` ("HH:MM") in `timeZone`, at least DAILY_MIN_TURN_MS after `now`. */
+export function nextDailyDeadline(now: number, at: string, timeZone: string): number {
+  const [h, m] = at.split(":").map(Number);
+  const wallNow = new Date(now + zoneOffset(now, timeZone));
+  for (let day = 0; day < 3; day++) {
+    const wall = Date.UTC(wallNow.getUTCFullYear(), wallNow.getUTCMonth(), wallNow.getUTCDate() + day, h, m);
+    // the offset at the deadline itself (daylight saving may differ from now's)
+    let t = wall - zoneOffset(wall, timeZone);
+    t = wall - zoneOffset(t, timeZone);
+    if (t >= now + DAILY_MIN_TURN_MS) return t;
+  }
+  return now + 24 * 3600 * 1000;
+}
 
 /** How a computer squad plays (the lobby's "AI settings"), mapped onto the AI's options on the server. */
 export interface BotTuning {
@@ -131,6 +261,12 @@ export function recommendedMapBlocks(players: number, budget: number): number {
   return Math.min(10, base + extra);
 }
 
+/** Map size for a co-op scenario, from how many units take the field (both sides, reinforcements included). */
+export function recommendedScenarioBlocks(s: MatchSettings): number {
+  const units = s.maxPlayers * s.scenario.unitsPerPlayer + s.scenario.enemies.reduce((a, g) => a + g.count, 0);
+  return units <= 12 ? 5 : units <= 24 ? 6 : units <= 40 ? 7 : units <= 60 ? 8 : 9;
+}
+
 export function defaultSettings(): MatchSettings {
   return {
     name: "New Match",
@@ -150,7 +286,9 @@ export function defaultSettings(): MatchSettings {
     psionics: true,
     supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed" },
     turnTimer: 0,
-    coop: { squadSize: 1, turnEnd: "lockin", afkAI: false },
+    coop: { squadSize: 1, turnEnd: "lockin", dailyAt: "20:00", timeZone: "UTC", afkAI: false },
+    mode: "ffa",
+    scenario: defaultScenario(),
   };
 }
 
@@ -163,10 +301,13 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
   const sd = s.supplyDrops ?? d.supplyDrops;
   const co: Partial<CoopSettings> = s.coop ?? d.coop;
   const turnTimer = clamp(s.turnTimer, 0, 3600, 0);
+  const mode: GameMode = s.mode === "coop" ? "coop" : "ffa";
+  const dailyAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(co.dailyAt)) ? String(co.dailyAt) : d.coop.dailyAt;
   return {
     name: String(s.name ?? d.name).slice(0, 40) || d.name,
     notes: String(s.notes ?? "").split(String.fromCharCode(13)).join("").slice(0, 1000),
-    maxPlayers: clamp(s.maxPlayers, 2, 8, d.maxPlayers),
+    mode,
+    maxPlayers: mode === "coop" ? clamp(s.maxPlayers, 1, MAX_COOP_PLAYERS, 4) : clamp(s.maxPlayers, 2, 8, d.maxPlayers),
     // reusing a finished match's settings: a rolled "Random" environment goes back to Random
     biome: s.randomBiome ? "RANDOM" : s.biome === "RANDOM" || BIOMES.some((b) => b.id === s.biome) ? (s.biome as Biome | "RANDOM") : d.biome,
     timeOfDay: s.randomTime || s.timeOfDay === "random" ? "random" : s.timeOfDay === "night" || s.timeOfDay === "dusk" ? s.timeOfDay : "day",
@@ -189,10 +330,13 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     turnTimer,
     coop: {
       squadSize: clamp(co.squadSize, 1, MAX_SQUAD_SIZE, 1),
-      // "end on the timer" needs a timer
-      turnEnd: co.turnEnd === "timer" && turnTimer > 0 ? "timer" : "lockin",
+      // "end on the timer" needs a timer; a daily turn end is for co-op scenarios
+      turnEnd: co.turnEnd === "timer" && turnTimer > 0 ? "timer" : co.turnEnd === "daily" && mode === "coop" ? "daily" : "lockin",
+      dailyAt,
+      timeZone: validTimeZone(co.timeZone ?? "UTC"),
       afkAI: !!co.afkAI,
     },
+    scenario: sanitizeScenario(s.scenario),
   };
 }
 
@@ -215,6 +359,8 @@ export interface SquadMember {
   recruitId: string;
   /** co-op: user id of the squad member who controls this unit in battle (unset: dealt out in turn) */
   controller?: string;
+  /** co-op scenario enemies: where on the map they start */
+  deploy?: Placement;
   armor: string; // soldiers only; aliens/HWPs use their own
   items: { type: string; slot: string; x: number; y: number; ammo?: string }[];
 }

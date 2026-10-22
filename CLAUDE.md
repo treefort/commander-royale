@@ -12,6 +12,10 @@ about how to work on it.
   `gamedata/` (gitignored; the repo's `xcom/` folder is only the old demo — ignore it). Assets are served by our
   own server to signed-in players only (private deployment for friends).
 - Free-for-all between squads, last squad standing wins. Sequential async turns, optional turn timer.
+- Co-op scenario mode (2026-10-22, `settings.mode = "coop"`): the creator is a game master who designs the enemy
+  (groups by type/count/weapon/placement/arrival round, AI tactics) and the battlefield; 1–10 people form one team,
+  each hiring and commanding `unitsPerPlayer` units. Turn ends on lock-in (default), a daily time, or the timer;
+  offline players' units stay put. A GM who doesn't play watches everything (omniscient view) and commands nothing.
 - Co-op (2026-10-22): up to 10 people can share one squad, each commanding the units dealt to them, all acting
   at once on its turn; the turn ends when everyone locks in (or only on the timer). AFK/offline people's units
   are played by the AI. Computer squads have tunable AI (aggression, memory, explosives, cheat round, strength).
@@ -30,10 +34,11 @@ about how to work on it.
   doors, gravity), `pathfinding.ts`, `actions.ts` (`GameRules.apply` — every command goes through here),
   `mapgen.ts`, `setup.ts`, `view.ts` (per-player fog-of-war views/diffs), `ai.ts` (OpenXcom AIModule port),
   `coop.ts` (co-op squads: who controls which unit, lock-ins, AFK — the engine itself only knows squads),
+  `deploy.ts` (placing units: landing zone, UFO, middle, scattered; also reinforcement waves),
   `stats.ts`/`record.ts` (per-unit match statistics), `serialize.ts`.
 - `shared/rules/` — `generated.json` (from `tools/convert-rules.ts`, OpenXcom xcom1 rulesets), `catalog.ts`
   (prices, pool generation, loadout validation, budget guide), `value.ts` (price model), `calibration.json`
-  (measured price corrections), `squads.ts` (bot hiring strategies).
+  (measured price corrections), `squads.ts` (bot hiring strategies), `scenario.ts` (co-op scenario enemy forces).
 - `shared/protocol.ts` — `MatchSettings` + `sanitizeSettings` (all settings pass through it), recruits, loadouts.
 - `server/` — Bun.serve (`index.ts` routes), Google OAuth + dev login (`auth.ts`), SQLite (`db.ts`), lobby,
   battle hosting, websocket, bots, match records (`game.ts`).
@@ -79,6 +84,10 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   `Unit.controller` who commands a unit. Server-side checks (`mayCommand`) gate commands; "endturn" from a member
   is a lock-in toggle. Updates carry `by` (who acted) so a client only waits for its own; rejected commands reply
   `noUpdate`. Bot and AFK play share `runAI` (`turnSteps(rules, only)` plays a subset without ending the turn).
+  `publish` builds one view diff per side (`SentState` is per seat — never extract per socket) plus one for a
+  watching GM (`extractView(..., omniscient)`, `h.gmSent`). A scenario battle is seat 0 = the team (all players'
+  loadouts merged, `controller` = hirer, GM as `observer` member), seat 1 = `bot:scenario:<id>` with `b.waves`; the
+  enemy force is rebuilt deterministically from settings + seed (`buildEnemyForce`) for the match record.
 - Engine changes must keep the fog of war intact: clients only get what `extractView` sends; never leak enemy
   positions/inventories. The AI uses the authoritative battle but only "knows" enemies it has seen (OpenXcom
   rules, including its round-20 cheat).
@@ -98,5 +107,6 @@ Playable end to end locally: lobby (hire/equip shop with drag-and-drop, budget b
 host message, random environment/time), battlescape (original rules, fog of war, reaction fire, psi, explosives,
 blaster waypoints, supply drops/crates, minimap, exposure readout on move preview, music + sfx toggles, turn
 chime), match statistics + reports, bot tournaments and price calibration, co-op squads (lock-in turns, AFK →
-AI, unit hand-over) and per-bot AI settings (branch `feature/coop-squads`). Optional/not done: HUD rank icons,
+AI, unit hand-over) and per-bot AI settings (branch `feature/coop-squads`), co-op scenario mode with a game master
+(branch `feature/coop-scenarios`, built on the former). Optional/not done: HUD rank icons,
 alien UFOpaedia portraits, a TFTD-style narrower damage roll (offered, not requested).

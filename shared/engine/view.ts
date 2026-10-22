@@ -90,16 +90,31 @@ const ENEMY_FIELDS: (keyof Unit)[] = [
   "status", "size", "baseHeights", "movementType", "gender", "look", "fire", "loftemps", "activeHand", "hwp", "deathSound", "moveSound",
 ];
 
-export function extractView(b: Battle, player: number, sent: SentState, full: boolean): PlayerView {
-  const disc = b.discovered[player];
+const ALL_SEEN = new WeakMap<Battle, Uint8Array>();
+/** A game master's "discovered" map: everything. */
+function allSeen(b: Battle): Uint8Array {
+  let a = ALL_SEEN.get(b);
+  if (!a || a.length !== b.size) ALL_SEEN.set(b, (a = new Uint8Array(b.size).fill(7)));
+  return a;
+}
+
+/**
+ * What `player` may know. `omniscient` is a co-op scenario's game master watching from that side: the whole
+ * map and every unit (only ever sent to them).
+ */
+export function extractView(b: Battle, player: number, sent: SentState, full: boolean, omniscient = false): PlayerView {
+  const disc = omniscient ? allSeen(b) : b.discovered[player];
+  const sees = (t: number) => omniscient || canSeeTile(b, player, t);
   const tiles: number[][] = [];
   for (let i = 0; i < b.size; i++) {
     const d = disc[i];
     if (!d) continue;
+    // the game master's whole map: open air needn't be sent (unless something there changed)
+    if (omniscient && b.isVoid(i) && !b.fire[i] && !sent.tiles.has(i)) continue;
     const row = [i, b.parts[i * 4], b.parts[i * 4 + 1], b.parts[i * 4 + 2], b.parts[i * 4 + 3], b.fire[i], b.smoke[i], b.doorOpen[i], d];
     const key = row.join(",");
     const prev = sent.tiles.get(i);
-    if (prev !== undefined && prev !== key && !canSeeTile(b, player, i)) {
+    if (prev !== undefined && prev !== key && !sees(i)) {
       // changed while out of sight: the player keeps the state they last saw
       if (full) tiles.push(prev.split(",").map(Number));
       continue;
@@ -116,7 +131,7 @@ export function extractView(b: Battle, player: number, sent: SentState, full: bo
     if (mine) {
       const items = b.items.filter((it) => it.owner === u.id).map((it) => itemView(b, it, true));
       units.push({ ...u, mine: true, items });
-    } else if (!isOut(u) && isUnitVisibleTo(b, u, player)) {
+    } else if (!isOut(u) && (omniscient || isUnitVisibleTo(b, u, player))) {
       const v: UnitView = { id: u.id, mine: false };
       for (const f of ENEMY_FIELDS) (v as unknown as Record<string, unknown>)[f] = (u as unknown as Record<string, unknown>)[f];
       v.items = b.items.filter((it) => it.owner === u.id && (it.slot === "STR_RIGHT_HAND" || it.slot === "STR_LEFT_HAND")).map((it) => itemView(b, it, false));
@@ -135,7 +150,7 @@ export function extractView(b: Battle, player: number, sent: SentState, full: bo
     const list = b.itemsOnTile(t).map((id) => itemView(b, b.item(id)!, false));
     const key = JSON.stringify(list);
     const prev = sent.ground.get(t);
-    if (prev !== key && !canSeeTile(b, player, t)) {
+    if (prev !== key && !sees(t)) {
       // items came or went out of sight: keep showing what was last seen
       if (full && prev !== undefined) ground.push([t, JSON.parse(prev)]);
       continue;
