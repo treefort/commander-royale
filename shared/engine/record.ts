@@ -4,9 +4,9 @@ import { type Battle, isOut } from "./state.ts";
 import { unitStats, type UnitStats } from "./stats.ts";
 import { UnitStatus } from "./defs.ts";
 import { itemRule, tr, livingWeaponFor, unitRule } from "../rules/index.ts";
-import { checkLoadout } from "../rules/catalog.ts";
+import { checkLoadout, trainingCost, trainedRecruit } from "../rules/catalog.ts";
 import { memberCost } from "../rules/squads.ts";
-import type { MatchSettings, Recruit, Loadout } from "../protocol.ts";
+import type { MatchSettings, Recruit, Loadout, SquadMember } from "../protocol.ts";
 
 export interface UnitRecord {
   player: number; // seat
@@ -18,9 +18,11 @@ export interface UnitRecord {
   armor: string;
   kit: string; // what it held in its hands at deployment
   items: string[]; // everything it carried, loaded ammo included
-  recruitStats: Recruit["stats"];
+  recruitStats: Recruit["stats"]; // as it fought (training included)
   price: number; // hire price
-  cost: number; // price + armor + gear
+  cost: number; // price + armor + gear + training
+  /** training courses bought for it (sessions each) */
+  training?: SquadMember["training"];
   damage: number; // to enemies
   kills: number; // enemies it finished off
   killValue: number; // their hire price
@@ -100,13 +102,13 @@ export function buildRecord(b: Battle, pool: Recruit[], loadouts: Loadout[], id:
     const r = pool.find((x) => x.id === u.recruitId);
     if (!m || !r) continue;
     const alive = !isOut(u) && u.health > 0;
-    const cost = memberCost(r, m);
+    const cost = memberCost(r, m) + trainingCost(b.settings, r, m.training);
     if (alive) remaining[u.originalOwner] += cost;
     const s = unitStats(b, u.id);
     units.push({
       player: u.originalOwner, recruitId: r.id, key: recruitKey(r, m.armor), kind: r.kind, type: r.type, rank: r.rank, armor: m.armor || "STR_NONE_UC",
-      kit: kitName(r, m.items), items: m.items.flatMap((it) => (it.ammo ? [it.type, it.ammo] : [it.type])), recruitStats: r.stats,
-      price: r.price, cost, damage: Object.values(s.damage).reduce((a, x) => a + x, 0), kills: kills.get(u.id) ?? 0, killValue: killValue.get(u.id) ?? 0,
+      kit: kitName(r, m.items), items: m.items.flatMap((it) => (it.ammo ? [it.type, it.ammo] : [it.type])), recruitStats: trainedRecruit(r, m).stats,
+      price: r.price, cost, ...(m.training && trainingCost(b.settings, r, m.training) ? { training: m.training } : {}), damage: Object.values(s.damage).reduce((a, x) => a + x, 0), kills: kills.get(u.id) ?? 0, killValue: killValue.get(u.id) ?? 0,
       survived: alive,
       outcome: u.status === UnitStatus.IGNORE_ME ? "evacuated" : u.status === UnitStatus.DEAD ? "dead" : isOut(u) ? "unconscious" : "alive",
       stats: s,

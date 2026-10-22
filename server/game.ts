@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { db, randomId, type MatchRow, type PlayerRow, type UserRow } from "./db.ts";
 import { nextDailyDeadline, sanitizeSettings, defaultSettings, resolveBiome, resolveTimeOfDay, resolveMapBlocks, sanitizeBotTuning, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember, MAX_SIDES } from "../shared/protocol.ts";
-import { generatePool, checkLoadout, catalogFor, armorsFor, armorPrice } from "../shared/rules/catalog.ts";
+import { generatePool, checkLoadout, catalogFor, armorsFor, armorPrice, COURSES } from "../shared/rules/catalog.ts";
 import { createBattle, joinBattle, type SetupPlayer } from "../shared/engine/setup.ts";
 import { GameRules, type Command } from "../shared/engine/actions.ts";
 import { type Battle, type Unit, Phase } from "../shared/engine/state.ts";
@@ -402,6 +402,7 @@ export function saveLoadout(id: string, user: UserRow, loadout: Loadout) {
       recruitId: String(m.recruitId),
       armor: String(m.armor ?? "STR_NONE_UC"),
       ...(m.controller && team.has(String(m.controller)) ? { controller: String(m.controller) } : {}),
+      ...cleanTraining(m.training),
       items: (Array.isArray(m.items) ? m.items : []).filter((i) => i && typeof i === "object").slice(0, 40)
         .map((i) => ({ type: String(i.type), slot: String(i.slot), x: Number(i.x) | 0, y: Number(i.y) | 0, ammo: i.ammo ? String(i.ammo) : undefined })),
     })),
@@ -411,6 +412,17 @@ export function saveLoadout(id: string, user: UserRow, loadout: Loadout) {
   db.query("UPDATE match_players SET loadout = ?, ready = 0 WHERE match_id = ? AND user_id = ?").run(JSON.stringify(clean), id, user.id);
   touch(id);
   return { check };
+}
+
+/** Known courses with a whole number of sessions (checkLoadout says if there are too many). */
+function cleanTraining(raw: unknown): { training?: SquadMember["training"] } {
+  if (!raw || typeof raw !== "object") return {};
+  const t: NonNullable<SquadMember["training"]> = {};
+  for (const c of COURSES) {
+    const n = Math.floor(Number((raw as Record<string, unknown>)[c.id]));
+    if (n > 0) t[c.id] = Math.min(n, 99);
+  }
+  return Object.keys(t).length ? { training: t } : {};
 }
 
 export function setReady(id: string, user: UserRow, ready: boolean): string | null {

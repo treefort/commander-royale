@@ -7,6 +7,7 @@ import { directionTo, VoxelType, MAX_VIEW_DISTANCE, type Pos } from "./defs.ts";
 import { calculateLine } from "./tileengine.ts";
 import { armorRule, unitRule, itemRule, fitsSlot, livingWeaponFor, type PlacedItem } from "../rules/index.ts";
 import type { Recruit, SquadMember, Placement } from "../protocol.ts";
+import { trainedRecruit } from "../rules/catalog.ts";
 
 function standZ(b: Battle, x: number, y: number, size: number): number {
   for (let z = 0; z < b.sz; z++) if (canStand(b, { x, y, z }, size)) return z;
@@ -123,7 +124,8 @@ export function deployMember(b: Battle, r: Recruit, m: SquadMember, seat: number
     break;
   }
   if (!at) return null;
-  const u = createUnit(b, r, m.armor, seat, at, directionTo(at, { x: b.sx / 2, y: b.sy / 2, z: 0 }));
+  // trained soldiers fight with their trained stats
+  const u = createUnit(b, trainedRecruit(r, m), m.armor, seat, at, directionTo(at, { x: b.sx / 2, y: b.sy / 2, z: 0 }));
   if (u.hasInventory) {
     const innate = r.kind === "alien" ? livingWeaponFor(unitRule(r.type)) : null;
     const placed: PlacedItem[] = innate ? [{ type: innate, slot: "STR_RIGHT_HAND", x: 0, y: 0 }] : [];

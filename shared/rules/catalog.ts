@@ -6,7 +6,7 @@ import calibration from "./calibration.json" with { type: "json" };
 /** Corrections measured with bot duels (tools/duels.ts --calibrate): unit price multipliers, item and armor prices. */
 const CAL = calibration as { units: Record<string, number>; items: Record<string, number>; armor: Record<string, number> };
 import names from "./names.json" with { type: "json" };
-import { pricingTime, type MatchSettings, type Recruit, type LootTier, type Loadout, type TechLevel } from "../protocol.ts";
+import { pricingTime, type MatchSettings, type Recruit, type LootTier, type Loadout, type TechLevel, type SquadMember, type CourseId } from "../protocol.ts";
 import { RNG } from "../engine/rng.ts";
 
 export interface CatalogEntry {
@@ -143,6 +143,75 @@ export function priceUnit(kind: Recruit["kind"], type: string, stats: Stats, psi
   return { price, notes };
 }
 
+// ------------------------------------------------------------------------------------------
+// training: experience bought while hiring (the original only had battle experience and the psi lab)
+// ------------------------------------------------------------------------------------------
+
+export interface Course {
+  id: CourseId;
+  name: string;
+  /** what one session adds (never past the soldier stat caps) */
+  gains: Partial<Stats>;
+  /** only with psionics on */
+  psionic?: boolean;
+}
+
+export const COURSES: Course[] = [
+  { id: "marksmanship", name: "Marksmanship", gains: { firing: 5 } },
+  { id: "reflexes", name: "Reflexes", gains: { reactions: 5 } },
+  { id: "fitness", name: "Fitness", gains: { tu: 3, stamina: 5 } },
+  { id: "toughness", name: "Toughness", gains: { health: 3, strength: 3 } },
+  { id: "grenadier", name: "Grenadier", gains: { throwing: 6 } },
+  { id: "closecombat", name: "Close combat", gains: { melee: 6 } },
+  { id: "psi", name: "Psi training", gains: { psiSkill: 10 }, psionic: true },
+];
+/** Sessions per course at most: training sharpens a soldier, it doesn't remake one. */
+export const MAX_SESSIONS = 4;
+/** On top of what the stats are worth, so a natural veteran stays slightly better value than a trained rookie. */
+export const TRAINING_PREMIUM = 1.25;
+/** Even training the price model barely values costs something. */
+const MIN_SESSION_PRICE = 1000;
+
+/** A soldier's stats after the training bought for them. */
+export function trainedStats(base: Stats, training: SquadMember["training"]): Stats {
+  const s = { ...base };
+  for (const c of COURSES) {
+    const n = Math.max(0, Math.min(MAX_SESSIONS, Math.floor(training?.[c.id] ?? 0)));
+    for (const [k, v] of Object.entries(c.gains) as [keyof Stats, number][]) s[k] = Math.min(SOLDIER.statCaps[k], s[k] + v * n);
+  }
+  return s;
+}
+
+/** The recruit as they'll fight: with their training (anyone else as they are). */
+export function trainedRecruit(r: Recruit, m: SquadMember): Recruit {
+  return r.kind === "soldier" && m.training ? { ...r, stats: trainedStats(r.stats, m.training) } : r;
+}
+
+/** What the training costs: how much more the trained soldier is worth, plus the premium. */
+export function trainingCost(settings: MatchSettings, r: Recruit, training: SquadMember["training"]): number {
+  const sessions = COURSES.reduce((a, c) => a + Math.max(0, Math.min(MAX_SESSIONS, Math.floor(training?.[c.id] ?? 0))), 0);
+  if (!sessions || r.kind !== "soldier") return 0;
+  const time = pricingTime(settings.timeOfDay);
+  const before = priceUnit("soldier", r.type, r.stats, settings.psionics, undefined, time).price;
+  const after = priceUnit("soldier", r.type, trainedStats(r.stats, training), settings.psionics, undefined, time).price;
+  return Math.max(sessions * MIN_SESSION_PRICE, Math.round(((after - before) * TRAINING_PREMIUM) / 500) * 500);
+}
+
+/** Why this training can't be bought (empty: it can). */
+export function trainingErrors(settings: MatchSettings, r: Recruit, training: SquadMember["training"]): string[] {
+  if (!training) return [];
+  const errors: string[] = [];
+  for (const [id, n] of Object.entries(training)) {
+    const c = COURSES.find((x) => x.id === id);
+    if (!n) continue;
+    if (!c) errors.push(`Unknown training "${id}"`);
+    else if (r.kind !== "soldier") errors.push(`${r.name} can't be trained (only human soldiers)`);
+    else if (c.psionic && !settings.psionics) errors.push("Psi training needs psionics on");
+    else if (!Number.isInteger(n) || n < 0 || n > MAX_SESSIONS) errors.push(`${c.name}: 0-${MAX_SESSIONS} sessions`);
+  }
+  return errors;
+}
+
 export function seatsFor(r: Recruit): number {
   if (r.kind === "soldier") return 1;
   return armorRule(unitRule(r.type).armor).size > 1 ? 4 : 1;
@@ -269,6 +338,8 @@ export function checkLoadout(settings: MatchSettings, pool: Recruit[], l: Loadou
       if (!armors.has(m.armor || "STR_NONE_UC")) errors.push("Armor not allowed");
       cost += armorPrice(m.armor || "STR_NONE_UC");
     }
+    errors.push(...trainingErrors(settings, r, m.training));
+    cost += trainingCost(settings, r, m.training);
     if (r.kind === "hwp" && m.items.length) errors.push(`${r.name} cannot carry items`);
     // a living weapon (Chryssalid claws, Celatid spit...) already fills the right hand
     const innate = r.kind === "alien" ? livingWeaponFor(unitRule(r.type)) : null;

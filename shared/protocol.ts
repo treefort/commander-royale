@@ -385,7 +385,12 @@ export interface SquadMember {
   zone?: number;
   armor: string; // soldiers only; aliens/HWPs use their own
   items: { type: string; slot: string; x: number; y: number; ammo?: string }[];
+  /** human soldiers: training courses bought for them, and how many times each */
+  training?: Partial<Record<CourseId, number>>;
 }
+
+/** Training courses a soldier can be put through while hiring (see `COURSES` in rules/catalog.ts). */
+export type CourseId = "marksmanship" | "reflexes" | "fitness" | "toughness" | "grenadier" | "closecombat" | "psi";
 
 export interface Loadout {
   squad: SquadMember[];

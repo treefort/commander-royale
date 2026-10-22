@@ -2,9 +2,9 @@
 import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
 import { biomeName, DEFAULT_BOT_TUNING, MAX_SIDES, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
-import { checkLoadout, budgetGuide, type CatalogEntry } from "../../shared/rules/catalog.ts";
+import { checkLoadout, budgetGuide, COURSES, MAX_SESSIONS, trainedStats, trainingCost, trainedRecruit, type CatalogEntry } from "../../shared/rules/catalog.ts";
 import { forceSummary } from "../../shared/rules/scenario.ts";
-import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, type SlotId } from "../../shared/rules/index.ts";
+import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, SOLDIER, type SlotId } from "../../shared/rules/index.ts";
 import { InventoryScreen, type InvAdapter, type InvItem } from "./inventory.ts";
 import { Assets, battleFileList } from "../render/assets.ts";
 import { preload, getFile, hasFile } from "../files.ts";
@@ -60,6 +60,8 @@ export class LobbyPage {
   botStrategy = "any";
   /** the computer squad whose AI settings are open */
   tuning: string | null = null;
+  /** the hired soldier whose training is open (recruit id) */
+  training: string | null = null;
 
   constructor(private root: HTMLElement, private matchId: string, private me: Me, private go: (p: string) => void, private onStart: () => void) {
     this.connect();
@@ -314,7 +316,7 @@ export class LobbyPage {
       const r = s.pool.find((p) => p.id === m.recruitId);
       if (!r) continue;
       t.append(el("tr", {},
-        el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r))),
+        el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r)), m.training ? el("div", {}, el("span", { class: "tag" }, `trained: ${trainingSummary(m.training)}`)) : null),
         el("td", {}, m.items.length ? m.items.map((i) => tr(i.type)).join(", ") : el("span", { class: "muted" }, r.kind === "hwp" ? "built-in weapon" : "nothing")),
         el("td", {}, m.controller ? (m.controller === me.userId ? el("b", {}, "you") : names.get(m.controller) ?? "?") : el("span", { class: "muted" }, "dealt out at the start"))));
     }
@@ -432,14 +434,18 @@ export class LobbyPage {
         });
         armorSel = sel;
       }
-      const cost = r.price + (s.armors.find((a) => a.type === m.armor)?.price ?? 0) + m.items.reduce((a, it) => a + (s.catalog.find((c) => c.type === it.type)?.price ?? 0) + (it.ammo ? s.catalog.find((c) => c.type === it.ammo)?.price ?? 0 : 0), 0);
+      const cost = r.price + (s.armors.find((a) => a.type === m.armor)?.price ?? 0) + m.items.reduce((a, it) => a + (s.catalog.find((c) => c.type === it.type)?.price ?? 0) + (it.ammo ? s.catalog.find((c) => c.type === it.ammo)?.price ?? 0 : 0), 0)
+        + trainingCost(s.settings, r, m.training);
+      const sessions = Object.values(m.training ?? {}).reduce((a, n) => a + (n ?? 0), 0);
+      const open = this.training === r.id;
       t.append(el("tr", {},
-        el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r))),
+        el("td", {}, el("b", {}, r.name), el("div", { class: "muted" }, unitLabel(r)), sessions ? el("div", {}, el("span", { class: "tag" }, `trained: ${trainingSummary(m.training)}`)) : null),
         el("td", {}, armorSel),
         el("td", {}, r.kind === "hwp" ? el("span", { class: "muted" }, "built-in weapon") : m.items.length ? m.items.map((i) => tr(i.type) + (i.ammo ? ` (${tr(i.ammo)})` : "")).join(", ") : el("span", { class: "muted" }, "nothing")),
         coop ? el("td", {}, this.controllerSelect(m, team)) : null,
         el("td", { class: "price" }, money(cost)),
         el("td", {}, r.kind !== "hwp" ? el("button", { class: "small primary", onclick: () => this.openEquip(idx) }, "Equip") : null, " ",
+          r.kind === "soldier" ? el("button", { class: "small" + (open ? " primary" : ""), title: "Put this soldier through training courses", onclick: () => { this.training = open ? null : r.id; this.render(); } }, open ? "Done" : sessions ? `Train (${sessions})` : "Train") : null, " ",
           el("button", { class: "small danger", onclick: () => {
             for (const it of m.items) {
               this.loadout.stash.push(it.type);
@@ -449,10 +455,42 @@ export class LobbyPage {
             this.scheduleSave();
           } }, "Dismiss")),
       ));
+      if (open) t.append(el("tr", {}, el("td", { colspan: coop ? 6 : 5 }, this.trainingPanel(s, m, r))));
     });
     return el("div", {},
       el("div", { class: "scroll", style: { maxHeight: "360px", marginTop: "8px" } }, t),
       el("div", { class: "hint", style: { marginTop: "6px" } }, "Buy and fit gear from each unit's Equip screen: drag items onto the soldier, right-click to sell them back. Unequipped stores are dropped at your deployment zone."));
+  }
+
+  /** Training courses for a hired soldier: sessions per course, what the next one costs, the stats it makes. */
+  private trainingPanel(s: LobbyState, m: Loadout["squad"][number], r: Recruit): HTMLElement {
+    const now = trainedStats(r.stats, m.training);
+    const set = (id: string, n: number) => {
+      const t: Record<string, number> = { ...(m.training ?? {}) };
+      if (n > 0) t[id] = n;
+      else delete t[id];
+      if (Object.keys(t).length) m.training = t;
+      else delete m.training;
+      this.scheduleSave();
+    };
+    const rows = COURSES.filter((c) => !c.psionic || s.settings.psionics).map((c) => {
+      const n = m.training?.[c.id] ?? 0;
+      const stats = Object.keys(c.gains) as (keyof Recruit["stats"])[];
+      const maxed = stats.every((k) => now[k] >= SOLDIER.statCaps[k]);
+      const step = trainingCost(s.settings, r, { ...m.training, [c.id]: n + 1 }) - trainingCost(s.settings, r, m.training);
+      return el("tr", {},
+        el("td", {}, el("b", {}, c.name), el("div", { class: "muted" }, Object.entries(c.gains).map(([k, v]) => `${STAT_NAMES[k]} +${v}`).join(", ") + " a session")),
+        el("td", {}, el("button", { class: "small", disabled: !n, onclick: () => set(c.id, n - 1) }, "−"), ` ${n}/${MAX_SESSIONS} `,
+          el("button", { class: "small primary", disabled: n >= MAX_SESSIONS || maxed, onclick: () => set(c.id, n + 1) }, "+")),
+        el("td", { class: "price" }, n >= MAX_SESSIONS ? "done" : maxed ? "at the cap" : `+${money(step)}`));
+    });
+    const changed = (Object.keys(STAT_NAMES) as (keyof Recruit["stats"])[]).filter((k) => now[k] !== r.stats[k]);
+    return el("div", { class: "training" },
+      el("table", { class: "compact" }, ...rows),
+      el("div", { class: "row", style: { marginTop: "6px" } },
+        el("span", {}, changed.length ? changed.map((k) => `${STAT_NAMES[k]} ${r.stats[k]}→${now[k]}`).join(" · ") : "Untrained"),
+        el("span", { class: "price" }, `training ${money(trainingCost(s.settings, r, m.training))}`)),
+      el("div", { class: "hint" }, `A session costs $1,000, or more where the price model rates the better stats higher (what they're worth plus a quarter), so a natural veteran stays slightly better value: training is for shaping a soldier you like. Stats stop at the original soldier caps.${s.settings.psionics ? " Psi training stands in for the original's psi lab." : ""}`));
   }
 
   private controllerSelect(m: Loadout["squad"][number], team: LobbyState["players"]): HTMLElement {
@@ -547,7 +585,7 @@ export class LobbyPage {
     };
     const adapter: InvAdapter = {
       unit() {
-        const r = recruit();
+        const r = trainedRecruit(recruit(), member());
         const m = member();
         const weight = m.items.reduce((a, it) => a + (itemRule(it.type).fixedWeapon ? 0 : itemRule(it.type).weight) + (it.ammo ? itemRule(it.ammo).weight : 0), 0);
         const armor = r.kind === "soldier" ? m.armor || "STR_NONE_UC" : unitRule(r.type).armor;
@@ -671,7 +709,7 @@ export class LobbyPage {
       const check = checkLoadout(s.settings, s.pool, this.loadout);
       const r = recruit();
       const m = member();
-      const unitCost = r.price + (s.armors.find((a) => a.type === m.armor)?.price ?? 0) + m.items.reduce((a, it) => a + price(it.type) + (it.ammo ? price(it.ammo) : 0), 0);
+      const unitCost = r.price + (s.armors.find((a) => a.type === m.armor)?.price ?? 0) + m.items.reduce((a, it) => a + price(it.type) + (it.ammo ? price(it.ammo) : 0), 0) + trainingCost(s.settings, r, m.training);
       const rest = s.settings.budget - check.cost;
       budgetBar.replaceChildren(
         el("span", { class: rest < 0 ? "bad" : "good" }, `${short(rest)} left`),
@@ -900,6 +938,15 @@ function short(n: number): string {
 
 function armorShortName(type: string): string {
   return ({ STR_NONE_UC: "NONE", STR_PERSONAL_ARMOR_UC: "PERSONAL", STR_POWER_SUIT_UC: "POWER SUIT", STR_FLYING_SUIT_UC: "FLYING SUIT" } as Record<string, string>)[type] ?? tr(type);
+}
+
+const STAT_NAMES: Record<string, string> = {
+  tu: "TU", stamina: "Stamina", health: "Health", reactions: "Reactions", firing: "Firing", throwing: "Throwing", strength: "Strength", melee: "Melee", psiSkill: "Psi skill",
+};
+
+/** "Marksmanship ×2, Fitness" */
+function trainingSummary(t: Loadout["squad"][number]["training"]): string {
+  return COURSES.filter((c) => t?.[c.id]).map((c) => (t![c.id]! > 1 ? `${c.name} ×${t![c.id]}` : c.name)).join(", ");
 }
 
 function unitLabel(r: Recruit): string {

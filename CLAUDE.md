@@ -16,6 +16,10 @@ about how to work on it.
   ready at the start): `joinBattle` (setup.ts) adds a side last in turn order with a new edge landing zone
   (`newLandingZone`), or adds a person to an existing side. Map size defaults to auto (`mapBlocks: 0`, settled at
   start). `MAX_SIDES` = 30 is only the technical limit of the 32-bit event visibility masks.
+- Training (2026-10-22): soldiers can be trained while hiring, in named courses (`COURSES` in catalog.ts, up to
+  `MAX_SESSIONS` each, capped at the original stat caps), priced at the value model's price increase × 1.25
+  (`TRAINING_PREMIUM`, owner's choice: a natural veteran stays slightly better value), $1,000 a session minimum.
+  `SquadMember.training`; `trainedRecruit` applies it at deployment.
 - Co-op scenario mode (2026-10-22, `settings.mode = "coop"`): the creator is a game master who designs the enemy
   (groups by type/count/weapon/placement/arrival round, AI tactics) and the battlefield; 1–10 people form one team,
   each filling `seatsPerPlayer` Skyranger seats (large units take 4) and commanding those units; the team lands

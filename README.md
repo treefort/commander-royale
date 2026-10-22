@@ -79,7 +79,9 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    commanders, every alien race and rank, and tanks. Prices follow ability (time units, health × armor, accuracy,
    reactions, strength, psionics, innate weapons, flight, night vision, special abilities). Buy weapons, ammo,
    explosives, equipment and armor, then kit out each unit on the original inventory screen. Unequipped gear is
-   dropped at your deployment zone.
+   dropped at your deployment zone. Human soldiers can also be put through **training** (Marksmanship, Reflexes,
+   Fitness, Toughness, Grenadier, Close combat and, with psionics, Psi training; up to 4 sessions each, never past
+   the original stat caps), at $1,000 a session or what the price model says the better stats are worth plus 25%.
 4. **Battle**: the creator starts once two squads are ready; squads deploy around the map edge. Players take turns
    in a shuffled order; the game is asynchronous (close the tab and come back) unless a turn timer is set. Last
    squad standing wins.
