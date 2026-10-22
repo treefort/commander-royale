@@ -207,14 +207,7 @@ export class InventoryScreen {
       if (wr.compatibleAmmo.length && itemRule(sel.type).battleType === BattleType.AMMO) return this.warn("STR_WRONG_AMMUNITION_FOR_THIS_WEAPON");
       return;
     }
-    // items are placed by their top-left cell, aligned with where the cursor holds them
-    let x = s.x, y = s.y;
-    const def = INVENTORY_SLOTS[s.slot];
-    if (def.type === 0) {
-      const r = itemRule(sel.type);
-      x = Math.max(0, s.x - Math.floor((r.invWidth - 1) / 2));
-      y = Math.max(0, s.y - Math.floor((r.invHeight - 1) / 2));
-    }
+    const { x, y } = this.dropAt(s, sel.type, px, py, items, sel.id);
     if (s.slot === sel.slot && x === sel.x && y === sel.y) {
       this.selected = null;
       return;
@@ -241,14 +234,45 @@ export class InventoryScreen {
       }
       if (s.slot !== "STR_GROUND") return this.warn("STR_NOT_ENOUGH_SPACE");
     }
-    let x = s.x, y = s.y;
-    if (INVENTORY_SLOTS[s.slot].type === 0) {
-      const r = itemRule(type);
-      x = Math.max(0, s.x - Math.floor((r.invWidth - 1) / 2));
-      y = Math.max(0, s.y - Math.floor((r.invHeight - 1) / 2));
-    }
+    const { x, y } = this.dropAt(s, type, px, py, a.items(), -1);
     if (a.buy) await this.run(a.buy(type, s.slot, x, y));
     this.held = null;
+  }
+
+  /**
+   * Where an item dropped into a grid slot (belt, legs, backpack...) goes: of the free spots in that slot it fits
+   * in whole, the one nearest to where it's drawn under the cursor, so it needn't be lined up to the pixel.
+   */
+  private dropAt(s: { slot: SlotId; x: number; y: number }, type: string, px: number, py: number, items: InvItem[], ignore: number): { x: number; y: number } {
+    const def = INVENTORY_SLOTS[s.slot];
+    if (def.type !== 0) return { x: s.x, y: s.y };
+    const r = itemRule(type);
+    const inSlot = new Set(def.cells.map(([cx, cy]) => `${cx},${cy}`));
+    const taken = new Set<string>();
+    for (const it of items) {
+      if (it.slot !== s.slot || it.id === ignore) continue;
+      const o = itemRule(it.type);
+      for (let i = 0; i < o.invWidth; i++) for (let j = 0; j < o.invHeight; j++) taken.add(`${it.x + i},${it.y + j}`);
+    }
+    // the item is drawn centred on the cursor: its top-left corner is half its size up and left
+    const left = px - r.invWidth * 8, top = py - r.invHeight * 8;
+    let best: { x: number; y: number } | null = null, bestD = Infinity;
+    for (const [cx, cy] of def.cells) {
+      let ok = true;
+      for (let i = 0; i < r.invWidth && ok; i++)
+        for (let j = 0; j < r.invHeight && ok; j++) {
+          const k = `${cx + i},${cy + j}`;
+          if (!inSlot.has(k) || taken.has(k)) ok = false;
+        }
+      if (!ok) continue;
+      const d = (def.x + cx * 16 - left) ** 2 + (def.y + cy * 16 - top) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = { x: cx, y: cy };
+      }
+    }
+    // nowhere it fits: aim where the cursor is (the move is refused with "not enough space")
+    return best ?? { x: Math.max(0, s.x - Math.floor((r.invWidth - 1) / 2)), y: Math.max(0, s.y - Math.floor((r.invHeight - 1) / 2)) };
   }
 
   private async run(p: Promise<string | null> | string | null) {
