@@ -57,13 +57,15 @@ export function renderLogin(root: HTMLElement, me: Me, next = location.pathname)
 export async function renderHome(root: HTMLElement, me: Me, go: (path: string) => void) {
   root.innerHTML = "";
   root.append(topbar(me));
-  const wrap = el("div", { class: "wrap" });
+  // two columns: the new-match form on the left, your matches on the right (scrolling on their own, so a long
+  // history never pushes the form down); stacked on narrow screens
+  const wrap = el("div", { class: "wrap home" });
   root.append(wrap);
-  const list = el("div", { class: "panel" }, el("h2", {}, "YOUR MATCHES"), el("div", { class: "muted" }, "Loading..."));
-  const create = el("div", { class: "panel" }, el("h2", {}, "NEW MATCH"));
-  wrap.append(list, create);
+  const list = el("div", { class: "panel home-matches" }, el("h2", {}, "YOUR MATCHES"), el("div", { class: "muted" }, "Loading..."));
+  const create = el("div", { class: "panel home-create" }, el("h2", {}, "NEW MATCH"));
+  wrap.append(create, list);
   // the form, optionally pre-filled from an earlier match
-  const startFrom = el("select", {}, el("option", { value: "" }, "Default settings")) as HTMLSelectElement;
+  const startFrom = el("select", { class: "start-from" }, el("option", { value: "" }, "Default settings")) as HTMLSelectElement;
   const formSlot = el("div", {});
   let pastSettings = new Map<string, MatchSettings>();
   const showForm = () => {
@@ -78,7 +80,7 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
   startFrom.addEventListener("change", showForm);
   create.append(
     el("div", { class: "row", style: { marginBottom: "10px" } }, el("span", {}, "Start from:"), startFrom,
-      el("span", { class: "hint" }, "copy every setting from one of your earlier matches, then change what you like")),
+      el("span", { class: "hint" }, "copy every setting from an earlier match, then change what you like")),
     formSlot,
   );
   showForm();
@@ -94,24 +96,34 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
       showForm();
       create.scrollIntoView({ behavior: "smooth", block: "start" });
     };
-    list.replaceChildren(el("h2", {}, "YOUR MATCHES"));
-    if (!matches.length) list.append(el("div", { class: "muted" }, "No matches yet. Create one below, then send the invite link to your opponents."));
+    list.replaceChildren(el("h2", {}, `YOUR MATCHES${matches.length ? ` (${matches.length})` : ""}`));
+    if (!matches.length) list.append(el("div", { class: "muted" }, "No matches yet. Create one, then send the invite link to the people you want to play with."));
     else {
-      const t = el("table", {}, el("tr", {}, el("th", {}, "Match"), el("th", {}, "Biome"), el("th", {}, "Players"), el("th", {}, "Status"), el("th", {}, "")));
-      for (const m of matches) {
+      // whatever needs you comes first: your turn, then open lobbies and running battles, then finished ones
+      const rank = (m: any) => (m.yourTurn ? 0 : m.status === "lobby" ? 1 : m.status === "playing" ? 2 : 3);
+      const sorted = [...matches].sort((x, y) => rank(x) - rank(y));
+      const cards = el("div", { class: "match-cards" });
+      for (const m of sorted) {
         const status = m.status === "lobby" ? el("span", { class: "badge dim" }, "Lobby")
-          : m.status === "finished" ? el("span", {}, el("span", { class: "badge dim" }, "Finished"), " ", m.winner ? `${m.winner} won` : "")
-          : m.yourTurn ? el("span", { class: "badge" }, "Your turn") : el("span", { class: "muted" }, `Round ${m.round}: ${m.turnOf}'s turn`);
-        t.append(el("tr", {},
-          el("td", {}, el("a", { href: `/m/${m.id}`, onclick: (e: Event) => { e.preventDefault(); go(`/m/${m.id}`); } }, m.name)),
-          el("td", {}, biomeName(m.biome)),
-          el("td", {}, `${m.players.join(", ")} (${m.players.length}/${m.maxPlayers})`),
-          el("td", {}, status),
-          el("td", {}, el("button", { class: "small", onclick: () => go(`/m/${m.id}`) }, "Open"), " ",
+          : m.status === "finished" ? el("span", { class: "badge dim" }, m.winner ? `${m.winner} won` : "Finished")
+          : m.yourTurn ? el("span", { class: "badge" }, "Your turn") : el("span", { class: "badge dim" }, `Round ${m.round}`);
+        const mode = m.settings?.mode === "coop" ? "co-op" : "free-for-all";
+        const open = (e: Event) => {
+          e.preventDefault();
+          go(`/m/${m.id}`);
+        };
+        cards.append(el("div", { class: "match-card" + (m.yourTurn ? " yours" : "") },
+          el("div", { class: "row" },
+            el("a", { class: "grow match-name", href: `/m/${m.id}`, onclick: open }, m.name),
+            status),
+          el("div", { class: "muted" }, `${biomeName(m.biome)} · ${mode}${m.status === "playing" && !m.yourTurn && m.turnOf ? ` · ${m.turnOf}'s turn` : ""}`),
+          el("div", { class: "muted" }, `${m.players.join(", ")} (${m.settings?.mode === "coop" ? `team of ${m.maxPlayers}` : `${m.players.length}/${m.maxPlayers} squads`})`),
+          el("div", { class: "row", style: { marginTop: "4px", gap: "6px" } },
+            el("button", { class: "small", onclick: open }, "Open"),
             m.settings ? el("button", { class: "small", title: "Start a new match with these settings", onclick: () => reuse(m.id) }, "Reuse settings") : null),
         ));
       }
-      list.append(el("div", { class: "scroll" }, t));
+      list.append(cards);
     }
   } catch (e) {
     list.append(el("div", { class: "err" }, String((e as Error).message)));
@@ -185,15 +197,21 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   const nameInput = el("input", { value: s.name, maxlength: 40, disabled: readOnly }) as HTMLInputElement;
   nameInput.addEventListener("input", () => (s.name = nameInput.value));
 
-  field("Game mode", sel([
-    { id: "ffa", name: "Free-for-all: squads fight it out" },
-    { id: "coop", name: "Co-op scenario: everyone against your enemy" },
-  ] as const, () => s.mode, (v) => {
-    s.mode = v;
-    s.maxPlayers = v === "coop" ? Math.min(Math.max(s.maxPlayers, 4), MAX_COOP_PLAYERS) : Math.min(Math.max(s.maxPlayers, 2), 8);
-    if (v !== "coop" && s.coop.turnEnd === "daily") s.coop.turnEnd = "lockin";
+  // the game mode is a pair of tabs over the rest of the form
+  const MODES: { id: GameMode; name: string; blurb: string }[] = [
+    { id: "ffa", name: "Free-for-all", blurb: "2–8 squads fight it out; last squad standing wins. Several people can share a squad, and computer squads can join." },
+    { id: "coop", name: "Co-op scenario", blurb: "You're the game master: set up the mission and the enemy, and everyone who joins plays on one team against it." },
+  ];
+  const tabButtons = MODES.map((m) => el("button", { type: "button", class: "tab", disabled: readOnly && m.id !== s.mode, onclick: () => {
+    if (readOnly || s.mode === m.id) return;
+    s.mode = m.id;
+    s.maxPlayers = m.id === "coop" ? Math.min(Math.max(s.maxPlayers, 4), MAX_COOP_PLAYERS) : Math.min(Math.max(s.maxPlayers, 2), 8);
+    if (m.id !== "coop" && s.coop.turnEnd === "daily") s.coop.turnEnd = "lockin";
     if (s.coop.turnEnd === "daily") s.coop.timeZone = browserTimeZone();
-  }), el("span", { class: "hint" }, "In a co-op scenario you're the game master: you set up the mission and the enemy, and everyone who joins plays on one team"));
+    refresh();
+  } }, m.name));
+  const tabBlurb = el("div", { class: "hint tab-blurb" });
+  f.append(el("div", { class: "full" }, el("div", { class: "tabs" }, ...tabButtons), tabBlurb));
   field("Match name", nameInput);
   const notesInput = el("textarea", { rows: 3, maxlength: 1000, disabled: readOnly, placeholder: "Optional: house rules, when you'll play, what to expect... everyone who joins sees this", class: "notes-input" }) as HTMLTextAreaElement;
   notesInput.value = s.notes ?? "";
@@ -338,6 +356,8 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
 
   function refresh() {
     for (const o of only) for (const e of o.els) e.style.display = o.mode === s.mode ? "" : "none";
+    MODES.forEach((m, i) => tabButtons[i].classList.toggle("active", m.id === s.mode));
+    tabBlurb.textContent = MODES.find((m) => m.id === s.mode)!.blurb;
     const atStart = s.scenario.enemies.filter((g) => g.round <= 1).reduce((a, g) => a + g.count, 0);
     const later = s.scenario.enemies.filter((g) => g.round > 1).reduce((a, g) => a + g.count, 0);
     forceCount.textContent = `${atStart} on the map at the start${later ? `, ${later} more as reinforcements` : ""}.`;

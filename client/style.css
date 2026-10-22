@@ -57,7 +57,7 @@ button.small { font-size: 11px; padding: 3px 7px; }
 input, select { font-family: "VT323", monospace; font-size: 20px; background: var(--input); color: var(--text); border: 2px solid var(--frame-lo); padding: 3px 6px; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green); }
 label { display: inline-flex; gap: 6px; align-items: center; }
-.form { display: grid; grid-template-columns: 220px 1fr; gap: 8px 14px; align-items: center; }
+.form { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 8px 14px; align-items: center; }
 .form .full { grid-column: 1 / -1; }
 .hint { font-size: 17px; color: var(--dim); }
 
@@ -126,3 +126,31 @@ td.recruit { min-width: 210px; }
 /* co-op scenario editor: the enemy groups table */
 table.compact td { padding: 2px 3px; }
 table.compact select, table.compact input { font-size: 18px; padding: 2px 3px; max-width: 220px; }
+
+/* home: the new-match form on the left, your matches on the right */
+.wrap.home { max-width: 1640px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0 18px; align-items: start; }
+.home-matches { position: sticky; top: 12px; max-height: calc(100vh - 110px); overflow-y: auto; }
+.match-cards { display: flex; flex-direction: column; gap: 8px; }
+.match-card { padding: 8px 10px; background: rgba(5, 11, 38, 0.6); border: 2px solid var(--frame-lo); font-size: 18px; }
+.match-card.yours { border-color: var(--green); }
+.match-card .match-name { font-size: 20px; }
+.match-card .muted { font-size: 16px; line-height: 1.2; }
+@media (max-width: 1100px) {
+  /* stacked: your matches first, kept short so the form is still near the top */
+  .wrap.home { grid-template-columns: minmax(0, 1fr); }
+  .home-matches { position: static; max-height: 40vh; order: -1; }
+  .form { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* game mode tabs over the match settings form */
+.tabs { display: flex; gap: 4px; border-bottom: 3px solid var(--frame-hi); }
+button.tab {
+  font-size: 14px; padding: 8px 18px 7px; background: var(--input); color: var(--dim);
+  border: 3px solid var(--frame-lo); border-bottom: none; margin-bottom: 0;
+}
+button.tab.active { background: var(--panel2); color: var(--accent); border-color: var(--frame-hi); position: relative; top: 3px; padding-bottom: 10px; }
+button.tab:disabled { opacity: 0.35; }
+button.tab.active:disabled { opacity: 1; }
+.tab-blurb { margin: 8px 0 4px; }
+/* option texts are long settings summaries: don't let them stretch the form */
+select.start-from { flex: 1; min-width: 0; max-width: 100%; }
