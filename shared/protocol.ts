@@ -32,7 +32,8 @@ export interface MatchSettings {
   allowHWP: boolean;
   allowArmor: boolean;
   psionics: boolean;
-  supplyDrops: { enabled: boolean; everyRounds: number; warningRounds: number; tier: LootTier };
+  /** `kits`: how much each drop holds (a kit is e.g. a rifle and two clips, a pair of grenades, a medikit) */
+  supplyDrops: { enabled: boolean; everyRounds: number; warningRounds: number; tier: LootTier; kits: number };
   turnTimer: number; // seconds per turn, 0 = unlimited
   coop: CoopSettings;
   /** co-op scenario mode: the creator's setup of the team and the enemy */
@@ -301,7 +302,7 @@ export function defaultSettings(): MatchSettings {
     allowHWP: true,
     allowArmor: true,
     psionics: true,
-    supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed" },
+    supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed", kits: 3 },
     turnTimer: 0,
     coop: { squadSize: 1, turnEnd: "lockin", dailyAt: "20:00", timeZone: "UTC", afkAI: false },
     mode: "ffa",
@@ -344,6 +345,7 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
       everyRounds: clamp(sd.everyRounds, 1, 20, 4),
       warningRounds: clamp(sd.warningRounds, 0, 10, 2),
       tier: (["basic", "advanced", "alien", "mixed"] as const).includes(sd.tier as LootTier) ? sd.tier : "mixed",
+      kits: clamp(sd.kits, 1, 12, 3),
     },
     turnTimer,
     coop: {

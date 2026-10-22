@@ -34,7 +34,7 @@ if (arg("biome")) fixed.biome = arg("biome") as Biome;
 if (arg("time")) fixed.timeOfDay = arg("time") as TimeOfDay;
 if (arg("tech")) fixed.techLevel = arg("tech") as TechLevel;
 if (arg("ufo")) fixed.ufo = arg("ufo")!;
-if (arg("drops") === "off") fixed.supplyDrops = { enabled: false, everyRounds: 4, warningRounds: 2, tier: "mixed" };
+if (arg("drops") === "off") fixed.supplyDrops = { enabled: false, everyRounds: 4, warningRounds: 2, tier: "mixed", kits: 3 };
 
 // every strategy meets every other equally often, in both seat orders (player 1 moves first)
 const lineups: Strategy[][] = [];

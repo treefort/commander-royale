@@ -319,7 +319,8 @@ const ALIEN: Kit[] = [
   ["STR_MIND_PROBE"], ["STR_HEAVY_PLASMA_CLIP", "STR_PLASMA_RIFLE_CLIP"], ["STR_PSI_AMP"],
 ];
 
-export function rollSupplyDrop(rng: RNG, tier: LootTier, psionics: boolean): string[] {
+/** A drop's contents: `kits` kits (battles from before the setting existed roll 2 or 3). */
+export function rollSupplyDrop(rng: RNG, tier: LootTier, psionics: boolean, kits?: number): string[] {
   const pickTier = (): Kit[] => {
     if (tier === "basic") return BASIC;
     if (tier === "advanced") return ADVANCED;
@@ -328,8 +329,8 @@ export function rollSupplyDrop(rng: RNG, tier: LootTier, psionics: boolean): str
     return r < 45 ? BASIC : r < 80 ? ADVANCED : ALIEN;
   };
   const out: string[] = [];
-  const kits = rng.int(2, 3);
-  for (let k = 0; k < kits; k++) {
+  const n = kits ?? rng.int(2, 3);
+  for (let k = 0; k < n; k++) {
     let kit = rng.pick(pickTier());
     if (!psionics && kit.includes("STR_PSI_AMP")) kit = rng.pick(ALIEN.filter((x) => !x.includes("STR_PSI_AMP")));
     out.push(...kit);

@@ -65,7 +65,7 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 1. **Create a match**: environment (urban, farmland, forest, jungle, desert, mountains,
    polar, Mars, alien base), time of day, optional landed UFO, map size (auto: sized when the battle starts for the
    squads there and the budget; or pick one), budget, seat limit, recruit pool size, technology level,
-   alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table) and an
+   alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table, kits per drop) and an
    optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
 2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby; there's no player
    limit (a battle takes up to 30 sides). The creator

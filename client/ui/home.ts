@@ -174,7 +174,7 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
 
 /** One line describing a match's main settings (for the "Start from" list). */
 function settingsSummary(s: MatchSettings): string {
-  const drops = s.supplyDrops.enabled ? `drops every ${s.supplyDrops.everyRounds} (${s.supplyDrops.tier})` : "no drops";
+  const drops = s.supplyDrops.enabled ? `drops every ${s.supplyDrops.everyRounds} (${s.supplyDrops.kits ?? 3} ${s.supplyDrops.tier} kits)` : "no drops";
   const env = s.randomBiome ? "Random" : biomeName(s.biome);
   if (s.mode === "coop") {
     const foes = s.scenario.enemies.reduce((a, g) => a + g.count, 0);
@@ -327,7 +327,11 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     el("span", {}, "every"), num(() => s.supplyDrops.everyRounds, (v) => (s.supplyDrops.everyRounds = v), 1, 20),
     el("span", {}, "rounds, announced"), num(() => s.supplyDrops.warningRounds, (v) => (s.supplyDrops.warningRounds = v), 0, 10),
     el("span", {}, "rounds ahead")));
-  field("Drop contents", sel([{ id: "basic", name: "Basic (rifles, grenades, medikits)" }, { id: "advanced", name: "Advanced (cannons, lasers, scanners)" }, { id: "alien", name: "Alien tech (plasma, blasters, psi)" }, { id: "mixed", name: "Mixed (weighted random)" }] as const, () => s.supplyDrops.tier, (v) => (s.supplyDrops.tier = v)));
+  field("Drop contents", el("div", { class: "row" },
+    sel([{ id: "basic", name: "Basic (rifles, grenades, medikits)" }, { id: "advanced", name: "Advanced (cannons, lasers, scanners)" }, { id: "alien", name: "Alien tech (plasma, blasters, psi)" }, { id: "mixed", name: "Mixed (weighted random)" }] as const, () => s.supplyDrops.tier, (v) => (s.supplyDrops.tier = v)),
+    num(() => s.supplyDrops.kits, (v) => (s.supplyDrops.kits = v), 1, 12, 1, "60px"),
+    el("span", {}, "kits per drop")),
+    "A kit is a weapon with its ammo, a pair of grenades, a medikit, a scanner...");
   field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Squads ending on the timer need one");
   f.append(err);
   if (!readOnly) {

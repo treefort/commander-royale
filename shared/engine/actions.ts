@@ -1378,7 +1378,7 @@ export class GameRules {
     // favour the middle of the map so everyone has a fair run at it
     const central = spots.filter((p) => Math.abs(p.x - cx) < b.sx * 0.3 && Math.abs(p.y - cy) < b.sy * 0.3);
     const pos = this.reachableDropSpot(central.length ? central : spots) ?? b.rng.pick(central.length ? central : spots);
-    const items = rollSupplyDrop(b.rng, sd.tier, b.settings.psionics);
+    const items = rollSupplyDrop(b.rng, sd.tier, b.settings.psionics, sd.kits);
     const drop = { id: b.supply.length + 1, pos, dropRound: nextRound, announcedRound: b.round, dropped: false, items };
     b.supply.push(drop);
     ev.push({ t: "supply", pos, dropped: false, round: nextRound }, ev.all());

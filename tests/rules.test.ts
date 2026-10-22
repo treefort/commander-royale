@@ -2,7 +2,9 @@ import { test, expect } from "bun:test";
 import { files } from "../tools/render-map.ts";
 import { Battle, TerrainLib, isOut } from "../shared/engine/state.ts";
 import { TilePart } from "../shared/formats/terrain.ts";
-import { defaultSettings, type Recruit } from "../shared/protocol.ts";
+import { defaultSettings, sanitizeSettings, type Recruit } from "../shared/protocol.ts";
+import { rollSupplyDrop } from "../shared/rules/catalog.ts";
+import { RNG } from "../shared/engine/rng.ts";
 import { createUnit, giveItem, spawnGroundItem } from "../shared/engine/units.ts";
 import { GameRules } from "../shared/engine/actions.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
@@ -144,7 +146,7 @@ test("a squad with nobody left standing is eliminated and the survivor wins", ()
 test("supply drops are announced ahead of time and land as a ground pile", () => {
   const s = defaultSettings();
   const b = field(2, s);
-  b.settings = { ...s, supplyDrops: { enabled: true, everyRounds: 2, warningRounds: 1, tier: "basic" } };
+  b.settings = { ...s, supplyDrops: { enabled: true, everyRounds: 2, warningRounds: 1, tier: "basic", kits: 3 } };
   createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 1, y: 1, z: 0 }, 2);
   createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 28, y: 28, z: 0 }, 6);
   const rules = start(b);
@@ -162,6 +164,19 @@ test("supply drops are announced ahead of time and land as a ground pile", () =>
   expect(landed).toBe(true);
   const d = b.supply.find((x) => x.dropped)!;
   expect(b.itemsOnTile(b.idxP(d.pos)).length).toBeGreaterThan(0);
+});
+
+test("the drop size setting sets how many kits each drop holds", () => {
+  const items = (kits: number | undefined, seed: number) => rollSupplyDrop(new RNG(seed), "basic", false, kits).length;
+  const avg = (kits: number | undefined) => Array.from({ length: 50 }, (_, i) => items(kits, i)).reduce((a, n) => a + n, 0) / 50;
+  // basic kits hold 1-3 items
+  expect(avg(1)).toBeLessThan(3);
+  expect(avg(8)).toBeGreaterThan(8);
+  expect(avg(8)).toBeGreaterThan(avg(3) * 2);
+  // battles from before the setting: 2 or 3 kits, as before
+  for (let i = 0; i < 20; i++) expect(items(undefined, i)).toBeGreaterThanOrEqual(2);
+  expect(sanitizeSettings({}).supplyDrops.kits).toBe(3);
+  expect(sanitizeSettings({ supplyDrops: { kits: 40 } } as never).supplyDrops.kits).toBe(12);
 });
 
 test("malformed commands are rejected (fake fire modes, non-hand slots, bad positions)", () => {
