@@ -199,7 +199,7 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
 
   // the game mode is a pair of tabs over the rest of the form
   const MODES: { id: GameMode; name: string; blurb: string }[] = [
-    { id: "ffa", name: "Free-for-all", blurb: "2–8 squads fight it out; last squad standing wins. Several people can share a squad, and computer squads can join." },
+    { id: "ffa", name: "Free-for-all", blurb: "2–8 squads fight it out; last squad standing wins. Computer squads can join, and with “Co-op squads” set above 1, several people can share a squad." },
     { id: "coop", name: "Co-op scenario", blurb: "You're the game master: set up the mission and the enemy, and everyone who joins plays on one team against it." },
   ];
   const tabButtons = MODES.map((m) => el("button", { type: "button", class: "tab", disabled: readOnly && m.id !== s.mode, onclick: () => {
