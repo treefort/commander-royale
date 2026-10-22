@@ -63,8 +63,10 @@ test("pasted answers are read whatever shape they come in, and mistakes are repo
   expect(parseSettingsText(`Here you go:\n\`\`\`json\n${json}\n\`\`\`\nHave fun!`)).toEqual(s);
   expect(parseSettingsText(`https://xcom.example/?settings=${encodeURIComponent(json)}`)).toEqual(s);
   expect(() => parseSettingsText("make it hard please")).toThrow();
-  const { warnings } = checkSettings({ mode: "coop", maxPlayers: 40, bogus: 1, ufo: "none", scenario: { enemies: [{ type: "STR_MUTON_SOLDIER", placement: "ufo" }, { type: "STR_NOPE", weapon: "STR_SPOON" }] } });
-  expect(warnings.join("\n")).toContain("maxPlayers: 40 isn't allowed here, using 10");
+  const { warnings } = checkSettings({ mode: "coop", maxPlayers: 40, mapBlocks: 2, bogus: 1, ufo: "none", scenario: { enemies: [{ type: "STR_MUTON_SOLDIER", placement: "ufo" }, { type: "STR_NOPE", weapon: "STR_SPOON" }] } });
+  // there is no player limit any more
+  expect(warnings.join("\n")).toContain("maxPlayers: not a setting");
+  expect(warnings.join("\n")).toContain("mapBlocks: 2 isn't allowed here, using 4");
   expect(warnings.join("\n")).toContain("bogus: not a setting");
   expect(warnings.join("\n")).toContain("\"ufo\" placement without a landed UFO");
   expect(warnings.join("\n")).toContain("no such unit \"STR_NOPE\"");

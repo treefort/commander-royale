@@ -13,8 +13,6 @@ export interface MatchSettings {
   name: string;
   /** optional message from the creator, shown to everyone in the lobby (house rules, schedule...) */
   notes: string;
-  /** free-for-all: squads; co-op scenario: people on the team (not counting a game master who only watches) */
-  maxPlayers: number;
   biome: Biome | "RANDOM"; // RANDOM is decided when the battle starts
   /** set when a "Random" environment was rolled at the start, so reusing these settings rolls again */
   randomBiome?: boolean;
@@ -22,7 +20,10 @@ export interface MatchSettings {
   /** set when a "random" time of day was rolled at the start, so reusing these settings rolls again */
   randomTime?: boolean;
   ufo: string; // "none" | "random" | ufo type
-  mapBlocks: number; // map edge length in 10-tile blocks
+  /** map edge length in 10-tile blocks; 0 = auto, sized when the battle starts for whoever is there */
+  mapBlocks: number;
+  /** set when an auto map size was decided at the start, so reusing these settings sizes it again */
+  autoMap?: boolean;
   budget: number;
   squadLimit: number; // seats; large units take 4
   poolSize: number;
@@ -55,7 +56,11 @@ export interface CoopSettings {
 }
 
 export const MAX_SQUAD_SIZE = 10;
-export const MAX_COOP_PLAYERS = 10;
+/**
+ * No setting caps how many squads play (people can join a battle in progress), but battle events carry a 32-bit
+ * mask of the sides that may see them: this many sides at most.
+ */
+export const MAX_SIDES = 30;
 
 export type Placement = "edge" | "ufo" | "center" | "spread";
 
@@ -267,22 +272,27 @@ export function recommendedMapBlocks(players: number, budget: number): number {
 }
 
 /** Map size for a co-op scenario, from how many units take the field (both sides, reinforcements included). */
-export function recommendedScenarioBlocks(s: MatchSettings): number {
-  const units = s.maxPlayers * s.scenario.seatsPerPlayer + s.scenario.enemies.reduce((a, g) => a + g.count, 0);
+export function recommendedScenarioBlocks(s: MatchSettings, people: number): number {
+  const units = people * s.scenario.seatsPerPlayer + s.scenario.enemies.reduce((a, g) => a + g.count, 0);
   const blocks = units <= 12 ? 5 : units <= 24 ? 6 : units <= 40 ? 7 : units <= 60 ? 8 : 9;
   // several landing zones around the edge want a bit more room
-  return Math.min(10, blocks + (s.scenario.teamStart === "apart" && s.maxPlayers > 2 ? 1 : 0));
+  return Math.min(10, blocks + (s.scenario.teamStart === "apart" && people > 2 ? 1 : 0));
+}
+
+/** The map size a battle gets: the chosen one, or (auto) one for the squads / co-op team there at the start. */
+export function resolveMapBlocks(s: MatchSettings, squads: number, people: number): number {
+  if (s.mapBlocks) return s.mapBlocks;
+  return s.mode === "coop" ? recommendedScenarioBlocks(s, Math.max(1, people)) : recommendedMapBlocks(Math.max(2, squads), s.budget);
 }
 
 export function defaultSettings(): MatchSettings {
   return {
     name: "New Match",
     notes: "",
-    maxPlayers: 2,
     biome: "URBAN",
     timeOfDay: "day",
     ufo: "none",
-    mapBlocks: 5,
+    mapBlocks: 0,
     budget: 400_000,
     squadLimit: 14,
     poolSize: 40,
@@ -315,12 +325,12 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     name: String(s.name ?? d.name).slice(0, 40) || d.name,
     notes: String(s.notes ?? "").split(String.fromCharCode(13)).join("").slice(0, 1000),
     mode,
-    maxPlayers: mode === "coop" ? clamp(s.maxPlayers, 1, MAX_COOP_PLAYERS, 4) : clamp(s.maxPlayers, 2, 8, d.maxPlayers),
     // reusing a finished match's settings: a rolled "Random" environment goes back to Random
     biome: s.randomBiome ? "RANDOM" : s.biome === "RANDOM" || BIOMES.some((b) => b.id === s.biome) ? (s.biome as Biome | "RANDOM") : d.biome,
     timeOfDay: s.randomTime || s.timeOfDay === "random" ? "random" : s.timeOfDay === "night" || s.timeOfDay === "dusk" ? s.timeOfDay : "day",
     ufo: UFO_CHOICES.some((u) => u.id === s.ufo) ? (s.ufo as string) : d.ufo,
-    mapBlocks: clamp(s.mapBlocks, 4, 10, d.mapBlocks),
+    // 0 (or nothing) is auto; reusing a finished match's settings, an auto size that was decided goes back to auto
+    mapBlocks: s.autoMap || !(Number(s.mapBlocks) > 0) ? 0 : clamp(s.mapBlocks, 4, 10, d.mapBlocks),
     budget: clamp(s.budget, 50_000, 5_000_000, d.budget),
     squadLimit: clamp(s.squadLimit, 1, 30, d.squadLimit),
     poolSize: clamp(s.poolSize, 10, 80, d.poolSize),

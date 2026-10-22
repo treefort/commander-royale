@@ -30,13 +30,13 @@ async function route() {
     const id = m[1];
     try {
       const state = await api(`/api/matches/${id}`);
-      if (state.status === "lobby") {
-        // following an invite link joins the match automatically (with a squad of your own if there's a slot,
-        // else as a teammate in a co-op squad with room; the server says if it's full)
+      // a battle in progress can be joined too: hire, equip and deploy from the lobby page
+      if (state.status === "lobby" || (state.status === "playing" && !state.you?.deployed)) {
+        // following an invite link joins the match automatically (with a squad of your own)
         if (!state.you) await api(`/api/matches/${id}/join`, { body: {} });
         current = new LobbyPage(root, id, me, go, () => route());
       } else {
-        if (!state.you) throw new Error("this battle has already started without you");
+        if (!state.you) throw new Error("this battle is over");
         document.body.classList.add("battle");
         current = new BattleScreen(root, id, { id: me.user.id, name: me.user.name }, () => go("/"));
       }

@@ -1,6 +1,6 @@
 # X-COM: Battlescape (multiplayer)
 
-A browser port of the X-COM: UFO Defense battlescape, rebuilt for 2–8 player free-for-all squad battles and co-op scenarios (up to 10 people against an enemy a game master sets up). It uses
+A browser port of the X-COM: UFO Defense battlescape, rebuilt for free-for-all squad battles and co-op scenarios (a team of people against an enemy a game master sets up), which anyone with the invite link can join, even mid-battle. It uses
 the original game's graphics, maps, terrain and sounds (loaded from your copy of the game) and the original rules
 (time units, accuracy, reaction fire, voxel line of fire, destructible terrain, fire, smoke, night lighting,
 psionics...), with a multiplayer layer on top: Google sign-in, lobbies with invite links, a shared recruit pool
@@ -62,12 +62,13 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 
 ## How a match works
 
-1. **Create a match**: number of squads (2–8), environment (urban, farmland, forest, jungle, desert, mountains,
-   polar, Mars, alien base), time of day, optional landed UFO, map size (a recommendation is computed from the
-   player count and budget, and can be overridden), budget, seat limit, recruit pool size, technology level,
+1. **Create a match**: environment (urban, farmland, forest, jungle, desert, mountains,
+   polar, Mars, alien base), time of day, optional landed UFO, map size (auto: sized when the battle starts for the
+   squads there and the budget; or pick one), budget, seat limit, recruit pool size, technology level,
    alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table) and an
    optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
-2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby. The creator
+2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby; there's no player
+   limit (a battle takes up to 30 sides). The creator
    can also add computer squads ("Add AI squad", with a hiring strategy); they hire automatically, are always
    ready, and play their turns on the server one action at a time so you can watch. Each computer squad has
    **AI settings**: aggression (cautious → reckless), how keen it is on explosives, how many rounds it remembers
@@ -79,8 +80,14 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    reactions, strength, psionics, innate weapons, flight, night vision, special abilities). Buy weapons, ammo,
    explosives, equipment and armor, then kit out each unit on the original inventory screen. Unequipped gear is
    dropped at your deployment zone.
-4. **Battle**: squads deploy around the map edge. Players take turns in a shuffled order; the game is asynchronous
-   (close the tab and come back) unless a turn timer is set. Last squad standing wins.
+4. **Battle**: the creator starts once two squads are ready; squads deploy around the map edge. Players take turns
+   in a shuffled order; the game is asynchronous (close the tab and come back) unless a turn timer is set. Last
+   squad standing wins.
+5. **Joining late**: the invite link works while the battle is on. Latecomers (and anyone who wasn't ready at the
+   start) hire and equip as usual and press **Deploy**: their squad lands in a new zone on the map edge, as far from
+   everyone else as possible, and takes its turn after the others each round. In a co-op scenario they land with
+   the team (or, landing apart, in a zone of their own); joining a shared squad that's already fighting puts you in
+   at once, and its people hand you units.
 
 ### Setting up a match with an AI assistant
 

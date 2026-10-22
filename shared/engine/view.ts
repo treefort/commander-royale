@@ -197,6 +197,8 @@ export function applyView(prev: Battle | null, v: PlayerView, files: FileSource)
   b.phase = v.phase;
   b.winner = v.winner;
   b.players = v.players;
+  // squads can join the battle in progress
+  b.growSides(v.players.length);
   b.globalShade = v.globalShade;
   const disc = b.discovered[v.you];
   for (const row of v.tiles) {

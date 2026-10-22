@@ -115,10 +115,9 @@ test("co-op on the server: joining a squad, lock-ins, AFK and AI tuning", async 
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const [ann, ben, dot, eli] = ["co_ann", "co_ben", "co_dot", "co_eli"].map(mkUser);
-  const { id } = game.createMatch(ann, { budget: 200_000, biome: "CULTA", timeOfDay: "day", maxPlayers: 2, coop: { ...defaultSettings().coop, squadSize: 2 } });
+  const { id } = game.createMatch(ann, { budget: 200_000, biome: "CULTA", timeOfDay: "day", coop: { ...defaultSettings().coop, squadSize: 2 } });
   expect(game.joinMatch(id, ben)).toBeNull();
-  // every squad slot is taken: Dot joins the first squad with room
-  expect(game.joinMatch(id, dot)).toBeNull();
+  expect(game.joinMatch(id, dot, ann.id)).toBeNull();
   expect(game.joinMatch(id, eli, ann.id)).toBe("That squad is full");
   let lobby = game.lobbyState(id, dot)!;
   expect(lobby.players.find((p) => p.userId === dot.id)!.squadOf).toBe(ann.id);

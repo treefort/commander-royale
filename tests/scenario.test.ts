@@ -19,7 +19,7 @@ import type { UserRow } from "../server/db.ts";
 function scenarioSettings(extra: Partial<MatchSettings["scenario"]> = {}): MatchSettings {
   const d = defaultSettings();
   return sanitizeSettings({
-    ...d, mode: "coop", biome: "CULTA", timeOfDay: "day", ufo: "STR_SMALL_SCOUT", mapBlocks: 5, budget: 150_000, maxPlayers: 3,
+    ...d, mode: "coop", biome: "CULTA", timeOfDay: "day", ufo: "STR_SMALL_SCOUT", mapBlocks: 5, budget: 150_000,
     scenario: {
       ...d.scenario, seatsPerPlayer: 2, ...extra,
       enemies: extra.enemies ?? [
@@ -49,7 +49,6 @@ test("daily turn ends land on the right wall-clock time, a decent while ahead", 
 
 test("the game master's enemy force: types, numbers, weapons and reinforcement waves", () => {
   const s = scenarioSettings();
-  expect(s.maxPlayers).toBe(3);
   expect(enemyTypeChoices().some((t) => t.id === "STR_SECTOPOD_TERRORIST")).toBe(true);
   const f = buildEnemyForce(s, 7);
   expect(f.recruits.length).toBe(7);
@@ -198,16 +197,16 @@ test("a co-op scenario on the server: game master, team, lock-ins and the GM's v
   };
   const [gm, ann, ben, cat] = ["sc_gm", "sc_ann", "sc_ben", "sc_cat"].map(mkUser);
   const settings = scenarioSettings({ gmPlays: false });
-  settings.maxPlayers = 2;
   const { id } = game.createMatch(gm, settings);
   expect(game.joinMatch(id, ann)).toBeNull();
   expect(game.joinMatch(id, ben)).toBeNull();
-  expect(game.joinMatch(id, cat)).toBe("The team is full");
+  // no head count: Cat joins too, but isn't ready when the battle starts
+  expect(game.joinMatch(id, cat)).toBeNull();
   expect(game.addBot(id, gm, "swarm")).toContain("scenario");
   let lobby = game.lobbyState(id, gm)!;
   expect(lobby.gameMaster).toBe(true);
   expect(game.setReady(id, gm, true)).toContain("game master");
-  expect(game.startMatch(id, gm)).toBe("Everyone on the team must be ready");
+  expect(game.startMatch(id, gm)).toBe("Nobody on the team is ready yet");
   for (const [u, seed] of [[ann, 1], [ben, 2]] as const) {
     const full = buildSquad("swarm", { ...lobby.settings, mode: "ffa" }, lobby.pool, new RNG(seed));
     expect(game.saveLoadout(id, u, full).check!.ok).toBe(false); // more than 2 units
@@ -216,6 +215,9 @@ test("a co-op scenario on the server: game master, team, lock-ins and the GM's v
   }
   lobby = game.lobbyState(id, gm)!;
   expect(game.startMatch(id, gm)).toBeNull();
+  // the map was sized for who was there (auto unless set: here the test settings chose 5)
+  expect(game.lobbyState(id, cat)!.battle!.sides.length).toBe(2);
+  expect(game.lobbyState(id, cat)!.you!.deployed).toBe(false);
   const sockets = [gm, ann, ben].map((user) => ({ data: { user, matchId: id }, sent: [] as string[], send(m: string) { this.sent.push(m); }, close() {} }));
   for (const s of sockets) game.wsOpen(s as never);
   const [sg, sa, sb] = sockets;
@@ -253,12 +255,24 @@ test("a co-op scenario on the server: game master, team, lock-ins and the GM's v
   expect(lastView(sa).round).toBe(2);
   expect(game.listMatches(ann).find((m) => m.id === id)!.yourTurn).toBe(true);
   expect(game.listMatches(gm).find((m) => m.id === id)!.yourTurn).toBe(false);
+  // Cat gets ready late: their units land with the team, theirs to command, and the team waits for them now
+  const catKit = buildSquad("swarm", { ...lobby.settings, mode: "ffa" }, lobby.pool, new RNG(9));
+  expect(game.saveLoadout(id, cat, { squad: catKit.squad.slice(0, 2), stash: [] }).check!.ok).toBe(true);
+  expect(game.setReady(id, cat, true)).toBeNull();
+  expect(game.lobbyState(id, cat)!.you!.deployed).toBe(true);
+  expect(game.setReady(id, cat, true)).toBe("Your squad is already in the battle");
+  const mine = lastView(sa).units.filter((u: { mine: boolean; status?: number }) => u.mine && u.status !== 8);
+  expect(mine.filter((u: { controller?: string }) => u.controller === cat.id).length).toBe(2);
+  expect(lastView(sa).players[0].members.map((m: { userId: string }) => m.userId)).toContain(cat.id);
+  const sc = { data: { user: cat, matchId: id }, sent: [] as string[], send(m: string) { this.sent.push(m); }, close() {} };
+  game.wsOpen(sc as never);
+  expect(lastView(sc).you).toBe(0);
   // the game master can call it off
   send(sg, { t: "cmd", seq: 6, cmd: { c: "surrender" } });
   expect(lastView(sa).phase).toBe(Phase.FINISHED);
   expect(lastView(sa).winner).toBe(1);
   const rec = game.matchRecords().find((r) => r.id === id)!;
-  expect(rec.units.filter((u) => u.player === 0).length).toBe(4);
+  expect(rec.units.filter((u) => u.player === 0).length).toBe(6);
   expect(rec.units.filter((u) => u.player === 1).length).toBeGreaterThanOrEqual(5);
 }, 120_000);
 

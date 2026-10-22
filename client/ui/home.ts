@@ -1,6 +1,6 @@
 import { api, el, money } from "../api.ts";
 import { boxArtScene } from "./boxart.ts";
-import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_COOP_PLAYERS, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
+import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
 import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
 import { checkSettings, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
@@ -159,7 +159,7 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
             el("a", { class: "grow match-name", href: `/m/${m.id}`, onclick: open }, m.name),
             status),
           el("div", { class: "muted" }, `${biomeName(m.biome)} · ${mode}${m.status === "playing" && !m.yourTurn && m.turnOf ? ` · ${m.turnOf}'s turn` : ""}`),
-          el("div", { class: "muted" }, `${m.players.join(", ")} (${m.settings?.mode === "coop" ? `team of ${m.maxPlayers}` : `${m.players.length}/${m.maxPlayers} squads`})`),
+          el("div", { class: "muted" }, `${m.players.join(", ")} ${m.settings?.mode === "coop" ? "" : ` (${m.players.length} squad${m.players.length === 1 ? "" : "s"})`}`),
           el("div", { class: "row", style: { marginTop: "4px", gap: "6px" } },
             el("button", { class: "small", onclick: open }, "Open"),
             m.settings ? el("button", { class: "small", title: "Start a new match with these settings", onclick: () => reuse(m.id) }, "Reuse settings") : null),
@@ -178,9 +178,9 @@ function settingsSummary(s: MatchSettings): string {
   const env = s.randomBiome ? "Random" : biomeName(s.biome);
   if (s.mode === "coop") {
     const foes = s.scenario.enemies.reduce((a, g) => a + g.count, 0);
-    return `Co-op scenario: up to ${s.maxPlayers} × ${s.scenario.seatsPerPlayer} seats vs ${foes} enemies, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${drops}`;
+    return `Co-op scenario: ${s.scenario.seatsPerPlayer} seats each vs ${foes} enemies, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${drops}`;
   }
-  return `${s.maxPlayers} squads, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${s.techLevel} tech, ${drops}`;
+  return `Free-for-all, ${env}, ${s.randomTime || s.timeOfDay === "random" ? "random time" : s.timeOfDay}, ${money(s.budget)}, ${s.techLevel} tech, ${drops}`;
 }
 
 /** The match settings form (create + edit). Budget guidance updates live. */
@@ -191,8 +191,6 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   s.coop = { ...d.coop, ...s.coop };
   s.mode ??= "ffa";
   s.scenario ??= d.scenario;
-  const recommended = () => (s.mode === "coop" ? recommendedScenarioBlocks(s) : recommendedMapBlocks(s.maxPlayers, s.budget));
-  let mapTouched = s.mapBlocks !== recommended();
   const f = el("div", { class: "form" });
   const err = el("div", { class: "err full" });
   const guide = el("div", { class: "guide full" });
@@ -235,23 +233,17 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     i.addEventListener("input", () => set(i.value));
     return i;
   };
-  const mapInput = num(() => s.mapBlocks, (v) => { s.mapBlocks = v; mapTouched = true; }, 4, 10);
   const nameInput = el("input", { value: s.name, maxlength: 40, disabled: readOnly }) as HTMLInputElement;
   nameInput.addEventListener("input", () => (s.name = nameInput.value));
 
   // the game mode is a pair of tabs over the rest of the form
-  // squads (free-for-all) and people (co-op) are different counts: each tab keeps its own, so flipping between
-  // the tabs never changes the number that was set (by hand, a link or an earlier match)
-  const playersBy: Record<GameMode, number> = { ffa: 2, coop: 4, [s.mode]: s.maxPlayers };
   const MODES: { id: GameMode; name: string; blurb: string }[] = [
-    { id: "ffa", name: "Free-for-all", blurb: "2–8 squads fight it out; last squad standing wins. Computer squads can join, and with “Co-op squads” set above 1, several people can share a squad." },
-    { id: "coop", name: "Co-op scenario", blurb: "You're the game master: set up the mission and the enemy, and everyone who joins plays on one team against it." },
+    { id: "ffa", name: "Free-for-all", blurb: "Squads fight it out; last squad standing wins. Anyone with the invite link can join, even once the battle is on: their squad lands at the edge of the map. Computer squads can join, and with “Co-op squads” set above 1, several people can share a squad." },
+    { id: "coop", name: "Co-op scenario", blurb: "You're the game master: set up the mission and the enemy, and everyone who joins plays on one team against it (latecomers land with the team when they're ready)." },
   ];
   const tabButtons = MODES.map((m) => el("button", { type: "button", class: "tab", disabled: readOnly && m.id !== s.mode, onclick: () => {
     if (readOnly || s.mode === m.id) return;
-    playersBy[s.mode] = s.maxPlayers;
     s.mode = m.id;
-    s.maxPlayers = playersBy[m.id];
     if (m.id !== "coop" && s.coop.turnEnd === "daily") s.coop.turnEnd = "lockin";
     if (s.coop.turnEnd === "daily") s.coop.timeZone = browserTimeZone();
     refresh();
@@ -265,8 +257,6 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   field("Message for players", notesInput);
 
   // ---- free-for-all ----
-  const squadsInput = num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 2, 8);
-  field("Players", squadsInput, "2–8 squads, free-for-all", "ffa");
   field("Co-op squads", el("div", { class: "row" },
     el("span", {}, "up to"), num(() => s.coop.squadSize, (v) => (s.coop.squadSize = v), 1, MAX_SQUAD_SIZE, 1, "60px"),
     el("span", {}, "people per squad; turn ends"),
@@ -275,13 +265,11 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     "Several people can share a squad, each commanding some of its units, all moving at once on its turn", "ffa");
 
   // ---- co-op scenario: the team ----
-  const teamInput = num(() => s.maxPlayers, (v) => (s.maxPlayers = v), 1, MAX_COOP_PLAYERS, 1, "60px");
   field("The team", el("div", { class: "row" },
     text(() => s.scenario.teamName, (v) => (s.scenario.teamName = v)),
-    el("span", {}, "up to"), teamInput,
-    el("span", {}, "people, each with"), num(() => s.scenario.seatsPerPlayer, (v) => (s.scenario.seatsPerPlayer = v), 1, 30, 1, "60px"),
+    el("span", {}, "everyone with"), num(() => s.scenario.seatsPerPlayer, (v) => (s.scenario.seatsPerPlayer = v), 1, 30, 1, "60px"),
     el("span", {}, "Skyranger seats")),
-    "Soldiers and small aliens take 1 seat, tanks and large aliens 4: e.g. 3 people with 4 seats each (4 soldiers or a tank), or 10 people with 1. Everyone hires, equips and commands their own units", "coop");
+    "Soldiers and small aliens take 1 seat, tanks and large aliens 4 (4 seats = 4 soldiers or a tank). Everyone who joins hires, equips and commands their own units", "coop");
   field("Landing", sel([
     { id: "together", name: "The whole team lands together" },
     { id: "apart", name: "Everyone lands apart (like squads in a normal battle)" },
@@ -320,6 +308,7 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   field("Environment", sel([{ id: "RANDOM" as const, name: "Random (rolled when the battle starts)" }, ...BIOMES.map((b) => ({ id: b.id, name: b.name }))], () => s.biome, (v) => (s.biome = v)));
   field("Time of day", sel([{ id: "random", name: "Random (rolled when the battle starts)" }, { id: "day", name: "Day" }, { id: "dusk", name: "Dusk" }, { id: "night", name: "Night" }] as const, () => s.timeOfDay, (v) => (s.timeOfDay = v)), "At night humans see 9 tiles unless an area is lit; aliens see in the dark");
   field("Landed UFO", sel(UFO_CHOICES, () => s.ufo, (v) => (s.ufo = v)), "Placed in the middle of the map");
+  const mapInput = sel([{ id: "0", name: "Auto" }, ...[4, 5, 6, 7, 8, 9, 10].map((n) => ({ id: String(n), name: `${n} (${n * 10}x${n * 10} tiles)` }))], () => String(s.mapBlocks), (v) => (s.mapBlocks = Number(v)));
   field("Map size (blocks)", mapInput, mapHint);
   const budgetInput = num(() => s.budget, (v) => (s.budget = v), 50_000, 5_000_000, 10_000);
   field("Budget per player", budgetInput);
@@ -409,15 +398,9 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     forceCount.textContent = `${atStart} on the map at the start${later ? `, ${later} more as reinforcements` : ""}.`;
     dailyRow.style.display = s.coop.turnEnd === "daily" ? "" : "none";
     dailyInput.value = s.coop.dailyAt;
-    // the mode switch clamps the head count differently
-    squadsInput.value = teamInput.value = String(s.maxPlayers);
-    const rec = recommended();
-    if (!mapTouched) {
-      s.mapBlocks = rec;
-      mapInput.value = String(rec);
-    }
-    const who = s.mode === "coop" ? "this scenario" : `${s.maxPlayers} players`;
-    mapHint.textContent = `${s.mapBlocks * 10}x${s.mapBlocks * 10} tiles. Recommended for ${who}: ${rec} (${rec * 10}x${rec * 10})${mapTouched && s.mapBlocks !== rec ? " — overridden" : ""}`;
+    mapHint.textContent = s.mapBlocks ? "A size of your own: squads joining later still find room at the edge"
+      : s.mode === "coop" ? `Auto: sized for the team at the start and the enemy force (2 people: ${recommendedScenarioBlocks(s, 2)}, 4: ${recommendedScenarioBlocks(s, 4)}, 8: ${recommendedScenarioBlocks(s, 8)})`
+      : `Auto: sized for the squads ready at the start (2 squads: ${recommendedMapBlocks(2, s.budget)}, 3–4: ${recommendedMapBlocks(4, s.budget)}, 5–6: ${recommendedMapBlocks(6, s.budget)}, more: ${recommendedMapBlocks(8, s.budget)})`;
     const g = budgetGuide(s);
     guide.replaceChildren(
       el("div", { class: "title", style: { fontSize: "12px" } }, `WHAT ${money(s.budget)} BUYS`),
@@ -456,8 +439,7 @@ function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void
     try {
       const raw = parseSettingsText(text.trim().startsWith("{") ? text : text.includes("settings=") ? text : `?settings=${encodeURIComponent(text)}`) as Record<string, unknown>;
       const { settings, warnings } = checkSettings(raw);
-      // unless the assistant chose a map size or time zone, pick them like the form would
-      if (raw.mapBlocks === undefined) settings.mapBlocks = settings.mode === "coop" ? recommendedScenarioBlocks(settings) : recommendedMapBlocks(settings.maxPlayers, settings.budget);
+      // unless the assistant chose a time zone, use the browser's like the form would
       if ((raw.coop as { timeZone?: unknown } | undefined)?.timeZone === undefined) settings.coop.timeZone = browserTimeZone();
       apply(settings);
       out.replaceChildren(el("div", { class: "loaded" }, `Loaded "${settings.name}" from ${source}: check the form below, then Create match.`));

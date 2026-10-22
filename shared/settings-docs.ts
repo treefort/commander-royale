@@ -3,7 +3,7 @@
 // Players point their assistant at the reference, describe the match they want, and get back a link
 // (/?settings=<json>) or JSON to paste into the New Match form.
 import {
-  BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_COOP_PLAYERS, DEFAULT_BOT_TUNING, defaultSettings, sanitizeSettings,
+  BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_SIDES, DEFAULT_BOT_TUNING, defaultSettings, sanitizeSettings,
   recommendedMapBlocks, recommendedScenarioBlocks, type MatchSettings,
 } from "./protocol.ts";
 import { UNITS, armorRule, itemRule, tr } from "./rules/index.ts";
@@ -27,11 +27,10 @@ export const FIELDS: FieldDoc[] = [
   { path: "mode", type: list(["ffa", "coop"]), text: "\"ffa\": free-for-all, squads fight each other and the last squad standing wins. \"coop\": a scenario — everyone who joins plays on ONE team against an enemy force the creator (the game master) defines in `scenario`." },
   { path: "name", type: "string, up to 40 characters", text: "Shown in the match list and lobby." },
   { path: "notes", type: "string, up to 1000 characters", text: "A message from the creator to everyone who joins (house rules, schedule, the story of the mission...)." },
-  { path: "maxPlayers", type: "integer", range: [1, MAX_COOP_PLAYERS], text: `Free-for-all: number of squads, 2–8 (values below 2 become 2). Co-op: number of people on the team, 1–${MAX_COOP_PLAYERS} (a game master who only watches doesn't count). Default 2 squads / 4 people.` },
   { path: "biome", type: list(["RANDOM", ...BIOMES.map((b) => b.id)]), text: `Environment: ${BIOMES.map((b) => `${b.id} = ${b.name}`).join(", ")}. RANDOM is rolled when the battle starts.` },
   { path: "timeOfDay", type: list(["day", "dusk", "night", "random"]), text: "At night humans see 9 tiles except in lit areas (flares, fire); aliens see in the dark. Dusk is in between." },
   { path: "ufo", type: list(UFO_CHOICES.map((u) => u.id)), text: `A landed UFO in the middle of the map (cover, a building to fight over; co-op enemies can start inside it): ${UFO_CHOICES.filter((u) => u.id.startsWith("STR")).map((u) => `${u.id} = ${u.name}`).join(", ")}.` },
-  { path: "mapBlocks", type: "integer", range: [4, 10], text: "Map edge in 10-tile blocks (5 = 50x50 tiles). Leave it out and the form picks a size for the player count / number of units (free-for-all: 5 for 2 squads, 6 for 3–4, 7 for 5–6, 8 for 7–8, +1 at $1,000,000+; co-op: from the total units on the field)." },
+  { path: "mapBlocks", type: "integer", range: [0, 10], text: "Map edge in 10-tile blocks (5 = 50x50 tiles), 4–10. 0 (the default) = auto: sized when the battle starts for whoever is there (free-for-all: 5 for 2 squads, 6 for 3–4, 7 for 5–6, 8 for more, +1 at $1,000,000+; co-op: from the team's size and the enemy force). Only set it when the player asks for a particular size." },
   { path: "budget", type: "integer (dollars)", range: [50_000, 5_000_000], text: "What each player (free-for-all: each squad's leader; co-op: each person) spends on hiring units, weapons and armor. See \"Budget rules of thumb\" below." },
   { path: "squadLimit", type: "integer (seats)", range: [1, 30], mode: "ffa", text: "Free-for-all squad size in Skyranger seats: soldiers and small aliens take 1, tanks and large aliens (Cyberdisc, Reaper, Sectopod) take 4. The original Skyranger holds 14." },
   { path: "poolSize", type: "integer", range: [10, 80], text: "How many recruits are in the hiring pool (everyone hires from an identical copy)." },
@@ -74,12 +73,12 @@ export const FIELDS: FieldDoc[] = [
 export const EXAMPLES: { ask: string; settings: Record<string, unknown> }[] = [
   {
     ask: "A quick 1v1 in a city at night, small squads, no aliens for hire, a 2-minute turn timer.",
-    settings: { mode: "ffa", name: "Night in the City", maxPlayers: 2, biome: "URBAN", timeOfDay: "night", budget: 200000, squadLimit: 8, allowAliens: false, turnTimer: 120 },
+    settings: { mode: "ffa", name: "Night in the City", biome: "URBAN", timeOfDay: "night", budget: 200000, squadLimit: 8, allowAliens: false, turnTimer: 120 },
   },
   {
     ask: "Three of us against the crew of a downed Sectoid scout in farmland, with Floater reinforcements later. We each want 4 soldiers, landing apart. Turns end at 8pm Eastern every day.",
     settings: {
-      mode: "coop", name: "Crash Site", maxPlayers: 3, biome: "CULTA", timeOfDay: "day", ufo: "STR_SMALL_SCOUT", budget: 250000, techLevel: "laser",
+      mode: "coop", name: "Crash Site", biome: "CULTA", timeOfDay: "day", ufo: "STR_SMALL_SCOUT", budget: 250000, techLevel: "laser",
       coop: { turnEnd: "daily", dailyAt: "20:00", timeZone: "America/New_York" },
       scenario: {
         teamName: "X-COM", enemyName: "Sectoid Crew", seatsPerPlayer: 4, teamStart: "apart", gmPlays: true,
@@ -94,7 +93,7 @@ export const EXAMPLES: { ask: string; settings: Record<string, unknown> }[] = [
   {
     ask: "I'll run a terror mission for 6 friends (2 seats each) — Chryssalids and zombies in a city at dusk, and I just want to watch.",
     settings: {
-      mode: "coop", name: "Terror Site", maxPlayers: 6, biome: "URBAN", timeOfDay: "dusk", budget: 150000, supplyDrops: { tier: "basic" },
+      mode: "coop", name: "Terror Site", biome: "URBAN", timeOfDay: "dusk", budget: 150000, supplyDrops: { tier: "basic" },
       scenario: {
         teamName: "Rapid Response", enemyName: "The Hive", seatsPerPlayer: 2, teamStart: "together", gmPlays: false,
         enemies: [
@@ -109,7 +108,7 @@ export const EXAMPLES: { ask: string; settings: Record<string, unknown> }[] = [
   {
     ask: "Hard mode: two of us with big budgets assault the alien base on Mars — Ethereals, Mutons and a Sectopod.",
     settings: {
-      mode: "coop", name: "Cydonia", maxPlayers: 2, biome: "MARS", timeOfDay: "night", budget: 1500000, techLevel: "alien",
+      mode: "coop", name: "Cydonia", biome: "MARS", timeOfDay: "night", budget: 1500000, techLevel: "alien",
       scenario: {
         seatsPerPlayer: 8, enemyName: "Ethereal Guard",
         enemies: [
@@ -175,8 +174,9 @@ Give the player **both**:
 
 Rules:
 - **Only include what you want to change.** Anything left out keeps its default; nested objects (\`supplyDrops\`,
-  \`coop\`, \`scenario\`, \`scenario.ai\`, each enemy group) can be partial too. Leave out \`mapBlocks\` and the form
-  picks a good map size.
+  \`coop\`, \`scenario\`, \`scenario.ai\`, each enemy group) can be partial too. Leave out \`mapBlocks\` and the map
+  is sized when the battle starts, for however many players are there.
+- There is no player limit to set: anyone with the invite link can join, before the battle or while it's on.
 - Numbers outside their range are clamped and unknown keys are ignored; the form lists every adjustment it made,
   so if the player pastes back a warning, fix that field.
 - Only the player can create the match (they're signed in; you aren't). The JSON is not secret.
@@ -184,12 +184,14 @@ Rules:
 
 ## The two game modes
 
-- **Free-for-all (\`"mode": "ffa"\`)**: 2–8 squads fight; last squad standing wins. Each squad's leader hires and
+- **Free-for-all (\`"mode": "ffa"\`)**: any number of squads (up to ${MAX_SIDES}) fight; last squad standing wins.
+  People can join while the battle is on: their squad lands at the map edge, as far from the others as possible,
+  and takes its turn after the others each round. Each squad's leader hires and
   equips it from \`budget\` within \`squadLimit\` seats. With \`coop.squadSize\` above 1 several people can share one
   squad (each commands some of its units; they all move at once on its turn). Computer-played squads can be added in
   the lobby (not through these settings).
-- **Co-op scenario (\`"mode": "coop"\`)**: the creator is the game master. Up to ${MAX_COOP_PLAYERS} people form one
-  team — each hires and commands their own units with \`budget\` and \`scenario.seatsPerPlayer\` seats — against an
+- **Co-op scenario (\`"mode": "coop"\`)**: the creator is the game master. Everyone who joins (also once the battle
+  is on) is on one team — each hires and commands their own units with \`budget\` and \`scenario.seatsPerPlayer\` seats — against an
   enemy force described in \`scenario.enemies\` and played by the computer (\`scenario.ai\`). The team moves first and
   everyone acts at once; the enemy can get reinforcements in later rounds. The creator can play too or just watch
   everything (\`scenario.gmPlays\`).
@@ -223,7 +225,7 @@ ${md([["id", "name", "tech level", "damage"], ...weaponRows])}
 
 ${guide.examples.map((x) => `- ${x}`).join("\n")}
 - ${guide.prices.join(" ")}
-- Free-for-all map size recommendation: ${[2, 4, 6, 8].map((n) => `${n} squads → ${recommendedMapBlocks(n, d.budget)}`).join(", ")} blocks (+1 at $1,000,000+). Co-op: from the total units, e.g. the default scenario → ${recommendedScenarioBlocks({ ...d, mode: "coop" })}.
+- Auto map size: free-for-all ${[2, 4, 6, 8].map((n) => `${n} squads → ${recommendedMapBlocks(n, d.budget)}`).join(", ")} blocks (+1 at $1,000,000+). Co-op: from the total units, e.g. the default scenario with 4 people → ${recommendedScenarioBlocks({ ...d, mode: "coop" }, 4)}.
 
 ## Examples
 

@@ -42,6 +42,8 @@ type Dialog =
   | { kind: "gameover" };
 
 const TEAM_COLORS = [16 * 4, 16 * 2, 16 * 8, 16 * 3, 16 * 12, 16 * 9, 16 * 5, 16 * 14];
+/** Squads past the eighth (people can keep joining) reuse the colours. */
+const teamColor = (side: number) => TEAM_COLORS[side % TEAM_COLORS.length];
 
 const MESSAGES: Record<string, string> = {
   STR_TURN_BEGINS: "{0}'s turn",
@@ -61,6 +63,7 @@ const MESSAGES: Record<string, string> = {
   STR_ONLY_LEADER_SURRENDERS: "Only the squad leader can surrender",
   STR_GAME_MASTER_WATCHES: "The game master watches: the team gives the orders",
   STR_REINFORCEMENTS_ARRIVED: "{0}: reinforcements have arrived!",
+  STR_JOINED_BATTLE: "{0} has joined the battle",
   STR_HOST_HANDED_TO_AI: "The host had the AI play this turn for {0}",
   STR_HOST_ONLY: "Only the host can do that",
   STR_NOBODY_TO_WAIT_FOR: "Nobody is holding up this turn",
@@ -757,7 +760,7 @@ export class BattleScreen {
     const list = this.visibleEnemies();
     list.forEach((u, i) => {
       const x = ix + 300, y = iy - 16 - i * 13;
-      const color = TEAM_COLORS[u.owner] ?? 32;
+      const color = teamColor(u.owner);
       this.surf.fillRect(x, y, 15, 12, color + 8);
       this.surf.rect(x, y, 15, 12, color + 2);
       drawText(this.surf, this.assets.small, String(i + 1), x + 4, y + 2, 15 - 5 > 0 ? 0 : 0);
@@ -795,7 +798,7 @@ export class BattleScreen {
       const alive = b.units.filter((u) => u.originalOwner === i && !isOut(u)).length;
       const text = `${p.name.toUpperCase()}${p.eliminated ? " (OUT)" : ""}${i === this.you ? " *" : ""}`;
       const y = 14 + i * 9;
-      s.fillRect(4, y + 1, 5, 5, TEAM_COLORS[i] + 3);
+      s.fillRect(4, y + 1, 5, 5, teamColor(i) + 3);
       // dimmed text without contrast: with it, base 8's shades would run on into the next colour ramp
       drawText(s, A.small, text, 12, y, p.eliminated ? 8 : 0, { contrast: !p.eliminated });
       void alive;
@@ -1064,7 +1067,7 @@ export class BattleScreen {
         drawText(s, A.small, `${winner.toUpperCase()} HOLDS THE FIELD`, cx + 20, cy + 66, -1, { align: "center", width: 280, contrast: true });
         b.players.forEach((p, i) => {
           const fallen = b.units.filter((u) => u.originalOwner === i && isOut(u)).length;
-          drawText(s, A.small, `${p.name.toUpperCase()}${p.surrendered ? " (SURRENDERED)" : ""}`, cx + 40, cy + 84 + i * 9, TEAM_COLORS[i] - 1, { contrast: true });
+          drawText(s, A.small, `${p.name.toUpperCase()}${p.surrendered ? " (SURRENDERED)" : ""}`, cx + 40, cy + 84 + i * 9, teamColor(i) - 1, { contrast: true });
           void fallen;
         });
         button(cx + 60, cy + 146, 90, 18, "VIEW MAP", () => (this.dialog = null));
@@ -1100,7 +1103,7 @@ export class BattleScreen {
         }
     for (const u of b.units) {
       if (isOut(u) || u.pos.z > z) continue;
-      const c = TEAM_COLORS[u.owner] + 2;
+      const c = teamColor(u.owner) + 2;
       s.fillRect(ox + u.pos.x * cell, oy + u.pos.y * cell, cell * u.size, cell * u.size, c);
       if (u.id === this.st.selected) s.rect(ox + u.pos.x * cell - 1, oy + u.pos.y * cell - 1, cell * u.size + 2, cell * u.size + 2, 1 + (this.st.animFrame % 2) * 3);
     }

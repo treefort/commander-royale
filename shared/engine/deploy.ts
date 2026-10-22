@@ -1,7 +1,7 @@
 // Putting units on the map: a squad's landing zone, or (co-op scenario enemies) the UFO, the middle of the
 // map or anywhere, at the start or as reinforcements later on.
-import { type Battle, type Unit } from "./state.ts";
-import { canStand } from "./mapgen.ts";
+import { type Battle, type Unit, type Rect, isOut } from "./state.ts";
+import { canStand, openSkyTiles } from "./mapgen.ts";
 import { createUnit, giveItem } from "./units.ts";
 import { directionTo, type Pos } from "./defs.ts";
 import { armorRule, unitRule, itemRule, fitsSlot, livingWeaponFor, type PlacedItem } from "../rules/index.ts";
@@ -43,6 +43,37 @@ export function deploySpots(b: Battle, seat: number, how: Placement | undefined,
   }
   const z = (zone !== undefined ? b.landingZones[zone] : undefined) ?? b.zones[seat] ?? { x: b.sx / 2 - 5, y: b.sy / 2 - 5, w: 10, h: 10 };
   return around(b, z.x + z.w / 2, z.y + z.h / 2, 18);
+}
+
+/**
+ * A landing zone for a squad joining the battle in progress (or a co-op teammate landing apart): the 10x10 block on
+ * the map edge farthest from every other landing zone and from the other sides' units, open ground preferred.
+ */
+export function newLandingZone(b: Battle, seat: number): Rect {
+  const cols = Math.max(1, Math.floor(b.sx / 10)), rows = Math.max(1, Math.floor(b.sy / 10));
+  const open = new Map<number, number>();
+  for (const p of openSkyTiles(b, 0)) {
+    const k = Math.floor(p.x / 10) * rows + Math.floor(p.y / 10);
+    open.set(k, (open.get(k) ?? 0) + 1);
+  }
+  const others = [
+    ...b.landingZones.map((z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 })),
+    ...b.units.filter((u) => u.owner !== seat && !isOut(u)).map((u) => ({ x: u.pos.x, y: u.pos.y })),
+  ];
+  let best: Rect | null = null, bestScore = -1;
+  for (let cx = 0; cx < cols; cx++)
+    for (let cy = 0; cy < rows; cy++) {
+      if (cx > 0 && cy > 0 && cx < cols - 1 && cy < rows - 1) continue;
+      const x = cx * 10 + 5, y = cy * 10 + 5;
+      const far = others.length ? Math.min(...others.map((o) => Math.hypot(o.x - x, o.y - y))) : 1;
+      // a block that's mostly buildings or rough ground counts as half as far away
+      const score = far * ((open.get(cx * rows + cy) ?? 0) >= 30 ? 1 : 0.5);
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x: cx * 10, y: cy * 10, w: 10, h: 10 };
+      }
+    }
+  return best!;
 }
 
 export function sizeOf(r: Recruit): number {

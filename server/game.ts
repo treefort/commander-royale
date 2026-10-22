@@ -4,9 +4,9 @@ import type { ServerWebSocket } from "bun";
 import { readFileSync, existsSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { db, randomId, type MatchRow, type PlayerRow, type UserRow } from "./db.ts";
-import { nextDailyDeadline, sanitizeSettings, defaultSettings, resolveBiome, resolveTimeOfDay, sanitizeBotTuning, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember, MAX_COOP_PLAYERS } from "../shared/protocol.ts";
+import { nextDailyDeadline, sanitizeSettings, defaultSettings, resolveBiome, resolveTimeOfDay, resolveMapBlocks, sanitizeBotTuning, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember, MAX_SIDES } from "../shared/protocol.ts";
 import { generatePool, checkLoadout, catalogFor, armorsFor, armorPrice } from "../shared/rules/catalog.ts";
-import { createBattle, type SetupPlayer } from "../shared/engine/setup.ts";
+import { createBattle, joinBattle, type SetupPlayer } from "../shared/engine/setup.ts";
 import { GameRules, type Command } from "../shared/engine/actions.ts";
 import { type Battle, type Unit, Phase } from "../shared/engine/state.ts";
 import { serializeBattle, deserializeBattle } from "../shared/engine/serialize.ts";
@@ -115,6 +115,12 @@ function leadersOf(players: PlayerRow[]): PlayerRow[] {
 function squadOf(players: PlayerRow[], leader: PlayerRow): PlayerRow[] {
   return [leader, ...players.filter((p) => p.squad_of === leader.user_id)];
 }
+/** Whether someone is in the battle (with a squad, in someone's, or watching as game master), not still to join it. */
+function deployed(m: MatchRow, userId: string): boolean {
+  if (m.status === "lobby") return false;
+  const h = loadHost(m.id);
+  return !!h && seatOf(h, userId) >= 0;
+}
 
 // ------------------------------------------------------------------------------------------
 // lobby
@@ -153,7 +159,7 @@ export function listMatches(user: UserRow) {
     }
     // co-op squads are listed as "Leader + Member + ..."
     const squads = s.mode === "coop" ? [players.map((p) => p.name).join(" + ")] : leadersOf(players).map((l) => squadOf(players, l).map((p) => p.name).join(" + "));
-    return { id: m.id, name: s.name, status: m.status, biome: s.biome, settings: s, created: m.created, players: squads, maxPlayers: s.maxPlayers, turnOf, yourTurn, round, winner, updated: m.updated };
+    return { id: m.id, name: s.name, status: m.status, biome: s.biome, settings: s, created: m.created, players: squads, turnOf, yourTurn, round, winner, updated: m.updated };
   });
 }
 
@@ -171,9 +177,25 @@ export function lobbyState(id: string, user: UserRow | null) {
   const me = user ? players.find((p) => p.user_id === user.id) : undefined;
   const pool = JSON.parse(m.pool) as Recruit[];
   const leader = me?.squad_of ? players.find((p) => p.user_id === me.squad_of) : me;
+  // a battle in progress: who's in it (people still hiring can join it, or a shared squad in it)
+  const h = m.status !== "lobby" ? loadHost(m.id) : null;
+  const battle = h ? {
+    round: h.battle.round,
+    over: h.battle.phase === Phase.FINISHED,
+    sides: h.battle.players.map((p) => {
+      const people = (p.members ?? []).filter((x) => !x.observer);
+      return {
+        name: p.name, userId: p.userId, eliminated: p.eliminated, bot: isBot(p.userId), people: people.map((x) => x.name), joinedRound: p.joinedRound ?? 1,
+        // free-for-all co-op: a human squad with room takes another person
+        room: settings.mode === "ffa" && !isBot(p.userId) && !p.eliminated && settings.coop.squadSize > 1 && people.length < settings.coop.squadSize,
+      };
+    }),
+  } : null;
+  const inBattle = (userId: string) => !!h && seatOf(h, userId) >= 0;
   return {
     id: m.id,
     status: m.status,
+    battle,
     owner: m.owner,
     isOwner: !!user && m.owner === user.id,
     settings,
@@ -181,12 +203,12 @@ export function lobbyState(id: string, user: UserRow | null) {
     gameMaster: !!user && isGameMaster(m, settings, user.id),
     players: players.map((p) => ({
       name: p.name, seat: p.seat, ready: !!p.ready, hasLoadout: !!p.loadout, you: !!user && p.user_id === user.id, owner: p.user_id === m.owner,
-      userId: p.user_id, squadOf: p.squad_of, gm: isGameMaster(m, settings, p.user_id),
+      userId: p.user_id, squadOf: p.squad_of, gm: isGameMaster(m, settings, p.user_id), deployed: inBattle(p.user_id),
       ...(isBot(p.user_id) ? { bot: true, botId: p.user_id, ai: botTuning(p) } : {}),
     })),
     strategies: STRATEGIES,
     you: me ? {
-      seat: me.seat, loadout: leader?.loadout ? (JSON.parse(leader.loadout) as Loadout) : null, ready: !!leader?.ready,
+      seat: me.seat, loadout: leader?.loadout ? (JSON.parse(leader.loadout) as Loadout) : null, ready: !!leader?.ready, deployed: inBattle(me.user_id),
       // co-op: the leader whose squad you play in (they hire and equip it; you see their loadout)
       squadOf: me.squad_of, leaderName: me.squad_of ? leader?.name ?? null : null,
     } : null,
@@ -197,33 +219,73 @@ export function lobbyState(id: string, user: UserRow | null) {
 }
 
 /**
- * Joins a lobby with a squad of your own, or (co-op) as a teammate in `squad`'s (a leader's user id). With no
- * choice and every squad slot taken, you join the first human squad with room.
+ * Joins a match with a squad of your own, or (co-op) as a teammate in `squad`'s (a leader's user id). Any number
+ * can join, also once the battle is on: you hire and equip as usual and your squad lands when you're ready (joining
+ * a squad that's already fighting puts you in the battle at once).
  */
 export function joinMatch(id: string, user: UserRow, squad?: string): string | null {
   const m = getMatch(id);
   if (!m) return "Match not found";
   const players = getPlayers(id);
   if (players.some((p) => p.user_id === user.id)) return squad !== undefined ? joinSquad(id, user, squad) : null;
-  if (m.status !== "lobby") return "This match has already started";
+  if (m.status === "finished") return "This battle is over";
   const s = parseSettings(m.settings);
   let leader: PlayerRow | undefined;
-  if (s.mode === "coop") {
-    // everyone's on the one team: only the head count matters
-    if (scenarioPlayers(m, s, players).length >= s.maxPlayers) return "The team is full";
-  } else if (squad) {
+  if (s.mode === "ffa" && squad) {
     leader = players.find((p) => p.user_id === squad && !p.squad_of);
     const e = squadRoom(s, players, leader);
     if (e) return e;
-  } else if (leadersOf(players).length >= s.maxPlayers) {
-    leader = leadersOf(players).find((l) => !squadRoom(s, players, l));
-    if (!leader) return "This match is full";
-  }
+  } else if (s.mode === "ffa" && leadersOf(players).length >= MAX_SIDES) return SIDES_FULL;
   const seats = new Set(players.map((p) => p.seat));
   let seat = 0;
   while (seats.has(seat)) seat++;
   db.query("INSERT INTO match_players (match_id, user_id, seat, name, squad_of) VALUES (?, ?, ?, ?, ?)").run(id, user.id, seat, user.name, leader?.user_id ?? null);
+  if (leader) joinSquadInBattle(m, user, leader.user_id);
   touch(id);
+  return null;
+}
+
+const SIDES_FULL = `This match already has ${MAX_SIDES} squads, as many as a battle can take`;
+
+/** Joining a squad that's already fighting puts you in the battle at once (its people hand you units with G). */
+function joinSquadInBattle(m: MatchRow, user: UserRow, leaderId: string) {
+  if (m.status !== "playing") return;
+  const h = loadHost(m.id);
+  const seat = h ? seatOf(h, leaderId) : -1;
+  if (!h || seat < 0 || h.battle.phase !== Phase.PLAYING) return;
+  const ev = new BattleEvents(h.battle);
+  joinBattle(h.battle, { userId: user.id, name: user.name, loadout: { squad: [], stash: [] }, members: [{ userId: user.id, name: user.name }] }, [], ev, seat);
+  publish(h, ev, false, user.id);
+}
+
+/** A squad (or co-op scenario teammate) that wasn't ready when the battle started, or joined since, lands now. */
+function deployLate(m: MatchRow, me: PlayerRow): string | null {
+  const h = loadHost(m.id);
+  if (!h) return "The battle isn't running";
+  const b = h.battle;
+  if (b.phase !== Phase.PLAYING) return "This battle is over";
+  const s = parseSettings(m.settings);
+  const pool = JSON.parse(m.pool) as Recruit[];
+  const loadout = JSON.parse(me.loadout!) as Loadout;
+  const ev = new BattleEvents(b);
+  if (s.mode === "coop") {
+    // onto the team, commanding what they hired; landing apart, in a zone of their own
+    const squad = loadout.squad.map((x) => ({ ...x, controller: me.user_id }));
+    joinBattle(b, {
+      userId: me.user_id, name: me.name, loadout: { squad, stash: loadout.stash }, members: [{ userId: me.user_id, name: me.name }],
+      ...(s.scenario.teamStart === "apart" ? { landings: 1 } : {}),
+    }, pool, ev, 0);
+  } else {
+    if (b.players.length >= MAX_SIDES) return SIDES_FULL;
+    // the squad's people come along
+    const people = squadOf(getPlayers(m.id), me).filter((x) => seatOf(h, x.user_id) < 0);
+    joinBattle(b, { userId: me.user_id, name: me.name, loadout, members: people.map((x) => ({ userId: x.user_id, name: x.name })) }, pool, ev);
+  }
+  while (h.sent.length < b.players.length) h.sent.push(newSentState());
+  const ais = aiPlayers.get(h.id);
+  if (ais) b.players.forEach((_, seat) => ais.has(seat) || ais.set(seat, new AIPlayer(b, seat, undefined, b.round * 31 + seat)));
+  db.query("UPDATE match_players SET ready = 1 WHERE match_id = ? AND user_id = ?").run(m.id, me.user_id);
+  publish(h, ev, false, me.user_id);
   return null;
 }
 
@@ -240,7 +302,8 @@ function squadRoom(s: MatchSettings, players: PlayerRow[], leader: PlayerRow | u
 export function joinSquad(id: string, user: UserRow, leaderId: string): string | null {
   const m = getMatch(id);
   if (!m) return "Match not found";
-  if (m.status !== "lobby") return "The match has already started";
+  if (m.status === "finished") return "This battle is over";
+  if (deployed(m, user.id)) return "You're already in the battle";
   const s = parseSettings(m.settings);
   if (s.mode === "coop") return "Everyone is on the same team in a co-op scenario";
   const players = getPlayers(id);
@@ -248,7 +311,7 @@ export function joinSquad(id: string, user: UserRow, leaderId: string): string |
   if (!me) return "You are not in this match";
   if (!leaderId) {
     if (!me.squad_of) return null;
-    if (leadersOf(players).length >= s.maxPlayers) return "There's no room for another squad (raise the number of squads in the settings)";
+    if (leadersOf(players).length >= MAX_SIDES) return SIDES_FULL;
     db.query("UPDATE match_players SET squad_of = NULL, ready = 0 WHERE match_id = ? AND user_id = ?").run(id, user.id);
   } else {
     if (leaderId === user.id || leaderId === me.squad_of) return null;
@@ -257,6 +320,7 @@ export function joinSquad(id: string, user: UserRow, leaderId: string): string |
     if (e) return e;
     db.query("UPDATE match_players SET squad_of = ?, ready = 0 WHERE match_id = ? AND user_id = ?").run(leaderId, id, user.id);
     // the leader's units dealt to this player keep their pick; nothing else to undo
+    joinSquadInBattle(m, user, leaderId);
   }
   touch(id);
   return null;
@@ -265,8 +329,10 @@ export function joinSquad(id: string, user: UserRow, leaderId: string): string |
 export function leaveMatch(id: string, user: UserRow): string | null {
   const m = getMatch(id);
   if (!m) return "Match not found";
-  if (m.status !== "lobby") return "The match is in progress — surrender from the battlescape instead";
-  if (m.owner === user.id) {
+  if (m.status === "finished") return "This battle is over";
+  // someone still getting ready to join a battle in progress can change their mind
+  if (deployed(m, user.id)) return "The match is in progress — surrender from the battlescape instead";
+  if (m.owner === user.id && m.status === "lobby") {
     db.query("DELETE FROM matches WHERE id = ?").run(id);
     broadcastLobby(id, true);
     return null;
@@ -296,12 +362,8 @@ export function updateSettings(id: string, user: UserRow, raw: Partial<MatchSett
     // a scenario has one team and a scripted enemy: computer squads and co-op squad links go
     for (const p of players) if (isBot(p.user_id)) db.query("DELETE FROM match_players WHERE match_id = ? AND user_id = ?").run(id, p.user_id);
     db.query("UPDATE match_players SET squad_of = NULL WHERE match_id = ?").run(id);
-    players = getPlayers(id);
-    const team = scenarioPlayers(m, s, players).length;
-    if (s.maxPlayers < team) s.maxPlayers = Math.min(MAX_COOP_PLAYERS, team);
   } else {
     const leaders = leadersOf(players);
-    if (s.maxPlayers < leaders.length) s.maxPlayers = leaders.length;
     const biggest = Math.max(1, ...leaders.map((l) => squadOf(players, l).length));
     if (biggest > s.coop.squadSize) return `A squad already has ${biggest} people: they have to split up before squads can be that small`;
   }
@@ -323,7 +385,8 @@ export function updateSettings(id: string, user: UserRow, raw: Partial<MatchSett
 export function saveLoadout(id: string, user: UserRow, loadout: Loadout) {
   const m = getMatch(id);
   if (!m) return { error: "Match not found" };
-  if (m.status !== "lobby") return { error: "The match has already started" };
+  if (m.status === "finished") return { error: "This battle is over" };
+  if (deployed(m, user.id)) return { error: "Your squad is already in the battle" };
   const players = getPlayers(id);
   const me = players.find((p) => p.user_id === user.id);
   if (!me) return { error: "You are not in this match" };
@@ -352,15 +415,23 @@ export function saveLoadout(id: string, user: UserRow, loadout: Loadout) {
 
 export function setReady(id: string, user: UserRow, ready: boolean): string | null {
   const m = getMatch(id);
-  if (!m || m.status !== "lobby") return "Match not open";
+  if (!m || m.status === "finished") return "Match not open";
   const me = getPlayers(id).find((p) => p.user_id === user.id);
   if (!me) return "You are not in this match";
+  if (deployed(m, user.id)) return "Your squad is already in the battle";
   if (me.squad_of) return "Your squad leader readies the squad";
   if (isGameMaster(m, parseSettings(m.settings), user.id)) return "You're the game master: start the battle when the team is ready";
   if (ready) {
     if (!me.loadout) return "Save a loadout first";
     const check = checkLoadout(parseSettings(m.settings), JSON.parse(m.pool), JSON.parse(me.loadout));
     if (!check.ok) return check.errors.join("; ");
+  }
+  // a battle in progress: ready means "drop us in"
+  if (m.status === "playing") {
+    if (!ready) return null;
+    const e = deployLate(m, me);
+    if (!e) touch(id);
+    return e;
   }
   db.query("UPDATE match_players SET ready = ? WHERE match_id = ? AND user_id = ?").run(ready ? 1 : 0, id, user.id);
   touch(id);
@@ -375,25 +446,30 @@ export function startMatch(id: string, user: UserRow): string | null {
   const everyone = getPlayers(id);
   const settings = parseSettings(m.settings);
   const coop = settings.mode === "coop";
-  const players = coop ? scenarioPlayers(m, settings, everyone) : leadersOf(everyone);
-  if (coop && !players.length) return "Nobody has joined the team yet";
-  if (!coop && players.length < 2) return "Waiting for at least one opponent";
-  if (players.some((p) => !p.ready)) return coop ? "Everyone on the team must be ready" : "Every squad must be ready";
+  // whoever isn't ready yet joins the battle once they are
+  const signedUp = coop ? scenarioPlayers(m, settings, everyone) : leadersOf(everyone);
+  const players = signedUp.filter((p) => p.ready);
+  if (coop && !signedUp.length) return "Nobody has joined the team yet";
+  if (coop && !players.length) return "Nobody on the team is ready yet";
+  if (!coop && signedUp.length < 2) return "Waiting for at least one opponent";
+  if (!coop && players.length < 2) return "At least two squads must be ready (the others can join once they are)";
   let pool = JSON.parse(m.pool) as Recruit[];
   // turn order is shuffled so the creator doesn't always go first
   const order = [...players].sort(() => Math.random() - 0.5);
-  // a "Random" environment is decided now (the lobby only ever shows "Random")
-  if (settings.biome === "RANDOM" || settings.timeOfDay === "random") {
-    if (settings.biome === "RANDOM") {
-      settings.biome = resolveBiome(settings.biome, m.seed);
-      settings.randomBiome = true;
-    }
-    if (settings.timeOfDay === "random") {
-      settings.timeOfDay = resolveTimeOfDay(settings.timeOfDay, m.seed);
-      settings.randomTime = true;
-    }
-    db.query("UPDATE matches SET settings = ? WHERE id = ?").run(JSON.stringify(settings), id);
+  // a "Random" environment and an auto map size are decided now (the lobby only ever shows "Random" / auto)
+  if (settings.biome === "RANDOM") {
+    settings.biome = resolveBiome(settings.biome, m.seed);
+    settings.randomBiome = true;
   }
+  if (settings.timeOfDay === "random") {
+    settings.timeOfDay = resolveTimeOfDay(settings.timeOfDay, m.seed);
+    settings.randomTime = true;
+  }
+  if (!settings.mapBlocks) {
+    settings.mapBlocks = resolveMapBlocks(settings, players.length, players.length);
+    settings.autoMap = true;
+  }
+  db.query("UPDATE matches SET settings = ? WHERE id = ?").run(JSON.stringify(settings), id);
   let setup: SetupPlayer[];
   if (coop) {
     // one team (moving first, like X-COM) against the game master's enemy force
@@ -444,8 +520,8 @@ function scenarioTeam(m: MatchRow, s: MatchSettings, everyone: PlayerRow[], play
   });
   const gm = everyone.find((p) => p.user_id === m.owner);
   const members: NonNullable<SetupPlayer["members"]> = players.map((p) => ({ userId: p.user_id, name: p.name }));
-  // the creator leads (and can call off) the mission, playing or not
-  if (gm && !players.includes(gm)) members.unshift({ userId: gm.user_id, name: gm.name, observer: true });
+  // the creator leads (and can call off) the mission, playing or not (one who plays but isn't ready joins later)
+  if (gm && !players.includes(gm) && !s.scenario.gmPlays) members.unshift({ userId: gm.user_id, name: gm.name, observer: true });
   else if (gm) members.sort((a, b) => (a.userId === gm.user_id ? -1 : b.userId === gm.user_id ? 1 : 0));
   return { userId: members[0].userId, name: s.scenario.teamName, loadout: { squad, stash }, members, ...(apart ? { landings: players.length, zoneStash } : {}) };
 }
@@ -497,9 +573,11 @@ function send(ws: Sock, msg: unknown) {
 export function broadcastLobby(id: string, deleted = false) {
   const set = sockets.get(id);
   if (!set) return;
+  const m = deleted ? null : getMatch(id);
   for (const ws of set) {
     if (deleted) send(ws, { t: "deleted" });
-    else send(ws, { t: "lobby", lobby: lobbyState(id, ws.data.user) });
+    // once the battle is on, the lobby is for the people still getting ready to join it
+    else if (m && !deployed(m, ws.data.user.id)) send(ws, { t: "lobby", lobby: lobbyState(id, ws.data.user) });
   }
 }
 
@@ -519,7 +597,7 @@ export function wsOpen(ws: Sock) {
   set.add(ws);
   const m = getMatch(ws.data.matchId);
   if (!m) return send(ws, { t: "deleted" });
-  if (m.status === "lobby") return send(ws, { t: "lobby", lobby: lobbyState(m.id, ws.data.user) });
+  if (!deployed(m, ws.data.user.id)) return send(ws, { t: "lobby", lobby: lobbyState(m.id, ws.data.user) });
   sendFullView(ws);
   broadcastPresence(ws.data.matchId);
   // back from being away: the AI hands their units back
@@ -788,7 +866,7 @@ function saveRecord(h: Host, m: MatchRow) {
     if (s.mode === "coop") {
       const force = buildEnemyForce(s, m.seed);
       pool = [...pool, ...force.recruits];
-      loadouts = [scenarioTeam(m, s, players, scenarioPlayers(m, s, players).filter((p) => p.loadout)).loadout, { squad: [...force.initial, ...force.waves.flatMap((w) => w.members)], stash: [] }];
+      loadouts = [scenarioTeam(m, s, players, scenarioPlayers(m, s, players).filter((p) => p.loadout && seatOf(h, p.user_id) >= 0)).loadout, { squad: [...force.initial, ...force.waves.flatMap((w) => w.members)], stash: [] }];
     } else {
       loadouts = h.battle.players.map((p) => {
         const row = players.find((r) => r.user_id === p.userId);
@@ -853,7 +931,7 @@ export function addBot(id: string, user: UserRow, strategy: string, rawTuning?: 
   const settings = parseSettings(m.settings);
   if (settings.mode === "coop") return "In a co-op scenario the enemy is set up in the scenario settings";
   const players = getPlayers(id);
-  if (leadersOf(players).length >= settings.maxPlayers) return "The match is full (raise the number of squads in the settings)";
+  if (leadersOf(players).length >= MAX_SIDES) return SIDES_FULL;
   const st: Strategy = STRATEGIES.includes(strategy as Strategy) ? (strategy as Strategy) : STRATEGIES[Math.floor(Math.random() * STRATEGIES.length)];
   const tuning = sanitizeBotTuning(rawTuning);
   const seats = new Set(players.map((p) => p.seat));

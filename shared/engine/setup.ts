@@ -2,13 +2,13 @@
 import { type Battle, type FileSource, Phase } from "./state.ts";
 import { generateMap } from "./mapgen.ts";
 import { spawnGroundItem } from "./units.ts";
-import { recalcAllLighting, recalculateAllFOV } from "./tileengine.ts";
+import { recalcAllLighting, recalculateAllFOV, calculateUnitLighting } from "./tileengine.ts";
 import { GameRules } from "./actions.ts";
 import { BattleEvents } from "./events.ts";
 import { itemRule } from "../rules/index.ts";
-import type { MatchSettings, Recruit, Loadout, BotTuning, SquadMember } from "../protocol.ts";
+import { resolveMapBlocks, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember } from "../protocol.ts";
 import { dealUnits } from "./coop.ts";
-import { deployAll } from "./deploy.ts";
+import { deployAll, newLandingZone } from "./deploy.ts";
 
 export interface SetupPlayer {
   userId: string;
@@ -28,6 +28,11 @@ export interface SetupPlayer {
 }
 
 export function createBattle(settings: MatchSettings, players: SetupPlayer[], pool: Recruit[], seed: number, files: FileSource): Battle {
+  // an auto map size fits whoever is here at the start (the server settles it first, so it's on record)
+  if (!settings.mapBlocks) {
+    const people = players[0]?.members?.filter((m) => !m.observer).length ?? 1;
+    settings = { ...settings, mapBlocks: resolveMapBlocks(settings, players.length, people), autoMap: true };
+  }
   // one landing zone per side, or several for a team landing apart; a side's zones are consecutive
   const first: number[] = [];
   let total = 0;
@@ -77,6 +82,49 @@ export function createBattle(settings: MatchSettings, players: SetupPlayer[], po
   const ev = new BattleEvents(b);
   rules.beginTurn(0, ev);
   return b;
+}
+
+/**
+ * Someone joining the battle in progress. With `seat` they join that side (a co-op scenario's team, or a shared
+ * squad in a free-for-all) and command the units they bring; without, their squad becomes a new side, last in the
+ * turn order. Units land where they would have at the start: the side's landing zone, or (a new side, or a teammate
+ * landing apart) a new zone on the map edge, as far from everyone else as the map allows. Returns the side.
+ */
+export function joinBattle(b: Battle, p: SetupPlayer, pool: Recruit[], ev: BattleEvents, seat = -1): number {
+  const newSide = seat < 0;
+  if (newSide) {
+    seat = b.players.length;
+    b.players.push({
+      index: seat, userId: p.userId, name: p.name, eliminated: false, surrendered: false, endedTurnCount: 0, joinedRound: b.round,
+      ...(p.members ? { members: p.members.map((m) => ({ userId: m.userId, name: m.name, locked: false, afk: false, away: false })) } : {}),
+      ...(p.ai ? { ai: p.ai } : {}),
+    });
+    b.growSides(b.players.length);
+  } else {
+    const side = b.players[seat];
+    // a squad from a save that predates co-op: its leader is its one member so far
+    side.members ??= [{ userId: side.userId, name: side.name, locked: false, afk: false, away: false }];
+    for (const m of p.members ?? []) if (!side.members.some((x) => x.userId === m.userId)) side.members.push({ userId: m.userId, name: m.name, locked: false, afk: false, away: false });
+  }
+  const entries = p.loadout.squad.map((m) => ({ m, r: pool.find((x) => x.id === m.recruitId)! })).filter((e) => e.r);
+  if (entries.length && (newSide || (p.landings ?? 0) > 0)) {
+    const z = newLandingZone(b, seat);
+    b.landingZones.push({ ...z, seat });
+    if (newSide) b.zones[seat] = z;
+    const zone = b.landingZones.length - 1;
+    for (const e of entries) e.m = { ...e.m, zone };
+  }
+  const created = deployAll(b, seat, entries);
+  if (p.members) {
+    const order = created.map((c) => ({ c, k: entries.findIndex((e) => e.m === c.m) })).sort((a, c) => a.k - c.k);
+    dealUnits(order.map((o) => o.c.unit), p.members.filter((x) => !x.observer).map((x) => x.userId), order.map((o) => o.c.m.controller));
+  }
+  if (created.length) for (const type of p.loadout.stash) spawnGroundItem(b, type, b.idxP(created[0].unit.pos));
+  b.rebuildUnitIndex();
+  calculateUnitLighting(b);
+  recalculateAllFOV(b);
+  ev.msg("STR_JOINED_BATTLE", ev.all(), p.name);
+  return seat;
 }
 
 export { itemRule };

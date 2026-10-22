@@ -36,6 +36,8 @@ export interface PlayerRecord {
   spent: number;
   hired: number;
   surrendered: boolean;
+  /** joined the battle in progress, in this round */
+  joinedRound?: number;
   won: boolean;
   bot: boolean; // a computer player
 }
@@ -116,6 +118,7 @@ export function buildRecord(b: Battle, pool: Recruit[], loadouts: Loadout[], id:
     players: b.players.map((p, i) => ({
       seat: i, userId: p.userId, name: p.name, spent: loadouts[i] ? checkLoadout(settings, pool, loadouts[i]).cost : 0,
       hired: loadouts[i]?.squad.length ?? 0, surrendered: p.surrendered, won: b.winner === i, bot: p.userId.startsWith("bot"),
+      ...(p.joinedRound ? { joinedRound: p.joinedRound } : {}),
     })),
     remaining,
     supplyDrops: b.supply.filter((d) => d.dropped).map((d) => ({

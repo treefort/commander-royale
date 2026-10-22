@@ -126,6 +126,8 @@ export interface PlayerState {
   members?: SquadMemberState[];
   /** a computer squad's AI settings */
   ai?: BotTuning;
+  /** the round a squad that joined the battle in progress landed in */
+  joinedRound?: number;
 }
 
 export interface SquadMemberState {
@@ -242,6 +244,12 @@ export class Battle {
     this.unitAt = new Int32Array(n);
     this.discovered = Array.from({ length: playerCount }, () => new Uint8Array(n));
     this.personal = Array.from({ length: playerCount }, () => new Uint8Array(n));
+  }
+
+  /** Per-side maps for sides added since (a squad joining the battle in progress). */
+  growSides(playerCount: number) {
+    while (this.discovered.length < playerCount) this.discovered.push(new Uint8Array(this.size));
+    while (this.personal.length < playerCount) this.personal.push(new Uint8Array(this.size));
   }
 
   get size(): number {

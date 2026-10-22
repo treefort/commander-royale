@@ -1,7 +1,7 @@
 // Match lobby: invite link, players, settings, and the loadout builder (hire, buy, equip).
 import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
-import { biomeName, DEFAULT_BOT_TUNING, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
+import { biomeName, DEFAULT_BOT_TUNING, MAX_SIDES, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
 import { checkLoadout, budgetGuide, type CatalogEntry } from "../../shared/rules/catalog.ts";
 import { forceSummary } from "../../shared/rules/scenario.ts";
 import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, type SlotId } from "../../shared/rules/index.ts";
@@ -17,8 +17,15 @@ interface LobbyState {
   /** co-op scenario: you run it without playing */
   gameMaster?: boolean;
   settings: MatchSettings;
+  /** a battle in progress (people still in the lobby are getting ready to join it) */
+  battle: {
+    round: number; over: boolean;
+    sides: { name: string; userId: string; eliminated: boolean; bot: boolean; people: string[]; joinedRound: number; room: boolean }[];
+  } | null;
   players: {
     name: string; seat: number; ready: boolean; hasLoadout: boolean; you: boolean; owner: boolean; userId: string;
+    /** in the battle already */
+    deployed: boolean;
     /** co-op: the leader whose squad this player plays in */
     squadOf: string | null;
     /** a co-op scenario's game master who only watches */
@@ -27,7 +34,7 @@ interface LobbyState {
   }[];
   strategies: string[];
   /** co-op members get their leader's loadout (read-only) */
-  you: { seat: number; loadout: Loadout | null; ready: boolean; squadOf: string | null; leaderName: string | null } | null;
+  you: { seat: number; loadout: Loadout | null; ready: boolean; squadOf: string | null; leaderName: string | null; deployed: boolean } | null;
   pool: Recruit[];
   catalog: CatalogEntry[];
   armors: { type: string; price: number }[];
@@ -77,7 +84,8 @@ export class LobbyPage {
       else if (m.t === "deleted") {
         alert("This match was deleted by its creator.");
         this.go("/");
-      } else if (m.t === "view") this.onStart();
+        // battle news means we're in it (the battle started, or we just joined one in progress)
+      } else if (m.t === "view" || m.t === "update") this.onStart();
     };
     ws.onclose = (e) => {
       if (e.code === 4003) return; // not a member: don't retry
@@ -87,7 +95,8 @@ export class LobbyPage {
 
   private onLobby(s: LobbyState) {
     if (!s) return;
-    if (s.status !== "lobby") {
+    // once the battle is on, the lobby is only for getting ready to join it
+    if (s.status !== "lobby" && (!s.you || s.you.deployed || !s.battle || s.battle.over)) {
       this.onStart();
       return;
     }
@@ -164,21 +173,29 @@ export class LobbyPage {
       el("div", { class: "panel" },
         el("div", { class: "row" },
           el("h2", { class: "grow" }, s.settings.name.toUpperCase()),
-          s.isOwner ? el("button", { onclick: () => { this.editingSettings = !this.editingSettings; this.settingsEl = null; this.render(); } }, this.editingSettings ? "Close settings" : "Edit settings") : null,
-          s.isOwner ? el("button", { class: "danger small", onclick: async () => { if (confirm("Delete this match?")) { await api(`/api/matches/${s.id}`, { method: "DELETE" }); this.go("/"); } } }, "Delete") : null,
-          !s.isOwner && s.you ? el("button", { class: "small", onclick: async () => { await this.act("leave"); this.go("/"); } }, "Leave") : null,
+          s.isOwner && !s.battle ? el("button", { onclick: () => { this.editingSettings = !this.editingSettings; this.settingsEl = null; this.render(); } }, this.editingSettings ? "Close settings" : "Edit settings") : null,
+          s.isOwner && !s.battle ? el("button", { class: "danger small", onclick: async () => { if (confirm("Delete this match?")) { await api(`/api/matches/${s.id}`, { method: "DELETE" }); this.go("/"); } } }, "Delete") : null,
+          s.you && (s.battle || !s.isOwner) ? el("button", { class: "small", onclick: async () => { await this.act("leave"); this.go("/"); } }, "Leave") : null,
         ),
         el("div", { class: "row" }, el("span", {}, "Invite link:"), el("span", { class: "invite" }, url),
           el("button", { class: "small", onclick: () => navigator.clipboard?.writeText(url) }, "Copy")),
         el("div", { class: "muted", style: { marginTop: "6px" } },
-          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.seatsPerPlayer} seats each${s.settings.scenario.teamStart === "apart" ? ", landing apart" : ""}` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
+          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks ? `${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map` : "map sized at the start"} · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.seatsPerPlayer} seats each${s.settings.scenario.teamStart === "apart" ? ", landing apart" : ""}` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
           `${s.settings.psionics ? " · psionics" : ""}${s.settings.allowAliens ? " · alien recruits" : ""}${s.settings.allowHWP ? " · tanks" : ""}` +
           `${s.settings.supplyDrops.enabled ? ` · supply drops every ${s.settings.supplyDrops.everyRounds} rounds (${s.settings.supplyDrops.tier})` : ""}${s.settings.turnTimer ? ` · ${s.settings.turnTimer}s turns` : " · no turn timer"}`),
         // the creator's message to everyone joining
         s.settings.notes?.trim() ? el("div", { class: "match-notes" }, el("div", { class: "title", style: { fontSize: "12px" } }, "MESSAGE FROM THE HOST"), el("div", { class: "notes-text" }, s.settings.notes)) : null,
-        this.editingSettings && s.isOwner ? this.settingsPanel(s) : null,
+        this.editingSettings && s.isOwner && !s.battle ? this.settingsPanel(s) : null,
       ),
     );
+    if (s.battle) {
+      wrap.append(this.renderJoining(s));
+      if (s.you?.squadOf) wrap.append(this.renderTeammateView(s));
+      else if (s.you && !s.gameMaster) wrap.append(this.renderLoadout(s));
+      root.querySelectorAll<HTMLElement>(".scroll").forEach((e, i) => (e.scrollTop = inner[i] ?? 0));
+      window.scrollTo(0, scrollY);
+      return;
+    }
     if (s.settings.mode === "coop") {
       wrap.append(this.renderScenario(s));
       if (s.you && !s.gameMaster) wrap.append(this.renderLoadout(s));
@@ -188,7 +205,8 @@ export class LobbyPage {
     }
     // squads (in co-op, each with the people sharing it)
     const leaders = s.players.filter((p) => !p.squadOf);
-    const allReady = leaders.length >= 2 && leaders.every((p) => p.ready);
+    // the squads that aren't ready yet join the battle once they are
+    const canStart = leaders.filter((p) => p.ready).length >= 2;
     const coop = s.settings.coop.squadSize > 1;
     const room = (l: LobbyState["players"][number]) => !l.bot && s.players.filter((p) => p.squadOf === l.userId).length + 1 < s.settings.coop.squadSize;
     const meRow = s.players.find((p) => p.you);
@@ -210,14 +228,16 @@ export class LobbyPage {
       if (p.bot && s.isOwner && this.tuning === p.botId) rows.push(el("tr", {}, el("td", { colspan: 3 }, this.tuningForm(p.ai ?? DEFAULT_BOT_TUNING, (ai) => this.act("tunebot", { botId: p.botId, ai })))));
     }
     wrap.append(el("div", { class: "panel" },
-      el("div", { class: "row" }, el("h2", { class: "grow" }, `SQUADS (${leaders.length}/${s.settings.maxPlayers})${coop ? ` · UP TO ${s.settings.coop.squadSize} PEOPLE EACH` : ""}`),
-        !s.you && (leaders.length < s.settings.maxPlayers || (coop && leaders.some(room))) ? el("button", { class: "primary", onclick: () => this.act("join") }, leaders.length < s.settings.maxPlayers ? "Join this match" : "Join as a teammate") : null,
-        s.you?.squadOf ? el("button", { class: "small", disabled: leaders.length >= s.settings.maxPlayers, title: "Leave this squad and hire one of your own", onclick: () => this.act("squad", { leader: "" }) }, "Field my own squad") : null,
-        s.isOwner ? el("button", { class: "primary", disabled: !allReady, onclick: () => this.act("start") }, "Start battle") : null),
+      el("div", { class: "row" }, el("h2", { class: "grow" }, `SQUADS (${leaders.length})${coop ? ` · UP TO ${s.settings.coop.squadSize} PEOPLE EACH` : ""}`),
+        !s.you ? el("button", { class: "primary", onclick: () => this.act("join") }, "Join this match") : null,
+        s.you?.squadOf ? el("button", { class: "small", title: "Leave this squad and hire one of your own", onclick: () => this.act("squad", { leader: "" }) }, "Field my own squad") : null,
+        s.isOwner ? el("button", { class: "primary", disabled: !canStart, onclick: () => this.act("start") }, "Start battle") : null),
       el("table", {}, ...rows),
       s.isOwner ? this.addBotRow(s) : null,
       coop ? el("div", { class: "hint" }, `Co-op: people who join a squad play it together — its leader hires and equips it, the units are dealt out between everyone (the leader can pick who gets which), and everyone moves at once on the squad's turn. ${s.settings.coop.turnEnd === "timer" ? "The turn ends when the timer runs out." : "The turn ends once everyone has locked in (End Turn)."}${s.settings.coop.afkAI ? " The AI plays for anyone offline for more than half a minute." : ""}`) : null,
-      s.isOwner && !allReady ? el("div", { class: "hint" }, "The battle can start once at least two squads are ready.") : null,
+      s.isOwner ? el("div", { class: "hint" }, !canStart ? "The battle can start once at least two squads are ready; anyone else can join it later."
+        : leaders.every((p) => p.ready) ? "Everyone's ready. Anyone you invite later can still join the battle while it's on."
+        : "Squads that aren't ready yet join the battle as soon as they are (so can anyone you invite later).") : null,
       this.error ? el("div", { class: "err" }, this.error) : null,
     ));
     if (s.you?.squadOf) wrap.append(this.renderTeammateView(s));
@@ -230,7 +250,7 @@ export class LobbyPage {
   private renderScenario(s: LobbyState): HTMLElement {
     const sc = s.settings.scenario;
     const team = s.players.filter((p) => !p.gm);
-    const allReady = team.length >= 1 && team.every((p) => p.ready);
+    const canStart = team.some((p) => p.ready);
     const co = s.settings.coop;
     const turns = co.turnEnd === "daily" ? `The team's turn ends at ${co.dailyAt} (${co.timeZone}) every day, or as soon as everyone has locked in (End Turn).`
       : co.turnEnd === "timer" && s.settings.turnTimer ? `The team's turn ends when the ${s.settings.turnTimer}s timer runs out.`
@@ -239,15 +259,18 @@ export class LobbyPage {
     return el("div", {},
       el("div", { class: "panel" },
         el("div", { class: "row" },
-          el("h2", { class: "grow" }, `THE TEAM: ${sc.teamName.toUpperCase()} (${team.length}/${s.settings.maxPlayers})`),
-          !s.you && team.length < s.settings.maxPlayers ? el("button", { class: "primary", onclick: () => this.act("join") }, "Join the team") : null,
-          s.isOwner ? el("button", { class: "primary", disabled: !allReady, onclick: () => this.act("start") }, "Start battle") : null),
+          el("h2", { class: "grow" }, `THE TEAM: ${sc.teamName.toUpperCase()} (${team.length})`),
+          !s.you ? el("button", { class: "primary", onclick: () => this.act("join") }, "Join the team") : null,
+          s.isOwner ? el("button", { class: "primary", disabled: !canStart, onclick: () => this.act("start") }, "Start battle") : null),
         el("table", {}, ...s.players.map((p) => el("tr", {},
           el("td", {}, p.name, p.owner ? el("span", { class: "muted" }, " (game master)") : null, p.you ? el("span", { class: "muted" }, " (you)") : null),
           el("td", {}, p.gm ? el("span", { class: "badge dim" }, "Watching") : p.ready ? el("span", { class: "badge" }, "Ready") : p.hasLoadout ? el("span", { class: "badge dim" }, "Equipping") : el("span", { class: "badge red" }, "Not ready")),
         ))),
         el("div", { class: "hint" }, `Everyone fills up to ${sc.seatsPerPlayer} Skyranger seat${sc.seatsPerPlayer > 1 ? "s" : ""} (tanks and large aliens take 4) with ${money(s.settings.budget)}, and commands those units in battle${sc.teamStart === "apart" ? ", landing in their own zone" : ""}. The whole team moves at once, and you see every move a teammate (or any enemy in sight) makes as it happens. ${turns} ${offline}`),
-        s.isOwner && !allReady ? el("div", { class: "hint" }, team.length ? "The battle can start once everyone on the team is ready." : "Send the invite link: the battle can start once someone has joined the team and is ready.") : null,
+        s.isOwner ? el("div", { class: "hint" }, !team.length ? "Send the invite link: the battle can start once someone has joined the team and is ready."
+          : !canStart ? "The battle can start once someone on the team is ready."
+          : team.every((p) => p.ready) ? "Everyone's ready. People you invite later can still join the team while the battle is on."
+          : "Whoever isn't ready yet joins the team in battle as soon as they are (so can anyone you invite later).") : null,
         this.error ? el("div", { class: "err" }, this.error) : null,
       ),
       el("div", { class: "panel" },
@@ -256,6 +279,29 @@ export class LobbyPage {
         el("div", { class: "muted" }, `Tactics: ${botSummary({ ...sc.ai, strength: 100 })}. Victory when every enemy is down and no more are coming.`),
         s.gameMaster ? el("div", { class: "hint", style: { marginTop: "6px" } }, `You're the game master: change the scenario with Edit settings, start the battle when the team is ready, and watch the whole battlefield — both sides — as it plays out. You can call off the mission from the battlescape (Surrender).`) : null,
       ));
+  }
+
+  /** A battle in progress, for someone getting ready to join it: who's fighting, and how joining works. */
+  private renderJoining(s: LobbyState): HTMLElement {
+    const b = s.battle!;
+    const coop = s.settings.mode === "coop";
+    const me = s.players.find((p) => p.you);
+    const iLead = !!me && !me.squadOf && s.players.some((p) => p.squadOf === me.userId);
+    const waiting = s.players.filter((p) => !p.deployed && !p.gm && !p.bot);
+    const rows = b.sides.map((p) => el("tr", {},
+      el("td", {}, p.name, p.bot ? el("span", { class: "muted" }, " (computer)") : null,
+        p.people.length > 1 || (p.people.length === 1 && p.people[0] !== p.name) ? el("div", { class: "muted" }, p.people.join(", ")) : null),
+      el("td", {}, p.eliminated ? el("span", { class: "badge red" }, "Out") : el("span", { class: "badge dim" }, p.joinedRound > 1 ? `Joined in round ${p.joinedRound}` : "Fighting")),
+      el("td", {}, p.room && s.you && !s.you.squadOf && !iLead ? el("button", { class: "small", onclick: () => this.act("join", { squad: p.userId }) }, "Join this squad") : null)));
+    const how = coop
+      ? `Hire and equip your units below, then press Deploy: they land ${s.settings.scenario.teamStart === "apart" ? "in a landing zone of your own on the map edge" : "in the team's landing zone"}, and you command them alongside the team.`
+      : `Hire and equip your squad below, then press Deploy: it lands at the edge of the map, as far from everyone else as possible, and takes its turn after the others each round.${s.settings.coop.squadSize > 1 ? " Or join a squad that's already fighting: you're in at once, and its people hand you units (G)." : ""}`;
+    return el("div", { class: "panel" },
+      el("div", { class: "row" }, el("h2", { class: "grow" }, `BATTLE IN PROGRESS · ROUND ${b.round}`)),
+      el("table", {}, ...rows),
+      waiting.length ? el("div", { class: "muted", style: { marginTop: "6px" } }, `Getting ready to join: ${waiting.map((p) => p.name + (p.you ? " (you)" : "")).join(", ")}`) : null,
+      el("div", { class: "hint" }, how),
+      this.error ? el("div", { class: "err" }, this.error) : null);
   }
 
   /** A co-op member's view: the leader's squad (read-only) and who gets which unit. */
@@ -312,7 +358,7 @@ export class LobbyPage {
 
   /** Creator only: add a computer-controlled squad that hires with the chosen strategy. */
   private addBotRow(s: LobbyState): HTMLElement {
-    const full = s.players.filter((p) => !p.squadOf).length >= s.settings.maxPlayers;
+    const full = s.players.filter((p) => !p.squadOf).length >= MAX_SIDES;
     const labels: Record<string, string> = {
       random: "Wildcard (random hires)", swarm: "Swarm (lots of cheap soldiers)", elite: "Elite (few veterans, best gear)", balanced: "Balanced",
       heavy: "Heavy weapons", monster: "Monster (one big alien + troops)", aliens: "Alien legion", tanks: "Armored (tanks)", psi: "Psionic",
@@ -323,7 +369,7 @@ export class LobbyPage {
     return el("div", { class: "row", style: { marginTop: "8px" } },
       el("span", {}, "Add a computer squad:"), sel,
       el("button", { class: "small", disabled: full, onclick: () => this.act("addbot", { strategy: sel.value }) }, "Add AI squad"),
-      full ? el("span", { class: "hint" }, "The match is full; raise the number of squads in the settings to add more.") : null);
+      full ? el("span", { class: "hint" }, `A battle takes ${MAX_SIDES} squads at most.`) : null);
   }
 
   /** The settings form keeps its (unsaved) state across lobby updates. */
@@ -354,7 +400,9 @@ export class LobbyPage {
           ? el("span", { class: check.seats > s.settings.scenario.seatsPerPlayer ? "bad" : "" }, `Seats ${check.seats}/${s.settings.scenario.seatsPerPlayer}`)
           : el("span", { class: check.seats > s.settings.squadLimit ? "bad" : "" }, `Seats ${check.seats}/${s.settings.squadLimit}`),
         el("span", { class: "muted" }, this.dirty ? "saving..." : "saved"),
-        el("button", { class: s.you!.ready ? "" : "primary", disabled: !check.ok && !s.you!.ready, onclick: () => this.act("ready", { ready: !s.you!.ready }) }, s.you!.ready ? "Not ready" : "Ready"),
+        s.battle
+          ? el("button", { class: "primary", disabled: !check.ok, title: "Land in the battle now", onclick: () => this.act("ready", { ready: true }) }, "Deploy")
+          : el("button", { class: s.you!.ready ? "" : "primary", disabled: !check.ok && !s.you!.ready, onclick: () => this.act("ready", { ready: !s.you!.ready }) }, s.you!.ready ? "Not ready" : "Ready"),
       ),
       check.errors.length ? el("div", { class: "warn" }, check.errors.join(" · ")) : null,
       el("details", { class: "guide" }, el("summary", {}, "Budget rules of thumb"), el("ul", {}, ...guide.examples.map((x) => el("li", {}, x))), el("div", { class: "hint" }, guide.prices.join(" "))),

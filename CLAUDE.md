@@ -1,7 +1,7 @@
 # X-COM Battlescape (multiplayer) — notes for Claude sessions
 
 A browser port of the X-COM: UFO Defense **battlescape only** (no geoscape): free-for-all multiplayer matches
-between 2–8 squads (people and/or AI), asynchronous turns, Google sign-in, running on Bun. The rules are ported
+between any number of squads (people and/or AI; joinable mid-battle), asynchronous turns, Google sign-in, running on Bun. The rules are ported
 from OpenXcom's faithful reimplementation; graphics/sounds/music come from the user's own GOG copy. Read
 `README.md` for the player-facing feature list, setup, controls and the balance/stats tools — this file is
 about how to work on it.
@@ -12,6 +12,10 @@ about how to work on it.
   `gamedata/` (gitignored; the repo's `xcom/` folder is only the old demo — ignore it). Assets are served by our
   own server to signed-in players only (private deployment for friends).
 - Free-for-all between squads, last squad standing wins. Sequential async turns, optional turn timer.
+- No player cap (2026-10-22): `maxPlayers` is gone. Anyone can join a battle in progress (or deploy late if not
+  ready at the start): `joinBattle` (setup.ts) adds a side last in turn order with a new edge landing zone
+  (`newLandingZone`), or adds a person to an existing side. Map size defaults to auto (`mapBlocks: 0`, settled at
+  start). `MAX_SIDES` = 30 is only the technical limit of the 32-bit event visibility masks.
 - Co-op scenario mode (2026-10-22, `settings.mode = "coop"`): the creator is a game master who designs the enemy
   (groups by type/count/weapon/placement/arrival round, AI tactics) and the battlefield; 1–10 people form one team,
   each filling `seatsPerPlayer` Skyranger seats (large units take 4) and commanding those units; the team lands
