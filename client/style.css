@@ -162,3 +162,40 @@ select.start-from { flex: 1; min-width: 0; max-width: 100%; }
 .ai-panel textarea { width: 100%; box-sizing: border-box; font-family: "VT323", monospace; font-size: 17px; background: var(--input); color: var(--text); border: 2px solid var(--frame-lo); padding: 4px 6px; }
 .ai-panel .warnings { margin: 6px 0 0; color: var(--orange); font-size: 17px; }
 .ai-panel .loaded { color: var(--green); font-size: 17px; margin-top: 6px; }
+
+/* ---- the front door (sign-in, passkey): the UFO Defense box art, filling the window (client/ui/boxart.ts) ---- */
+.boxart { position: fixed; inset: 0; overflow: hidden; background: #000; color: #e8efe8; }
+.boxart .bx-layer { position: absolute; inset: -30px; will-change: transform; }
+.boxart .bx-stars { width: calc(100% + 60px); height: calc(100% + 60px); }
+.boxart .bx-planet { position: absolute; }
+.boxart .bx-ship-layer { pointer-events: none; }
+.boxart .bx-ship { position: absolute; width: min(56vw, 86vh); right: 7vw; top: 9vh; filter: drop-shadow(-8px 14px 22px rgba(0,0,0,0.7)); user-select: none; }
+/* the box's thin white frame */
+.boxart .bx-frame { position: absolute; inset: clamp(10px, 2.2vmin, 22px); border: 2px solid rgba(255,255,255,0.85); pointer-events: none; }
+.boxart .bx-title { position: absolute; left: clamp(14px, 3vmin, 34px); top: clamp(8px, 2vmin, 20px); pointer-events: none; }
+.boxart .bx-title-art { display: none; height: min(48vh, 40vw); width: auto; user-select: none; filter: drop-shadow(0 0 1.2vmin rgba(0,0,0,0.6)); }
+.boxart .bx-title.art .bx-title-art { display: block; }
+/* the lettering as text: shown only if the art can't load, otherwise kept for screen readers */
+.boxart .bx-title-text { margin: 0; font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 500; font-size: min(14vh, 11vw); color: #fff; -webkit-text-stroke: 1px #0d4a2a; }
+.boxart .bx-title.art .bx-title-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.boxart .bx-ui { position: absolute; left: clamp(18px, 4vmin, 48px); bottom: clamp(18px, 5vmin, 56px); max-width: min(440px, calc(100% - 36px)); }
+.bx-card {
+  background: rgba(0, 0, 0, 0.72); border: 1px solid rgba(63,191,106,0.7); outline: 1px solid rgba(255,255,255,0.15); outline-offset: 3px;
+  padding: 16px 18px; backdrop-filter: blur(3px); font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 17px; line-height: 1.35;
+}
+.bx-card p { margin: 0 0 12px; color: #c8d6cc; }
+.bx-card .bx-lead { font-size: 20px; color: #fff; letter-spacing: 0.02em; }
+.bx-card .btn, .bx-card button { font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 16px; letter-spacing: 0.08em; text-transform: uppercase; }
+.bx-card a.btn.bx-google { display: inline-flex; align-items: center; gap: 10px; background: #fff; color: #111; border: 0; padding: 9px 16px; }
+.bx-card a.btn.bx-google:hover { filter: brightness(0.92); }
+.bx-card input { font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 18px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4); color: #fff; }
+.bx-card .muted, .bx-card .hint { color: #8fa596; font-size: 15px; }
+.bx-card .err { color: #ff8a7a; margin-top: 8px; }
+.bx-card .bx-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bx-card .bx-row input { flex: 1; min-width: 0; }
+@media (max-aspect-ratio: 10/11) {
+  /* tall screens: title across the top, craft in the middle, card at the bottom */
+  .boxart .bx-title-art { height: auto; width: min(78vw, 46vh); }
+  .boxart .bx-ship { width: 96vw; right: -4vw; top: 32vh; }
+  .boxart .bx-ui { left: 50%; transform: translateX(-50%); width: calc(100% - 36px); }
+}

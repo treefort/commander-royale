@@ -1,4 +1,5 @@
 import { api, el, money } from "../api.ts";
+import { boxArtScene } from "./boxart.ts";
 import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_COOP_PLAYERS, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
 import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
 import { checkSettings, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
@@ -30,39 +31,36 @@ export function topbar(me: Me): HTMLElement {
   );
 }
 
+/** Google's "G" mark, for the sign-in button. */
+const GOOGLE_G = `<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.5 0 20.1 0 24s1 7.5 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>`;
+
 export function renderLogin(root: HTMLElement, me: Me, next = location.pathname) {
   root.innerHTML = "";
   const nameInput = el("input", { placeholder: "Commander name", maxlength: 40 }) as HTMLInputElement;
-  root.append(
-    el("div", { class: "wrap landing" },
-      el("h1", {}, "X-COM"),
-      el("div", { class: "title", style: { fontSize: "20px", marginBottom: "6px" } }, "UFO DEFENSE — BATTLESCAPE"),
-      el("div", { class: "sub" }, "Multiplayer squad combat. Hire soldiers and aliens, kit them out, and fight to the last unit standing."),
-      el("div", { class: "panel", style: { maxWidth: "480px", margin: "0 auto" } },
-        me.google
-          ? el("a", { class: "btn primary", href: `/auth/google?next=${encodeURIComponent(next)}` }, "Sign in with Google")
-          : el("div", { class: "muted" }, "Google sign-in isn't configured on this server yet."),
-        me.devLogin
-          ? el("div", { style: { marginTop: "16px" } },
-            el("div", { class: "hint" }, "Local development login:"),
-            el("div", { class: "row", style: { justifyContent: "center", marginTop: "6px" } },
-              nameInput,
-              el("button", { onclick: () => {
-                if (nameInput.value.trim()) location.href = `/auth/dev?name=${encodeURIComponent(nameInput.value.trim())}&next=${encodeURIComponent(next)}`;
-              } }, "Enter")))
-          : null,
-      ),
-    ),
+  const google = el("a", { class: "btn bx-google", href: `/auth/google?next=${encodeURIComponent(next)}` });
+  google.innerHTML = `${GOOGLE_G}<span>Sign in with Google</span>`;
+  const card = el("div", { class: "bx-card" },
+    el("p", { class: "bx-lead" }, "Multiplayer battlescape: hire soldiers and aliens, kit them out, and fight to the last unit standing — or team up against an invasion."),
+    me.google ? google : el("p", { class: "muted" }, "Google sign-in isn't configured on this server yet."),
+    me.devLogin
+      ? el("div", { style: { marginTop: "14px" } },
+        el("div", { class: "hint" }, "Local development login:"),
+        el("div", { class: "bx-row", style: { marginTop: "6px" } },
+          nameInput,
+          el("button", { onclick: () => {
+            if (nameInput.value.trim()) location.href = `/auth/dev?name=${encodeURIComponent(nameInput.value.trim())}&next=${encodeURIComponent(next)}`;
+          } }, "Enter")))
+      : null,
   );
+  root.append(boxArtScene(card));
   nameInput.addEventListener("keydown", (e) => e.key === "Enter" && (nameInput.nextSibling as HTMLButtonElement)?.click());
 }
 
 /** The passkey a signed-in account enters once before it can play on this server. */
 export function renderPasskey(root: HTMLElement, me: Me, onUnlocked: () => void) {
   root.innerHTML = "";
-  root.append(topbar(me));
   const input = el("input", { type: "password", placeholder: "Passkey", maxlength: 100, autocomplete: "off" }) as HTMLInputElement;
-  const msg = el("div", { class: "err", style: { marginTop: "8px" } });
+  const msg = el("div", { class: "err" });
   const submit = async () => {
     msg.textContent = "";
     try {
@@ -74,15 +72,14 @@ export function renderPasskey(root: HTMLElement, me: Me, onUnlocked: () => void)
     }
   };
   input.addEventListener("keydown", (e) => e.key === "Enter" && submit());
-  root.append(
-    el("div", { class: "wrap landing" },
-      el("h1", {}, "X-COM"),
-      el("div", { class: "sub" }, `Welcome, ${me.user!.name}. This server is for invited players: enter the passkey you were given to start playing. You only need it once.`),
-      el("div", { class: "panel", style: { maxWidth: "480px", margin: "0 auto" } },
-        el("div", { class: "row", style: { justifyContent: "center" } }, input, el("button", { class: "primary", onclick: submit }, "Enter")),
-        msg),
-    ),
+  const card = el("div", { class: "bx-card" },
+    el("p", { class: "bx-lead" }, `Welcome, Commander ${me.user!.name}.`),
+    el("p", {}, "This server is for invited players: enter the passkey you were given. You only need it once."),
+    el("div", { class: "bx-row" }, input, el("button", { class: "primary", onclick: submit }, "Enter")),
+    msg,
+    el("p", { class: "hint", style: { margin: "12px 0 0" } }, "Not you? ", el("a", { href: "/auth/logout" }, "Sign out")),
   );
+  root.append(boxArtScene(card));
   input.focus();
 }
 

@@ -208,7 +208,7 @@ def main() -> None:
     game = None
     if setup or args.upload_gamedata:
         gd = Path(args.gamedata)
-        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS"] if (gd / d).exists()]
+        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS", "FRONT"] if (gd / d).exists()]
         game = put("gamedata.tar.gz", make_tar(dirs, gd))
 
     if setup:

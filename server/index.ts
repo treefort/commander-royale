@@ -72,6 +72,11 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     const user = currentUser(req);
 
     if (path === "/health") return json({ ok: true });
+    // the front page's art (cut from the box cover; see tools/front-art): public, the sign-in page shows it
+    if (path === "/front/ship.webp" || path === "/front/title.webp") {
+      const p = resolveGamePath(`FRONT/${path.slice(7)}`);
+      return p ? staticFile(p, "image/webp", "public, max-age=86400") : err("Not found", 404);
+    }
     if (path === "/llms.txt" || path === "/docs/match-settings.md") {
       reference ||= settingsReference(PUBLIC_URL);
       return new Response(reference, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
