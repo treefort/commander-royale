@@ -488,6 +488,8 @@ export function startMatch(id: string, user: UserRow): string | null {
   const host = newHost(id, battle);
   hosts.set(id, host);
   db.query("UPDATE matches SET status = 'playing', battle = ?, turn_deadline = ?, updated = ? WHERE id = ?").run(packBattle(battle), turnDeadline(battle), Date.now(), id);
+  // everyone in the battle now leaves the lobby for it (people not in it get the lobby, to get ready and join)
+  for (const ws of sockets.get(id) ?? []) if (deployed(getMatch(id)!, ws.data.user.id)) send(ws, { t: "started" });
   broadcastLobby(id);
   // a bot that moves first starts once people have had a moment to load the battle
   setTimeout(() => runAI(host), 4000);

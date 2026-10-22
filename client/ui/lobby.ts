@@ -85,7 +85,7 @@ export class LobbyPage {
         alert("This match was deleted by its creator.");
         this.go("/");
         // battle news means we're in it (the battle started, or we just joined one in progress)
-      } else if (m.t === "view" || m.t === "update") this.onStart();
+      } else if (m.t === "started" || m.t === "view" || m.t === "update") this.onStart();
     };
     ws.onclose = (e) => {
       if (e.code === 4003) return; // not a member: don't retry

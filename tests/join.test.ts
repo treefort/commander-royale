@@ -86,8 +86,18 @@ test("joining a battle in progress on the server: hire, deploy, and teammates jo
     expect(game.saveLoadout(id, u, buildSquad("swarm", lobby.settings, lobby.pool, new RNG(seed))).check!.ok).toBe(true);
     expect(game.setReady(id, u, true)).toBeNull();
   }
-  // Cat isn't ready: the battle starts without them
+  // Cat isn't ready: the battle starts without them. Ann's open lobby page is told to go to the battle; Cat's
+  // stays in the lobby, now showing the battle to join
+  const inLobby = (user: UserRow) => ({ data: { user, matchId: id }, sent: [] as string[], send(m: string) { this.sent.push(m); }, close() {} });
+  const la = inLobby(ann), lc = inLobby(cat);
+  game.wsOpen(la as never);
+  game.wsOpen(lc as never);
   expect(game.startMatch(id, ann)).toBeNull();
+  expect(la.sent.map((m) => JSON.parse(m).t)).toContain("started");
+  expect(lc.sent.map((m) => JSON.parse(m).t)).not.toContain("started");
+  expect(JSON.parse(lc.sent.at(-1)!).lobby.status).toBe("playing");
+  game.wsClose(la as never);
+  game.wsClose(lc as never);
   lobby = game.lobbyState(id, cat)!;
   expect(lobby.status).toBe("playing");
   expect(lobby.settings).toMatchObject({ mapBlocks: 5, autoMap: true });
