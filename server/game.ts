@@ -12,7 +12,7 @@ import { type Battle, type Unit, Phase } from "../shared/engine/state.ts";
 import { serializeBattle, deserializeBattle } from "../shared/engine/serialize.ts";
 import { buildRecord, type MatchRecord } from "../shared/engine/record.ts";
 import { recordEvents } from "../shared/engine/stats.ts";
-import { AIPlayer, aiOptionsFor } from "../shared/engine/ai.ts";
+import { AIPlayer, aiOptionsFor, STAND_IN_AI } from "../shared/engine/ai.ts";
 import { seatOfUser, memberOf, mayCommand, playedByAI, waitingFor, isShared, isObserver } from "../shared/engine/coop.ts";
 import { buildEnemyForce } from "../shared/rules/scenario.ts";
 import { buildSquad, STRATEGIES, type Strategy } from "../shared/rules/squads.ts";
@@ -283,7 +283,7 @@ function deployLate(m: MatchRow, me: PlayerRow): string | null {
   }
   while (h.sent.length < b.players.length) h.sent.push(newSentState());
   const ais = aiPlayers.get(h.id);
-  if (ais) b.players.forEach((_, seat) => ais.has(seat) || ais.set(seat, new AIPlayer(b, seat, undefined, b.round * 31 + seat)));
+  if (ais) b.players.forEach((p, seat) => ais.has(seat) || ais.set(seat, new AIPlayer(b, seat, isBot(p.userId) ? aiOptionsFor(p.ai) : STAND_IN_AI, b.round * 31 + seat)));
   db.query("UPDATE match_players SET ready = 1 WHERE match_id = ? AND user_id = ?").run(m.id, me.user_id);
   publish(h, ev, false, me.user_id);
   return null;
@@ -1022,7 +1022,8 @@ function aisOf(h: Host): Map<number, AIPlayer> {
   if (!m || [...m.values()].some((a) => a.b !== h.battle)) {
     m = new Map();
     h.battle.players.forEach((p, seat) => {
-      const opts = isBot(p.userId) ? aiOptionsFor(p.ai) : undefined;
+      // computer squads play their way; for people (AFK, offline, handed over by the host) the AI stands in
+      const opts = isBot(p.userId) ? aiOptionsFor(p.ai) : STAND_IN_AI;
       m!.set(seat, new AIPlayer(h.battle, seat, opts, h.battle.round * 31 + seat));
     });
     aiPlayers.set(h.id, m);

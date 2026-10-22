@@ -38,11 +38,22 @@ export interface AIOptions {
   personalities: boolean;
   intelligence: number;
   aggression: number;
+  /**
+   * playing for a person (AFK, offline, or the host's "AI plays this turn"): never ambushes or digs in while
+   * nothing is in sight (the aliens' waiting game looks like the player just standing there), keeps moving on
+   */
+  standIn?: boolean;
 }
 
 export const DEFAULT_AI: AIOptions = {
   cheatTurn: 20, difficulty: 4, grenadeTurn: 3, blasterTurn: 3, personalities: false, intelligence: 4, aggression: 1,
 };
+
+/**
+ * The AI standing in for a person's units: bold, always on the move, and no cheat turn (it plays with what the
+ * squad has actually seen, like the person would).
+ */
+export const STAND_IN_AI: AIOptions = { ...DEFAULT_AI, aggression: 2, cheatTurn: 1_000_000, standIn: true };
 
 /** A computer squad's lobby settings as AI options. */
 export function aiOptionsFor(t: BotTuning | undefined): AIOptions {
@@ -509,9 +520,21 @@ export class Thinker {
       } else if (act.facing !== undefined && act.facing !== u.dir) {
         // already in place: just face the right way
         return act;
-      } else return { type: "none" };
+      } else return this.idle();
     }
+    if (act.type === "none" || act.type === "rethink") return this.idle(act);
     return act;
+  }
+
+  /**
+   * Nothing to do where it is. An alien waits (ambush, hiding); standing in for a person, with nobody in sight,
+   * it moves on instead: towards the enemy it knows about, or into unexplored ground.
+   */
+  private idle(otherwise: Act = { type: "none" }): Act {
+    const p = this.patrolAct;
+    if (!this.ai.opts.standIn || this.visibleEnemies || p.type !== "walk" || posEq(p.target, this.u.pos)) return otherwise;
+    this.br.mode = Mode.PATROL;
+    return p;
   }
 
   private within(tu: number): Map<number, number> {
@@ -1074,6 +1097,8 @@ export class Thinker {
     }
     if (br.ambushTUs) ambushOdds *= 1.7;
     else ambushOdds = 0;
+    // standing in for a person: no lying in wait while nobody is in sight
+    if (this.ai.opts.standIn && !this.visibleEnemies) ambushOdds = 0;
     const canFight = this.melee || this.rifle || this.blaster || !!this.grenadeFromInventory() || this.psiCapable();
     if (!canFight) {
       combatOdds = 0;
