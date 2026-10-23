@@ -34,6 +34,9 @@ about how to work on it.
 - Supply drops: location + countdown public; land as a crate looted like a corpse pile; creator picks the
   loot table. They must land outdoors, on clear ground a squad can walk to. Indicators stay **subtle** (the
   user pushed back twice on flashy markers).
+- Mysterious Stranger (2026-10-23, `settings.stranger` = % chance, 0 = off): Fallout's perk as a match option for
+  every side. `GameRules.mysteriousStranger` runs after a shoot/melee that leaves a seen enemy standing; he's never in
+  `b.units` (events use `STRANGER_ID`; the client adds and removes a stand-in), and his damage is credited to nobody.
 - UI should feel like the original (320x200-style canvas, original palette/fonts) with modern conveniences.
 
 ## Layout

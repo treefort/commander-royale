@@ -4,7 +4,7 @@ import type { Assets } from "./assets.ts";
 import { UnitSpriteBuilder, type UnitLook } from "./unitsprite.ts";
 import { type Battle, type Unit, isOut, unitHeight, floatHeight } from "../../shared/engine/state.ts";
 import { TilePart } from "../../shared/formats/terrain.ts";
-import { type Pos, UnitStatus, DX, DY } from "../../shared/engine/defs.ts";
+import { type Pos, UnitStatus, DX, DY, STRANGER_ID } from "../../shared/engine/defs.ts";
 import type { IndexedImage } from "../../shared/formats/images.ts";
 import { itemRule, BULLETS } from "../../shared/rules/index.ts";
 
@@ -285,7 +285,8 @@ export class MapRenderer {
               const frames = this.unitFrames(b, e.u, st);
               const f = frames[e.part];
               if (!f) continue;
-              const us = d & 4 ? b.shade(e.shadeT >= 0 ? e.shadeT : t, st.player) : 16;
+              // (the Mysterious Stranger is seen even on ground you haven't explored)
+              const us = d & 4 || e.u.id === STRANGER_ID ? b.shade(e.shadeT >= 0 ? e.shadeT : t, st.player) : 16;
               s.blitShade(f, e.sx + cam.x - 16, e.sy + cam.y, us);
               if (e.u.fire > 0) {
                 const fr = smoke[4 + (st.animFrame >> 1)];
@@ -356,7 +357,8 @@ export class MapRenderer {
 
     // team markers above units and the selected-unit arrow
     for (const u of b.units) {
-      if (isOut(u) || u.pos.z > endZ) continue;
+      // (the Mysterious Stranger answers to no squad)
+      if (isOut(u) || u.pos.z > endZ || u.id === STRANGER_ID) continue;
       const anim = st.anims.get(u.id);
       const p = anim ? (anim.phase / anim.end < 0.5 ? anim.from : anim.to) : u.pos;
       const sp = mapToScreen(p);

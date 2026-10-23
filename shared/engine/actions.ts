@@ -1,15 +1,15 @@
 // The authoritative action processor: validates and fully resolves player commands, including
 // reaction fire, explosions, deaths and chain reactions, recording events for every player.
 import { type Battle, type Unit, type Item, isOut, unitHeight, floatHeight, Phase } from "./state.ts";
-import { type Pos, type ActionType, VoxelType, DIR_UP, DIR_DOWN, UnitStatus, DX, DY, directionTo, distanceSq, tileDistance, MAX_VIEW_DISTANCE_SQR, posEq } from "./defs.ts";
+import { type Pos, type ActionType, VoxelType, DIR_UP, DIR_DOWN, UnitStatus, DX, DY, directionTo, distanceSq, tileDistance, MAX_VIEW_DISTANCE_SQR, posEq, STRANGER_ID } from "./defs.ts";
 import { TilePart } from "../formats/terrain.ts";
-import { BattleEvents, appearance } from "./events.ts";
+import { BattleEvents, appearance, type UnitAppearance } from "./events.ts";
 import { Pathfinder } from "./pathfinding.ts";
 import {
   calculateFOV, refreshVisibleUnits, recalculateAllFOV, calculateLine, calculateParabola, canTargetUnit, canTargetTile, originVoxel,
   hit, explode, findTerrainExplosion, unitOpensDoor, closeUfoDoors, validMeleeRange, validateThrow, validThrowRange, positionFromEnd,
   ITEM_DROP_VOXEL_OFFSET, applyGravity, calculateTerrainLighting, calculateUnitLighting, calculateSunShading, recalcAllLighting,
-  isUnitVisibleTo, visible, sightOriginVoxel, horizontalBlockage, ignite, destroyPart,
+  isUnitVisibleTo, visible, sightOriginVoxel, horizontalBlockage, ignite, destroyPart, canSeeTile,
 } from "./tileengine.ts";
 import {
   actionTUs, firingAccuracy, throwingAccuracy, reactionScore, checkViewSector, mainHandWeapon, meleeWeapon, ammoOf, roundsLeft,
@@ -17,7 +17,7 @@ import {
 } from "./unitops.ts";
 import {
   BattleType, DamageType, itemRule, armorRule, unitRule, explosionRadius, livingWeaponFor, INVENTORY_SLOTS, INVENTORY_COSTS,
-  ITEMS, type SlotId, type ItemRule, tr,
+  ITEMS, SOLDIER, type SlotId, type ItemRule, tr,
 } from "../rules/index.ts";
 import { createUnit, spawnGroundItem } from "./units.ts";
 import { deployAll } from "./deploy.ts";
@@ -56,6 +56,11 @@ export interface ActionResult {
 }
 
 const NOT_ENOUGH_TU = "STR_NOT_ENOUGH_TIME_UNITS";
+/** the Mysterious Stranger's gun (his .44 magnum: the pistol's look and sound) and the power of his armor-piercing round */
+const STRANGER_WEAPON = "STR_PISTOL";
+const STRANGER_POWER = 150;
+/** ...which rolls 50-150% of that, not the original 0-200%: he doesn't fizzle */
+const STRANGER_DAMAGE_RANGE = 50;
 
 export class GameRules {
   constructor(public b: Battle) {}
@@ -85,6 +90,12 @@ export class GameRules {
     const u = b.unit(cmd.unit);
     if (!u || u.owner !== player || !unitCanAct(u)) return { ok: false, error: "STR_INVALID_UNIT", events: ev };
     const tuBefore = u.tu;
+    // the Mysterious Stranger may finish off an enemy this attack leaves standing (one the attacker can see)
+    let foe: Unit | undefined;
+    if ((cmd.c === "shoot" || cmd.c === "melee") && b.settings.stranger > 0) {
+      foe = b.unitOnTile(b.idxP(cmd.target));
+      if (foe && (foe.owner === player || !isUnitVisibleTo(b, foe, player))) foe = undefined;
+    }
     let err: string | undefined;
     switch (cmd.c) {
       case "move": err = this.move(u, cmd.to, ev); break;
@@ -115,6 +126,7 @@ export class GameRules {
       case "hand": u.activeHand = cmd.hand; break;
     }
     this.settle(ev);
+    if (foe && !err && !isOut(foe) && b.phase === Phase.PLAYING && b.rng.percent(b.settings.stranger)) this.mysteriousStranger(u, foe, ev);
     // a player who lost their last unit during their own turn hands the turn on
     for (let guard = 0; guard < b.players.length && b.phase === Phase.PLAYING && b.players[b.current].eliminated; guard++) this.endTurn(ev);
     if (err) {
@@ -1094,6 +1106,57 @@ export class GameRules {
           }
         }
     return null;
+  }
+
+  /**
+   * The Mysterious Stranger (Fallout): steps out beside `ally` where he has a clear shot, puts a magnum round into
+   * `foe` and is gone. He never misses, isn't a unit of the battle (nobody can shoot back or see him later), and
+   * nobody is credited with his damage or kills. No clear shot from anywhere near: he doesn't come.
+   */
+  mysteriousStranger(ally: Unit, foe: Unit, ev: BattleEvents): boolean {
+    const b = this.b;
+    const armor = armorRule("STR_PERSONAL_ARMOR_UC");
+    const ghost = {
+      id: STRANGER_ID, pos: ally.pos, size: 1, kneeled: false, floating: false, movementType: armor.movementType,
+      baseHeights: { stand: SOLDIER.standHeight, kneel: SOLDIER.kneelHeight, float: 0 },
+    } as Unit;
+    const foeTile = b.idxP(foe.pos);
+    const spots: Pos[] = [];
+    for (let r = 1; r <= 3; r++)
+      for (let dx = -r; dx <= r; dx++)
+        for (let dy = -r; dy <= r; dy++)
+          if (Math.max(Math.abs(dx), Math.abs(dy)) === r) spots.push({ x: ally.pos.x + dx, y: ally.pos.y + dy, z: ally.pos.z });
+    // somewhere the ally's side can see him, nearest the ally, then from behind (the farther side from the foe)
+    const seen = (p: Pos) => (canSeeTile(b, ally.owner, b.idxP(p)) ? 0 : 1);
+    const ring = (p: Pos) => Math.max(Math.abs(p.x - ally.pos.x), Math.abs(p.y - ally.pos.y));
+    spots.sort((p, q) => seen(p) - seen(q) || ring(p) - ring(q) || distanceSq(q, foe.pos, false) - distanceSq(p, foe.pos, false));
+    for (const at of spots) {
+      if (!canStand(b, at, 1)) continue;
+      const origin = originVoxel(b, ghost, foe.pos, false, at);
+      const aim = { x: 0, y: 0, z: 0 };
+      if (!canTargetUnit(b, origin, foeTile, aim, null)) continue;
+      const path: Pos[] = [];
+      const impact = calculateLine(b, origin, aim, true, path, { excludeUnit: null });
+      if (impact !== VoxelType.UNIT) continue;
+      const dir = directionTo(at, foe.pos);
+      const app: UnitAppearance = {
+        owner: ally.owner, originalOwner: ally.owner, type: "SOLDIER", race: "STR_HUMAN", name: "Mysterious Stranger", rank: "", armor: armor.type,
+        size: 1, baseHeights: ghost.baseHeights, movementType: armor.movementType, gender: 0, look: 0, turretType: -1, turretDir: dir, kneeled: false,
+        loftemps: armor.loftempsSet, hands: [["STR_RIGHT_HAND", STRANGER_WEAPON]],
+      };
+      const end = path[path.length - 1];
+      const vis = (1 << ally.owner) | ev.tileSeers(b.idxP(at)) | ev.seers(foe);
+      const wr = itemRule(STRANGER_WEAPON), ar = itemRule(wr.compatibleAmmo[0]);
+      ev.push({ t: "stranger", unit: STRANGER_ID, at, dir, app, gone: false }, vis);
+      ev.push({ t: "aim", unit: STRANGER_ID, aiming: true }, vis);
+      ev.push({ t: "shot", unit: STRANGER_ID, weapon: STRANGER_WEAPON, bullet: ar.bulletSprite >= 0 ? ar.bulletSprite : wr.bulletSprite, sound: ar.fireSound >= 0 ? ar.fireSound : wr.fireSound, path: [origin, end], impact }, vis);
+      ev.push({ t: "hit", at: { ...end }, anim: ar.hitAnimation, sound: ar.hitSound }, vis);
+      hit(b, ev, end, STRANGER_POWER, DamageType.AP, null, STRANGER_DAMAGE_RANGE);
+      ev.push({ t: "stranger", unit: STRANGER_ID, at, dir, app, gone: true }, vis);
+      this.settle(ev);
+      return true;
+    }
+    return false;
   }
 
   private spawn(type: string, owner: number, at: Pos, dir: number, ev: BattleEvents): Unit | null {

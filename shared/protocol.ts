@@ -35,6 +35,11 @@ export interface MatchSettings {
   /** `kits`: how much each drop holds (a kit is e.g. a rifle and two clips, a pair of grenades, a medikit) */
   supplyDrops: { enabled: boolean; everyRounds: number; warningRounds: number; tier: LootTier; kits: number };
   turnTimer: number; // seconds per turn, 0 = unlimited
+  /**
+   * the Mysterious Stranger (as in Fallout): % chance that, when a unit attacks an enemy it can see and the
+   * enemy survives, a stranger with a magnum appears beside the attacker, shoots the enemy and vanishes; 0 = off
+   */
+  stranger: number;
   coop: CoopSettings;
   /** co-op scenario mode: the creator's setup of the team and the enemy */
   scenario: Scenario;
@@ -304,6 +309,7 @@ export function defaultSettings(): MatchSettings {
     psionics: true,
     supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed", kits: 3 },
     turnTimer: 0,
+    stranger: 0,
     coop: { squadSize: 1, turnEnd: "lockin", dailyAt: "20:00", timeZone: "UTC", afkAI: false },
     mode: "ffa",
     scenario: defaultScenario(),
@@ -348,6 +354,7 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
       kits: clamp(sd.kits, 1, 12, 3),
     },
     turnTimer,
+    stranger: clamp(s.stranger, 0, 50, 0),
     coop: {
       squadSize: clamp(co.squadSize, 1, MAX_SQUAD_SIZE, 1),
       // "end on the timer" needs a timer; a daily turn end is for co-op scenarios
