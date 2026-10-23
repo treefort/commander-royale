@@ -52,7 +52,7 @@ button:active { border-color: #121c40 #8fa7e0 #8fa7e0 #121c40; }
 button:disabled { opacity: 0.45; cursor: default; filter: none; }
 button.primary { background: linear-gradient(180deg, #3f8a4a, #1f4d26); border-color: #8fe09a #10301a #10301a #8fe09a; }
 button.danger { background: linear-gradient(180deg, #9a3f3f, #571f1f); border-color: #e09a8f #301010 #301010 #e09a8f; }
-button.small { font-size: 11px; padding: 3px 7px; }
+button.small, .btn.small { font-size: 11px; padding: 3px 7px; }
 
 input, select { font-family: "VT323", monospace; font-size: 20px; background: var(--input); color: var(--text); border: 2px solid var(--frame-lo); padding: 3px 6px; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green); }
