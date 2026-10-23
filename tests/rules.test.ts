@@ -82,6 +82,25 @@ test("inventory moves cost the original TUs and you can only grab items from you
   expect(u.tu).toBe(tu - 12);
 });
 
+test("a grenade left to go off at the end of the turn is seen to explode by its thrower, even out of sight", () => {
+  const b = field();
+  const u = createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 2, y: 2, z: 0 }, 2);
+  const enemy = createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 27, y: 27, z: 0 }, 6);
+  const g = spawnGroundItem(b, "STR_GRENADE", b.idx(27, 26, 0));
+  g.fuse = 0;
+  g.previousOwner = u.id;
+  const rules = start(b);
+  expect(new BattleEvents(b).tileSeers(g.tile) & 1).toBe(0);
+  const health = enemy.health;
+  const res = rules.apply(0, { c: "endturn" });
+  expect(b.items.includes(g)).toBe(false);
+  expect(enemy.health).toBeLessThan(health);
+  const boom = res.events.list.find((r) => r.e.t === "explosion")!;
+  expect(boom.vis & 1).toBe(1);
+  // what it did to the unseen enemy stays hidden
+  expect(res.events.list.filter((r) => r.e.t === "damage").every((r) => !(r.vis & 1))).toBe(true);
+});
+
 test("reaction fire: a watcher with a loaded rifle snap-fires at an enemy walking into view", () => {
   const b = field();
   const watcher = createUnit(b, rookie({ reactions: 100 }), "STR_NONE_UC", 1, { x: 15, y: 5, z: 0 }, 4);

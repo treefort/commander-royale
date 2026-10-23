@@ -447,7 +447,9 @@ export class GameRules {
     const b = this.b;
     const radius = explosionRadius(ammo);
     const tile = b.idx(at.x >> 4, at.y >> 4, Math.floor(at.z / 24));
-    const vis = ev.tileSeers(tile) | ev.seers(b.unitOnTile(tile));
+    // whoever set it off sees it go off, also out of sight (they know where they threw it): a grenade left to
+    // explode at the end of the turn must not seem to fizzle. What it does to unseen units and terrain stays hidden.
+    const vis = ev.tileSeers(tile) | ev.seers(b.unitOnTile(tile)) | (attacker ? 1 << attacker.owner : 0);
     if (radius > 0) {
       ev.push({ t: "explosion", at: { ...at }, power: ammo.power, frame: ammo.hitAnimation >= 0 ? ammo.hitAnimation : 0, small: ammo.power <= 80 }, vis);
       explode(b, ev, at, ammo.power, ammo.damageType, radius, attacker);
