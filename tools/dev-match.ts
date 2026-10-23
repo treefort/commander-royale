@@ -2,7 +2,7 @@
 // straight into a battle in the browser. Players are "Alice" and either "Bob" or an AI squad.
 //
 //   bun tools/dev-match.ts [--biome CULTA] [--time day] [--budget 400000] [--ufo none] [--bot swarm]
-//                          [--drops 3] [--kit STR_RIFLE:STR_RIFLE_CLIP] [--url http://localhost:3000]
+//                          [--drops 3] [--kit STR_RIFLE:STR_RIFLE_CLIP] [--stranger 50] [--url http://localhost:3000]
 //
 // Then open http://localhost:3000/auth/dev?name=Alice&next=/m/<id> (and Bob in another browser profile).
 // End someone's turn without a browser: bun tools/dev-endturn.ts Bob <id>
@@ -28,7 +28,7 @@ async function call(cookie: string, path: string, body?: unknown) {
 
 const settings: Record<string, unknown> = {
   name: "Dev Match", biome: arg("biome", "CULTA"), timeOfDay: arg("time", "day"), ufo: arg("ufo", "none"),
-  mapBlocks: Number(arg("blocks", "4")), budget: Number(arg("budget", "400000")),
+  mapBlocks: Number(arg("blocks", "4")), budget: Number(arg("budget", "400000")), stranger: Number(arg("stranger", "0")),
 };
 if (arg("drops")) settings.supplyDrops = { enabled: true, everyRounds: Number(arg("drops")), warningRounds: 2, tier: "mixed" };
 const [weapon, clip] = (arg("kit", "STR_RIFLE:STR_RIFLE_CLIP")!).split(":");

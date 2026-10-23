@@ -347,6 +347,8 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
     num(() => s.supplyDrops.kits, (v) => (s.supplyDrops.kits = v), 1, 12, 1, "60px"),
     el("span", {}, "kits per drop")),
     "A kit is a weapon with its ammo, a pair of grenades, a medikit, a scanner...");
+  field("Mysterious Stranger", sel([...new Set([0, 5, 10, 20, 35, 50, s.stranger])].sort((a, b) => a - b).map((n) => ({ id: String(n), name: n ? `${n}% chance` : "Off" })), () => String(s.stranger), (v) => (s.stranger = Number(v))),
+    "As in Fallout: when an attack leaves a seen enemy standing, a stranger may appear beside the attacker, shoot it with a magnum and vanish (any side)");
   field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Squads ending on the timer need one");
   f.append(err);
   if (!readOnly) {

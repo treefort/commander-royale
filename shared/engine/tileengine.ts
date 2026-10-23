@@ -713,7 +713,8 @@ export const DAMAGE_RANGE = 100;
 export const EXPLOSIVE_DAMAGE_RANGE = 50;
 
 /** A bullet/melee hit on a voxel. Returns the unit hit (if any). */
-export function hit(b: Battle, ev: BattleEvents, center: Pos, power: number, type: DamageType, attacker: Unit | null): Unit | null {
+/** `range`: how far (%) a hit on a unit may roll either side of `power` (the original's 0-200%, HE's 50-150%). */
+export function hit(b: Battle, ev: BattleEvents, center: Pos, power: number, type: DamageType, attacker: Unit | null, range?: number): Unit | null {
   const ti = b.idx(center.x >> 4, center.y >> 4, Math.floor(center.z / 24));
   if (ti < 0) return null;
   let bu = b.unitOnTile(ti) ?? null;
@@ -722,7 +723,7 @@ export function hit(b: Battle, ev: BattleEvents, center: Pos, power: number, typ
     const rnd = b.rng.int(Math.floor(power / 4), Math.floor((power * 3) / 4));
     damageTile(b, ev, ti, part as unknown as TilePart, rnd);
   } else if (part === VoxelType.UNIT) {
-    const rng = type === DamageType.HE ? EXPLOSIVE_DAMAGE_RANGE : DAMAGE_RANGE;
+    const rng = range ?? (type === DamageType.HE ? EXPLOSIVE_DAMAGE_RANGE : DAMAGE_RANGE);
     const rnd = b.rng.int(Math.floor((power * (100 - rng)) / 100), Math.floor((power * (100 + rng)) / 100));
     let verticalOffset = 0;
     if (!bu) {

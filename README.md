@@ -65,8 +65,8 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 1. **Create a match**: environment (urban, farmland, forest, jungle, desert, mountains,
    polar, Mars, alien base), time of day, optional landed UFO, map size (auto: sized when the battle starts for the
    squads there and the budget; or pick one), budget, seat limit, recruit pool size, technology level,
-   alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table, kits per drop) and an
-   optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
+   alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table, kits per drop), the
+   Mysterious Stranger's chance and an optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
 2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby; there's no player
    limit (a battle takes up to 30 sides). The creator
    can also add computer squads ("Add AI squad", with a hiring strategy); they hire automatically, are always
@@ -186,6 +186,12 @@ Every battle keeps its starting point: the map, every unit with its gear and pos
 - Picked-up equipment is usable at once — there's no research.
 - **Supply drops**: every N rounds a drop is announced to everyone with its map position and countdown; when it
   lands, the crate's contents lie on the ground like a corpse pile — stand on it and open the inventory to grab gear.
+- **Mysterious Stranger** (optional, as in Fallout): when a unit shoots or strikes an enemy it can see and the enemy
+  survives, there's a set chance (5–50%, off by default) that a stranger in personal armor steps out
+  beside the attacker to a few bars of his theme, puts one armor-piercing magnum round (power 150, 50–150% damage)
+  into that enemy and vanishes. He never misses, works for every side alike, isn't a unit (nobody can shoot him or
+  see him again), and nobody is credited with his damage or kills. He needs a clear shot from a tile within 3 of
+  the attacker, preferring one the attacker's side can see; without one he doesn't come.
 - Removed from the original on purpose: civilians, morale/panic/berserk.
 
 ### Controls

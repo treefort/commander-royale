@@ -24,6 +24,8 @@ export type BattleEvent =
   | { t: "msg"; text: string; arg?: string }
   | { t: "reaction"; unit: number; target: number }
   | { t: "supply"; pos: Pos; dropped: boolean; round: number }
+  /** the Mysterious Stranger steps in (`gone`: and is gone again); `unit` is STRANGER_ID, `at` his tile */
+  | { t: "stranger"; unit: number; at: Pos; dir: number; app: UnitAppearance; gone: boolean }
   | { t: "terrain" };
 
 /** Enough about a unit to draw it, for units that come into view mid-action. */

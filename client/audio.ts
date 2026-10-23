@@ -178,4 +178,41 @@ export function playTurnChime() {
   });
 }
 
+/** The Mysterious Stranger's few bars: a low, brassy "dun, dun... dunnn" ending on an uneasy tritone. */
+export function playStrangerSting() {
+  if (!ctx || audioSettings.muted) return;
+  const t0 = ctx.currentTime + 0.02;
+  const out = ctx.createGain();
+  out.gain.value = audioSettings.volume * 0.22;
+  const tone = ctx.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = 1400;
+  tone.connect(out).connect(ctx.destination);
+  // [frequency, start, length]: A2, C3, then E-flat3 over A2, held with a slow vibrato
+  const notes: [number, number, number][] = [[110, 0, 0.2], [130.8, 0.24, 0.2], [155.6, 0.55, 1.3], [110, 0.55, 1.3]];
+  for (const [freq, delay, len] of notes) {
+    const start = t0 + delay;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    if (len > 1) {
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 5;
+      depth.gain.value = freq * 0.012;
+      lfo.connect(depth).connect(osc.frequency);
+      lfo.start(start);
+      lfo.stop(start + len + 0.05);
+    }
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, start);
+    env.gain.linearRampToValueAtTime(1, start + 0.03);
+    env.gain.setValueAtTime(1, start + len * 0.6);
+    env.gain.exponentialRampToValueAtTime(0.001, start + len);
+    osc.connect(env).connect(tone);
+    osc.start(start);
+    osc.stop(start + len + 0.05);
+  }
+}
+
 export const SND = { DOOR: 3, UFO_DOOR: 20, UFO_DOOR_CLOSE: 21, SMALL_EXPLOSION: 2, LARGE_EXPLOSION: 5, ITEM_DROP: 38, ITEM_THROW: 39, RELOAD: 17, WALK: 22, FLY: 15 };

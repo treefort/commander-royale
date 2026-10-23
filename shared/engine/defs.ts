@@ -57,3 +57,6 @@ export function distanceSq(a: Pos, b: Pos, considerZ = true): number {
   const x = a.x - b.x, y = a.y - b.y, z = considerZ ? a.z - b.z : 0;
   return x * x + y * y + z * z;
 }
+
+/** The Mysterious Stranger's unit id in events: he's never in the battle's unit list (clients draw him briefly). */
+export const STRANGER_ID = 999_999;

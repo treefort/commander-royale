@@ -2,6 +2,7 @@
 // with the battle. When a match ends they become a MatchRecord (see record.ts) for balance analysis.
 import type { Battle, Unit } from "./state.ts";
 import type { BattleEvents } from "./events.ts";
+import { STRANGER_ID } from "./defs.ts";
 
 export interface UnitStats {
   /** successful commands by type (move, shoot, throw, psi, medikit, inv, ...) */
@@ -78,6 +79,7 @@ export function recordEvents(b: Battle, ev: BattleEvents) {
   for (const { e } of ev.list) {
     switch (e.t) {
       case "shot": {
+        if (e.unit === STRANGER_ID) break; // the Mysterious Stranger isn't anyone's unit
         const s = unitStats(b, e.unit);
         s.shots[e.weapon] = (s.shots[e.weapon] ?? 0) + 1;
         break;

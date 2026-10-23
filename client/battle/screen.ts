@@ -8,10 +8,10 @@ import { exposureAt } from "./exposure.ts";
 import { drawHud, hudHit, ICONS_W, ICONS_H, TOOLTIPS, type HudButton, type HudState } from "./hud.ts";
 import { InventoryScreen, type InvAdapter, type InvItem } from "../ui/inventory.ts";
 import { preload, getFile, hasFile } from "../files.ts";
-import { initAudio, playSound, playTurnChime, playMusic, stopMusic, applyMusicSettings, unlockAudio, SND, audioSettings, saveAudioSettings } from "../audio.ts";
+import { initAudio, playSound, playTurnChime, playStrangerSting, playMusic, stopMusic, applyMusicSettings, unlockAudio, SND, audioSettings, saveAudioSettings } from "../audio.ts";
 import { applyView, type PlayerView } from "../../shared/engine/view.ts";
 import { type Battle, type Unit, type Item, isOut, Phase } from "../../shared/engine/state.ts";
-import type { BattleEvent } from "../../shared/engine/events.ts";
+import type { BattleEvent, UnitAppearance } from "../../shared/engine/events.ts";
 import type { Command, Hand } from "../../shared/engine/actions.ts";
 import { Pathfinder } from "../../shared/engine/pathfinding.ts";
 import { type Pos, UnitStatus, DIR_UP, DIR_DOWN, directionTo, posEq } from "../../shared/engine/defs.ts";
@@ -481,21 +481,20 @@ export class BattleScreen {
     }
   }
 
-  private ensureUnit(b: Battle, e: Extract<BattleEvent, { t: "move" }>): Unit {
-    let u = b.unit(e.unit);
+  private ensureUnit(b: Battle, id: number, a: UnitAppearance, at: Pos, dir: number): Unit {
+    let u = b.unit(id);
     if (!u) {
-      const a = e.app;
       u = {
-        id: e.unit, owner: a.owner, originalOwner: a.originalOwner, type: a.type, race: a.race, name: a.name, rank: a.rank, rankInt: 0,
+        id, owner: a.owner, originalOwner: a.originalOwner, type: a.type, race: a.race, name: a.name, rank: a.rank, rankInt: 0,
         gender: a.gender, look: a.look, armor: a.armor, stats: { tu: 0, stamina: 0, health: 1, bravery: 0, reactions: 0, firing: 0, throwing: 0, strength: 0, psiStrength: 0, psiSkill: 0, melee: 0 },
-        baseHeights: a.baseHeights, pos: { ...e.from }, dir: e.dir, turretDir: a.turretDir, turretType: a.turretType, tu: 0, energy: 0, health: 1, stun: 0, morale: 100,
+        baseHeights: a.baseHeights, pos: { ...at }, dir, turretDir: a.turretDir, turretType: a.turretType, tu: 0, energy: 0, health: 1, stun: 0, morale: 100,
         kneeled: a.kneeled, floating: false, status: UnitStatus.STANDING, armorNow: [0, 0, 0, 0, 0], armorMax: [0, 0, 0, 0, 0], wounds: [0, 0, 0, 0, 0, 0], fire: 0,
         loftemps: a.loftemps, movementType: a.movementType, size: a.size, specab: 0, spawnUnit: "", spawnOwner: -1, respawn: false, deathSound: [], moveSound: -1,
         energyRecovery: 0, woundable: false, nightVision: false, hasInventory: false, visibleUnits: [], spottedThisTurn: [], mindControllerId: -1, kills: 0, recruitId: "",
         activeHand: "STR_RIGHT_HAND", psiWeapon: false, hitByFire: false, motionPoints: 0, killedBy: -1, value: 0, hwp: false,
       };
       b.addUnit(u);
-      b.placeUnit(u, e.from);
+      b.placeUnit(u, at);
       for (const [slot, type] of a.hands) b.createItem(type, { owner: u.id, slot: slot as SlotId });
     }
     return u;
@@ -506,7 +505,7 @@ export class BattleScreen {
     const fast = this.keys.has("Shift") || this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.queue.length > 1;
     switch (e.t) {
       case "move": {
-        const u = this.ensureUnit(b, e);
+        const u = this.ensureUnit(b, e.unit, e.app, e.from, e.dir);
         if (u.status !== UnitStatus.STANDING) u.status = UnitStatus.STANDING;
         const vertical = e.from.x === e.to.x && e.from.y === e.to.y;
         const end = vertical ? 8 : e.dir % 2 ? 16 : 8;
@@ -672,6 +671,31 @@ export class BattleScreen {
         if (e.text === "STR_TURN_BEGINS") break;
         this.messages.push({ text: msgText(e.text, e.arg), time: performance.now() });
         break;
+      case "stranger": {
+        // the Mysterious Stranger shimmers into view (to a few bars of his theme), and out again after his shot
+        const u = this.ensureUnit(b, e.unit, e.app, e.at, e.dir);
+        u.dir = e.dir;
+        if (!e.gone) {
+          if (!this.onScreen(e.at)) this.centerOn(e.at);
+          playStrangerSting();
+          this.messages.push({ text: "A Mysterious Stranger appears!", time: performance.now() });
+        }
+        for (let f = 0; f < 6; f++) {
+          if ((f % 2 === 0) === e.gone) b.clearUnitTiles(u);
+          else b.placeUnit(u, e.at);
+          await this.wait(fast ? 20 : 70);
+        }
+        if (e.gone) {
+          b.clearUnitTiles(u);
+          for (const it of b.unitItems(u)) b.removeItem(it);
+          b.units = b.units.filter((x) => x !== u);
+          b.rebuildUnitIndex();
+        } else {
+          b.placeUnit(u, e.at);
+          await this.wait(fast ? 100 : 600);
+        }
+        break;
+      }
       case "supply":
         if (!e.dropped) {
           if (!b.supply.some((s) => posEq(s.pos, e.pos) && !s.dropped)) b.supply.push({ id: b.supply.length + 1, pos: e.pos, dropRound: e.round, announcedRound: b.round, dropped: false, items: [] });
