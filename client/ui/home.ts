@@ -167,6 +167,21 @@ export async function renderHome(root: HTMLElement, me: Me, go: (path: string) =
       }
       list.append(cards);
     }
+    // battles shared as challenges: the ones you set, and the ones you've had a go at
+    const challenges = await api<{ id: string; title: string; yours: boolean; goes: number; wins: number; beaten: boolean }[]>("/api/challenges");
+    if (challenges.length) {
+      list.append(el("h2", { style: { marginTop: "16px" } }, "CHALLENGES"), el("div", { class: "match-cards" }, ...challenges.map((c) => {
+        const open = (e: Event) => {
+          e.preventDefault();
+          go(`/c/${c.id}`);
+        };
+        return el("div", { class: "match-card" },
+          el("div", { class: "row" },
+            el("a", { class: "grow match-name", href: `/c/${c.id}`, onclick: open }, c.title),
+            c.beaten ? el("span", { class: "badge" }, "Beaten") : c.yours ? el("span", { class: "badge dim" }, "Yours") : null),
+          el("div", { class: "muted" }, `${c.goes} go${c.goes === 1 ? "" : "es"}, ${c.wins} win${c.wins === 1 ? "" : "s"}`));
+      })));
+    }
   } catch (e) {
     list.append(el("div", { class: "err" }, String((e as Error).message)));
   }

@@ -6,14 +6,15 @@ import { join, normalize } from "node:path";
 import { db, randomId, type MatchRow, type PlayerRow, type UserRow } from "./db.ts";
 import { nextDailyDeadline, sanitizeSettings, defaultSettings, resolveBiome, resolveTimeOfDay, resolveMapBlocks, sanitizeBotTuning, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember, MAX_SIDES } from "../shared/protocol.ts";
 import { generatePool, checkLoadout, catalogFor, armorsFor, armorPrice, COURSES } from "../shared/rules/catalog.ts";
-import { createBattle, joinBattle, type SetupPlayer } from "../shared/engine/setup.ts";
+import { createBattle, joinBattle, replayBattle, type SetupPlayer } from "../shared/engine/setup.ts";
 import { GameRules, type Command } from "../shared/engine/actions.ts";
-import { type Battle, type Unit, Phase } from "../shared/engine/state.ts";
+import { type Battle, type Unit, Phase, isOut } from "../shared/engine/state.ts";
+import { UnitStatus } from "../shared/engine/defs.ts";
 import { serializeBattle, deserializeBattle } from "../shared/engine/serialize.ts";
 import { buildRecord, type MatchRecord } from "../shared/engine/record.ts";
 import { recordEvents } from "../shared/engine/stats.ts";
 import { AIPlayer, aiOptionsFor, STAND_IN_AI } from "../shared/engine/ai.ts";
-import { seatOfUser, memberOf, mayCommand, playedByAI, waitingFor, isShared, isObserver } from "../shared/engine/coop.ts";
+import { seatOfUser, memberOf, membersOf, mayCommand, playedByAI, waitingFor, isShared, isObserver } from "../shared/engine/coop.ts";
 import { buildEnemyForce } from "../shared/rules/scenario.ts";
 import { buildSquad, STRATEGIES, type Strategy } from "../shared/rules/squads.ts";
 import { RNG } from "../shared/engine/rng.ts";
@@ -229,6 +230,7 @@ export function joinMatch(id: string, user: UserRow, squad?: string): string | n
   const players = getPlayers(id);
   if (players.some((p) => p.user_id === user.id)) return squad !== undefined ? joinSquad(id, user, squad) : null;
   if (m.status === "finished") return "This battle is over";
+  if (m.solo) return SOLO;
   const s = parseSettings(m.settings);
   let leader: PlayerRow | undefined;
   if (s.mode === "ffa" && squad) {
@@ -245,6 +247,7 @@ export function joinMatch(id: string, user: UserRow, squad?: string): string | n
   return null;
 }
 
+const SOLO = "This is someone's own go at a battle: nobody else can join it";
 const SIDES_FULL = `This match already has ${MAX_SIDES} squads, as many as a battle can take`;
 
 /** Joining a squad that's already fighting puts you in the battle at once (its people hand you units with G). */
@@ -303,6 +306,7 @@ export function joinSquad(id: string, user: UserRow, leaderId: string): string |
   const m = getMatch(id);
   if (!m) return "Match not found";
   if (m.status === "finished") return "This battle is over";
+  if (m.solo) return SOLO;
   if (deployed(m, user.id)) return "You're already in the battle";
   const s = parseSettings(m.settings);
   if (s.mode === "coop") return "Everyone is on the same team in a co-op scenario";
@@ -499,7 +503,11 @@ export function startMatch(id: string, user: UserRow): string | null {
   const battle = createBattle(settings, setup, pool, m.seed, gameFile);
   const host = newHost(id, battle);
   hosts.set(id, host);
-  db.query("UPDATE matches SET status = 'playing', battle = ?, turn_deadline = ?, updated = ? WHERE id = ?").run(packBattle(battle), turnDeadline(battle), Date.now(), id);
+  // kept as it begins, to be played again (a retry, a challenge); with what each side brought, for the statistics
+  const packed = packBattle(battle);
+  const loadouts = setup.map((p) => ({ squad: [...p.loadout.squad, ...(p.waves ?? []).flatMap((w) => w.members)], stash: p.loadout.stash }));
+  db.query("UPDATE matches SET status = 'playing', battle = ?, start_battle = ?, start_loadouts = ?, turn_deadline = ?, updated = ? WHERE id = ?")
+    .run(packed, packed, JSON.stringify(loadouts), turnDeadline(battle), Date.now(), id);
   // everyone in the battle now leaves the lobby for it (people not in it get the lobby, to get ready and join)
   for (const ws of sockets.get(id) ?? []) if (deployed(getMatch(id)!, ws.data.user.id)) send(ws, { t: "started" });
   broadcastLobby(id);
@@ -635,7 +643,11 @@ function sendFullView(ws: Sock) {
   const m = getMatch(h.id)!;
   const gm = isObserver(h.battle, seat, ws.data.user.id);
   // the host may have the AI play for whoever holds up a turn
-  send(ws, { t: "view", view: extractView(h.battle, seat, sentFor(h, seat, gm), true, gm), deadline: m.turn_deadline, host: m.owner === ws.data.user.id });
+  send(ws, {
+    t: "view", view: extractView(h.battle, seat, sentFor(h, seat, gm), true, gm), deadline: m.turn_deadline, host: m.owner === ws.data.user.id,
+    // it can be played again from the start (once the rules allow), and the challenge this is a go at
+    replayable: !!m.start_battle && !h.battle.players[seat]?.joinedRound, challenge: m.challenge_id,
+  });
 }
 
 export function wsClose(ws: Sock) {
@@ -818,11 +830,15 @@ function publish(h: Host, ev: BattleEvents, turnChanged: boolean, by: string) {
   const b = h.battle;
   const m = getMatch(h.id)!;
   const settings = b.settings;
+  if (m.solo) endSoloIfOut(h, ev);
   let dl = m.turn_deadline;
   if (turnChanged) dl = turnDeadline(b);
   const status = b.phase === Phase.FINISHED ? "finished" : "playing";
   db.query("UPDATE matches SET battle = ?, status = ?, turn_deadline = ?, updated = ? WHERE id = ?").run(packBattle(b), status, status === "finished" ? null : dl, Date.now(), h.id);
-  if (status === "finished") saveRecord(h, m);
+  if (status === "finished") {
+    saveRecord(h, m);
+    finishAttempt(h, m);
+  }
   // one diff per side (and one for a watching game master), sent to every socket on it: diffing per socket
   // would leave a second teammate's socket with nothing
   const msgs = new Map<string, string>();
@@ -877,7 +893,10 @@ function saveRecord(h: Host, m: MatchRow) {
     const s = h.battle.settings;
     let pool = JSON.parse(m.pool) as Recruit[];
     let loadouts: Loadout[];
-    if (s.mode === "coop") {
+    if (m.solo) {
+      // played again from a starting point: nobody could join, so the sides are the ones it began with
+      loadouts = JSON.parse(m.start_loadouts!);
+    } else if (s.mode === "coop") {
       const force = buildEnemyForce(s, m.seed);
       pool = [...pool, ...force.recruits];
       loadouts = [scenarioTeam(m, s, players, scenarioPlayers(m, s, players).filter((p) => p.loadout && seatOf(h, p.user_id) >= 0)).loadout, { squad: [...force.initial, ...force.waves.flatMap((w) => w.members)], stash: [] }];
@@ -1116,4 +1135,202 @@ export function resumeBots() {
       console.error("resuming bots failed", id, e);
     }
   }
+}
+
+// ------------------------------------------------------------------------------------------
+// playing a battle again: retries and challenges
+// ------------------------------------------------------------------------------------------
+
+/** Where a battle began: the battle then, what each side brought and the recruits they came from. */
+interface StartPoint {
+  battle: Battle;
+  seed: number;
+  pool: Recruit[];
+  loadouts: Loadout[];
+}
+
+function startPointOf(m: MatchRow): StartPoint | null {
+  if (!m.start_battle || !m.start_loadouts) return null;
+  const pool = JSON.parse(m.pool) as Recruit[];
+  const s = parseSettings(m.settings);
+  // a scenario's enemies are hired from recruits of their own
+  return {
+    battle: deserializeBattle(unpackBattle(m.start_battle), gameFile), seed: m.seed, loadouts: JSON.parse(m.start_loadouts),
+    pool: s.mode === "coop" && !m.solo ? [...pool, ...buildEnemyForce(s, m.seed).recruits] : pool,
+  };
+}
+
+/**
+ * Why `userId` can't play this battle again from the start yet (null: they can). While other people are still
+ * fighting it, a replay would show where their squads began; a retry gives up the battle, which teammates are
+ * still fighting.
+ */
+function replayBlocked(h: Host, userId: string, retry: boolean): string | null {
+  const b = h.battle;
+  const seat = seatOf(h, userId);
+  if (b.phase === Phase.FINISHED || seat < 0 || b.players[seat].eliminated) return null;
+  if (b.players.some((p, i) => i !== seat && !p.eliminated && !isBot(p.userId)))
+    return "Other people are still fighting this battle: it can be played again once it's over, or your squad is out of it";
+  if (retry && membersOf(b.players[seat]).some((x) => x.userId !== userId && !x.observer)) return "Your teammates are still fighting this battle";
+  return null;
+}
+
+/** `user` plays the battle from its start in `seat`, everyone else is the AI; a new match (its id). */
+function playFrom(sp: StartPoint, seat: number, user: UserRow, name: string, challengeId: string | null): string {
+  const b = replayBattle(sp.battle, seat, { userId: user.id, name: user.name }, Math.floor(Math.random() * 2 ** 31));
+  b.settings = { ...b.settings, name: name.slice(0, 40) };
+  recalcAllLighting(b);
+  const id = randomId(10);
+  const now = Date.now();
+  const packed = packBattle(b);
+  db.query(`INSERT INTO matches (id, owner, settings, status, seed, pool, battle, start_battle, start_loadouts, solo, challenge_id, turn_deadline, created, updated)
+    VALUES (?, ?, ?, 'playing', ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`)
+    .run(id, user.id, JSON.stringify(b.settings), sp.seed, JSON.stringify(sp.pool), packed, packed, JSON.stringify(sp.loadouts), challengeId, turnDeadline(b), now, now);
+  // the match list shows who's in it: the person, and (free-for-all) the squads the AI plays
+  b.players.forEach((p, i) => {
+    if (i !== seat && (b.settings.mode === "coop" || !isBot(p.userId))) return;
+    if (i !== seat) db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(p.userId, p.name, now);
+    db.query("INSERT INTO match_players (match_id, user_id, seat, name, loadout, ready) VALUES (?, ?, ?, ?, ?, 1)").run(id, p.userId, i, i === seat ? user.name : p.name, JSON.stringify(sp.loadouts[i] ?? null));
+  });
+  if (challengeId) db.query("INSERT INTO challenge_attempts (match_id, challenge_id, user_id, name, started) VALUES (?, ?, ?, ?, ?)").run(id, challengeId, user.id, user.name, now);
+  hosts.set(id, newHost(id, b));
+  // a computer squad that moves first starts once the person has had a moment to load the battle
+  setTimeout(() => {
+    const h = hosts.get(id);
+    if (h) runAI(h);
+  }, 4000);
+  return id;
+}
+
+/** Starts the battle `id` over from where it began (a new match); a battle still on is given up first. */
+export function retryMatch(id: string, user: UserRow): { id?: string; error?: string } {
+  const m = getMatch(id);
+  if (!m || m.status === "lobby") return { error: "That battle hasn't started" };
+  const h = loadHost(id);
+  const sp = startPointOf(m);
+  if (!h || !sp) return { error: "This battle began before battles could be played again" };
+  const seat = seatOfUser(sp.battle, user.id);
+  if (seat < 0) return { error: "You joined this battle after it began, so there's no start of yours to go back to" };
+  const e = replayBlocked(h, user.id, true);
+  if (e) return { error: e };
+  const b = h.battle;
+  if (b.phase === Phase.PLAYING && !b.players[seat].eliminated) {
+    const before = b.current;
+    const res = h.rules.apply(seat, { c: "surrender" });
+    publish(h, res.events, before !== b.current, user.id);
+  }
+  const name = parseSettings(m.settings).name.replace(/ \(retry\)$/, "");
+  return { id: playFrom(sp, seat, user, m.challenge_id ? name : `${name} (retry)`, m.challenge_id) };
+}
+
+/** What a challenge's page shows before anyone plays it (worked out once, when it's made). */
+export interface ChallengeSummary {
+  biome: string;
+  timeOfDay: string;
+  mapBlocks: number;
+  mode: string;
+  turnTimer: number;
+  /** in turn order */
+  sides: { name: string; units: number; yours: boolean; reinforcements: number }[];
+  squad: { name: string; type: string; armor: string; items: string[] }[];
+}
+
+function challengeSummary(b: Battle, seat: number): ChallengeSummary {
+  const s = b.settings;
+  return {
+    biome: s.biome, timeOfDay: s.timeOfDay, mapBlocks: s.mapBlocks, mode: s.mode, turnTimer: s.turnTimer,
+    sides: b.players.map((p, i) => ({
+      name: p.name, yours: i === seat, units: b.units.filter((u) => u.originalOwner === i && !isOut(u)).length,
+      reinforcements: b.waves.filter((w) => w.seat === i).reduce((n, w) => n + w.members.length, 0),
+    })),
+    squad: b.units.filter((u) => u.originalOwner === seat && !isOut(u))
+      .map((u) => ({ name: u.name, type: u.type, armor: u.armor, items: b.items.filter((i) => i.owner === u.id).map((i) => i.type) })),
+  };
+}
+
+/**
+ * Shares the start of battle `id` as a challenge: anyone with the link plays `user`'s side from there against the
+ * AI. Sharing again gives the same challenge (a new title renames it); a go at a challenge shares that challenge.
+ */
+export function shareChallenge(id: string, user: UserRow, rawTitle: unknown): { id?: string; error?: string } {
+  const m = getMatch(id);
+  if (!m || m.status === "lobby") return { error: "That battle hasn't started" };
+  if (!isMember(id, user.id)) return { error: "You are not part of this match" };
+  if (m.challenge_id) return { id: m.challenge_id };
+  const h = loadHost(id);
+  const sp = startPointOf(m);
+  if (!h || !sp) return { error: "This battle began before battles could be shared" };
+  const seat = seatOfUser(sp.battle, user.id);
+  if (seat < 0) return { error: "You joined this battle after it began, so there's no start of yours to share" };
+  const e = replayBlocked(h, user.id, false);
+  if (e) return { error: e };
+  const title = String(rawTitle ?? "").trim().slice(0, 40);
+  const old = db.query("SELECT id FROM challenges WHERE source = ? AND seat = ?").get(id, seat) as { id: string } | null;
+  if (old) {
+    if (title) db.query("UPDATE challenges SET title = ? WHERE id = ?").run(title, old.id);
+    return { id: old.id };
+  }
+  const cid = randomId(8);
+  db.query("INSERT INTO challenges (id, owner, source, seat, title, seed, pool, battle, loadouts, summary, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(cid, user.id, id, seat, title || parseSettings(m.settings).name, sp.seed, JSON.stringify(sp.pool), m.start_battle, m.start_loadouts, JSON.stringify(challengeSummary(sp.battle, seat)), Date.now());
+  return { id: cid };
+}
+
+interface ChallengeRow { id: string; owner: string; source: string; seat: number; title: string; seed: number; pool: string; battle: Uint8Array; loadouts: string; summary: string; created: number }
+interface AttemptRow { match_id: string; challenge_id: string; user_id: string; name: string; started: number; finished: number | null; won: number | null; rounds: number | null; lost: number | null; kills: number | null }
+
+/** A challenge's page: the briefing and everyone's goes at it. */
+export function challengeState(cid: string, user: UserRow) {
+  const c = db.query("SELECT id, owner, title, summary, created FROM challenges WHERE id = ?").get(cid) as ChallengeRow | null;
+  if (!c) return null;
+  const by = db.query("SELECT name FROM users WHERE id = ?").get(c.owner) as { name: string } | null;
+  const attempts = db.query("SELECT * FROM challenge_attempts WHERE challenge_id = ? ORDER BY started").all(cid) as AttemptRow[];
+  return {
+    id: c.id, title: c.title, by: by?.name ?? "?", yours: c.owner === user.id, created: c.created, summary: JSON.parse(c.summary) as ChallengeSummary,
+    attempts: attempts.map((a) => ({
+      name: a.name, you: a.user_id === user.id, matchId: a.user_id === user.id ? a.match_id : undefined, started: a.started,
+      finished: a.finished, won: !!a.won, rounds: a.rounds, lost: a.lost, kills: a.kills,
+    })),
+  };
+}
+
+/** `user` takes the challenge on: a new match from its start (its id). */
+export function acceptChallenge(cid: string, user: UserRow): { id?: string; error?: string } {
+  const c = db.query("SELECT * FROM challenges WHERE id = ?").get(cid) as ChallengeRow | null;
+  if (!c) return { error: "Challenge not found" };
+  const battle = deserializeBattle(unpackBattle(c.battle), gameFile);
+  return { id: playFrom({ battle, seed: c.seed, pool: JSON.parse(c.pool), loadouts: JSON.parse(c.loadouts) }, c.seat, user, c.title, c.id) };
+}
+
+/** Challenges you set or have had a go at, newest first (for the front page). */
+export function listChallenges(user: UserRow) {
+  const rows = db.query(`SELECT c.id, c.title, c.owner, c.created FROM challenges c WHERE c.owner = ?1
+    OR EXISTS (SELECT 1 FROM challenge_attempts a WHERE a.challenge_id = c.id AND a.user_id = ?1) ORDER BY c.created DESC LIMIT 50`).all(user.id) as ChallengeRow[];
+  return rows.map((c) => {
+    const n = db.query(`SELECT COUNT(*) AS goes, COALESCE(SUM(won), 0) AS wins, COALESCE(SUM(CASE WHEN user_id = ?1 THEN won ELSE 0 END), 0) AS mine
+      FROM challenge_attempts WHERE challenge_id = ?2`).get(user.id, c.id) as { goes: number; wins: number; mine: number };
+    return { id: c.id, title: c.title, yours: c.owner === user.id, created: c.created, goes: n.goes, wins: n.wins, beaten: n.mine > 0 };
+  });
+}
+
+/** A solo battle ends when the person's squad is out (the AI squads left needn't fight it out). */
+function endSoloIfOut(h: Host, ev: BattleEvents) {
+  const b = h.battle;
+  if (b.phase !== Phase.PLAYING || !b.players.some((p) => !isBot(p.userId) && p.eliminated)) return;
+  b.phase = Phase.FINISHED;
+  const left = b.players.filter((p) => !p.eliminated);
+  b.winner = left.length === 1 ? left[0].index : -1;
+  ev.msg("STR_GAME_OVER", ev.all(), left.length === 1 ? left[0].name : "");
+}
+
+/** A finished go at a challenge goes on the challenge's record (once). */
+function finishAttempt(h: Host, m: MatchRow) {
+  if (!m.challenge_id) return;
+  const b = h.battle;
+  const seat = seatOf(h, m.owner);
+  if (seat < 0) return;
+  const lost = b.units.filter((u) => u.originalOwner === seat && u.status === UnitStatus.DEAD && u.recruitId !== "spawn").length;
+  const kills = b.units.filter((v) => v.originalOwner !== seat && isOut(v) && v.status !== UnitStatus.IGNORE_ME && b.unit(b.stats.lastHit[v.id] ?? -1)?.originalOwner === seat).length;
+  db.query("UPDATE challenge_attempts SET finished = ?, won = ?, rounds = ?, lost = ?, kills = ? WHERE match_id = ? AND finished IS NULL")
+    .run(Date.now(), b.winner === seat ? 1 : 0, b.round, lost, kills, h.id);
 }

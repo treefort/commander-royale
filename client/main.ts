@@ -2,6 +2,7 @@ import { api } from "./api.ts";
 import { renderHome, renderLogin, renderPasskey, type Me } from "./ui/home.ts";
 import { LobbyPage } from "./ui/lobby.ts";
 import { BattleScreen } from "./battle/screen.ts";
+import { renderChallenge } from "./ui/challenge.ts";
 
 const root = document.getElementById("app")!;
 let me: Me;
@@ -25,6 +26,8 @@ async function route() {
     me = await api<Me>("/api/me");
     await route();
   });
+  const c = path.match(/^\/c\/([A-Za-z0-9]+)/);
+  if (c) return renderChallenge(root, me, c[1], go);
   const m = path.match(/^\/m\/([A-Za-z0-9]+)/);
   if (m) {
     const id = m[1];
@@ -38,7 +41,7 @@ async function route() {
       } else {
         if (!state.you) throw new Error("this battle is over");
         document.body.classList.add("battle");
-        current = new BattleScreen(root, id, { id: me.user.id, name: me.user.name }, () => go("/"));
+        current = new BattleScreen(root, id, { id: me.user.id, name: me.user.name }, () => go("/"), go);
       }
     } catch (e) {
       root.innerHTML = "";

@@ -199,3 +199,6 @@ select.start-from { flex: 1; min-width: 0; max-width: 100%; }
   .boxart .bx-ship { width: 96vw; right: -4vw; top: 32vh; }
   .boxart .bx-ui { left: 50%; transform: translateX(-50%); width: calc(100% - 36px); }
 }
+.wrap.challenge { max-width: 980px; display: flex; flex-direction: column; gap: 12px; }
+.challenge-sides { margin: 4px 0 10px; padding-left: 28px; }
+.share-box { width: min(520px, 92vw); box-sizing: border-box; }

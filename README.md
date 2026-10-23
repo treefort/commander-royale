@@ -156,6 +156,21 @@ AFK off in Options).
 With "AI plays for offline players" set, anyone offline for more than 30 s (`AWAY_GRACE_MS`) is played by the AI
 too, until they reconnect. This also works for a one-person squad.
 
+### Retries and challenges
+
+Every battle keeps its starting point: the map, every unit with its gear and position, and the turn order.
+
+- **Retry**: once the battle is over or your squad is out of it, **RETRY** (top right, on the game-over screen, or in
+  Options) starts a new match from that same start. You play your squad, the AI plays everyone else (other
+  people's squads included), and the dice are rolled fresh. If nobody but the AI is fighting you, Options →
+  **RESTART BATTLE** works mid-battle too: your squad surrenders the current battle first.
+- **Share as challenge** (game-over screen, or Options) makes a link (`/c/<id>`) to your squad's start. Anyone who
+  opens it sees a briefing (environment, turn order, unit counts, your squad's roster and gear) and can **accept**:
+  they play your squad from the start against the AI. Every go is listed on the challenge's page (wins first, then
+  quickest, then fewest units lost), and the front page lists the challenges you set or played.
+- While other people are still fighting a battle, it can't be retried or shared: that would show where their
+  squads began. A solo go is your own (nobody can join it), and it ends as soon as your squad is out.
+
 ### Rules notes
 
 - Original mechanics throughout: TU costs, snap/aimed/auto fire, the original accuracy spread, voxel line-of-fire,

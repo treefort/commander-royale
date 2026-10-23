@@ -19,6 +19,8 @@ import { itemRule, tr, BattleType, explosionRadius, armorRule, type SlotId } fro
 import { actionTUs, firingAccuracy, carriedWeight, roundsLeft } from "../../shared/engine/unitops.ts";
 import { calculateUnitLighting } from "../../shared/engine/tileengine.ts";
 import { memberOf, membersOf, mayCommand, controllerOf, isAfk, isShared, waitingFor } from "../../shared/engine/coop.ts";
+import { api } from "../api.ts";
+import { shareDialog } from "./share.ts";
 
 type ActionKind = "snap" | "aimed" | "auto" | "throw" | "melee" | "psi" | "probe" | "launch";
 
@@ -38,6 +40,7 @@ type Dialog =
   | { kind: "minimap" }
   | { kind: "options" }
   | { kind: "abort" }
+  | { kind: "restart" }
   | { kind: "nextturn"; title: string; sub: string }
   | { kind: "gameover" };
 
@@ -99,6 +102,9 @@ export class BattleScreen {
   processingOthers = false;
   /** the match creator: may have the AI play for whoever holds up a turn */
   isHost = false;
+  /** the battle can be played again from its start (a retry, or shared as a challenge), and the challenge it's a go at */
+  replayable = false;
+  challengeId: string | null = null;
   /** where the host's "AI: play for ..." button was drawn this frame (null: not shown) */
   private hostAiRect: { x: number; y: number; w: number; h: number } | null = null;
   busy = false;
@@ -121,7 +127,7 @@ export class BattleScreen {
   private loadingText = "CONNECTING...";
   private incoming: PlayerView | null = null;
 
-  constructor(private root: HTMLElement, private matchId: string, private me: { id: string; name: string }, private onExit: () => void) {
+  constructor(private root: HTMLElement, private matchId: string, private me: { id: string; name: string }, private onExit: () => void, private go: (path: string) => void) {
     root.innerHTML = "";
     this.canvas = document.createElement("canvas");
     this.canvas.className = "battle-canvas";
@@ -188,6 +194,8 @@ export class BattleScreen {
     switch (m.t) {
       case "view":
         this.isHost = !!m.host;
+        this.replayable = !!m.replayable;
+        this.challengeId = m.challenge ?? null;
         await this.onFullView(m.view as PlayerView);
         this.deadline = m.deadline;
         break;
@@ -879,12 +887,14 @@ export class BattleScreen {
     }
     if (this.inputLocked()) drawText(s, A.small, "...", this.vw - 16, iy - 10, 0);
     if (!this.online.has(this.me.id) && this.ws?.readyState !== 1) drawText(s, A.small, "OFFLINE", this.vw - 40, 4, 32 - 1);
-    // battle over: a way back out from the map view
-    if (this.b?.phase === Phase.FINISHED) {
-      const r = this.exitButtonRect();
-      const hover = inRect(this.mouse.x, this.mouse.y, r.x, r.y, r.w, r.h);
-      drawFrame(s, r.x, r.y, r.w, r.h, hover ? 16 * 4 : 16 * 2, 2, 15);
-      drawText(s, A.small, "BACK TO MATCHES", r.x, r.y + 5, hover ? 16 * 4 - 1 : 0, { align: "center", width: r.w, contrast: true });
+    // battle over (or your squad out of it): a way back out from the map view, and to start over
+    if (this.outOfIt()) {
+      for (const [r, label] of [[this.exitButtonRect(), "BACK TO MATCHES"], [this.retryButtonRect(), "RETRY"]] as const) {
+        if (!r) continue;
+        const hover = inRect(this.mouse.x, this.mouse.y, r.x, r.y, r.w, r.h);
+        drawFrame(s, r.x, r.y, r.w, r.h, hover ? 16 * 4 : 16 * 2, 2, 15);
+        drawText(s, A.small, label, r.x, r.y + 5, hover ? 16 * 4 - 1 : 0, { align: "center", width: r.w, contrast: true });
+      }
     }
   }
 
@@ -1042,7 +1052,11 @@ export class BattleScreen {
           `M MINIMAP  1/2 USE LEFT/RIGHT HAND${isShared(this.b?.players[this.you]) ? "  G GIVE UNIT" : ""}`,
           "ENTER: CHAT  HOLD SHIFT: FAST ANIMATIONS",
         ];
-        help.forEach((h, i) => drawText(s, A.small, h, cx, cy + 92 + i * 10, 16 * 4 - 1, { align: "center", width: 320 }));
+        help.forEach((h, i) => drawText(s, A.small, h, cx, cy + 88 + i * 9, 16 * 4 - 1, { align: "center", width: 320 }));
+        // against the AI: start over (giving this battle up), or dare others to do better from the same start
+        const restart = this.replayAllowed(true), share = this.replayAllowed() || !!this.challengeId;
+        if (restart) button(cx + 40, cy + 152, share ? 116 : 240, 14, this.outOfIt() ? "RETRY" : "RESTART BATTLE", () => (this.outOfIt() ? this.retry() : (this.dialog = { kind: "restart" })));
+        if (share) button(restart ? cx + 164 : cx + 40, cy + 152, restart ? 116 : 240, 14, "SHARE AS CHALLENGE", () => this.share());
         button(cx + 40, cy + 170, 110, 18, "LEAVE BATTLE", () => this.onExit());
         button(cx + 170, cy + 170, 110, 18, "OK", () => (this.dialog = null));
         break;
@@ -1053,6 +1067,15 @@ export class BattleScreen {
         drawText(s, A.small, "YOUR SQUAD LEAVES THE BATTLE FOR GOOD", cx + 40, cy + 92, -1, { align: "center", width: 240, contrast: true });
         button(cx + 60, cy + 110, 90, 20, "SURRENDER", () => { this.dialog = null; this.send({ c: "surrender" }); }, 16 * 2 + 3);
         button(cx + 170, cy + 110, 90, 20, "CANCEL", () => (this.dialog = null));
+        break;
+      }
+      case "restart": {
+        drawFrame(s, cx + 30, cy + 56, 260, 88, 16 * 2 + 3, 8, 14);
+        drawText(s, A.big, "START OVER?", cx + 30, cy + 68, -1, { align: "center", width: 260, contrast: true });
+        drawText(s, A.small, "YOUR SQUAD SURRENDERS THIS BATTLE AND", cx + 30, cy + 88, -1, { align: "center", width: 260, contrast: true });
+        drawText(s, A.small, "A NEW ONE BEGINS FROM THE SAME START", cx + 30, cy + 97, -1, { align: "center", width: 260, contrast: true });
+        button(cx + 50, cy + 116, 100, 20, "RESTART", () => this.retry(), 16 * 2 + 3);
+        button(cx + 170, cy + 116, 100, 20, "CANCEL", () => (this.dialog = null));
         break;
       }
       case "nextturn": {
@@ -1075,8 +1098,15 @@ export class BattleScreen {
           drawText(s, A.small, `${p.name.toUpperCase()}${p.surrendered ? " (SURRENDERED)" : ""}`, cx + 40, cy + 84 + i * 9, teamColor(i) - 1, { contrast: true });
           void fallen;
         });
-        button(cx + 60, cy + 146, 90, 18, "VIEW MAP", () => (this.dialog = null));
-        button(cx + 170, cy + 146, 90, 18, "EXIT", () => this.onExit());
+        if (this.replayAllowed() || this.challengeId) button(cx + 60, cy + 124, 200, 16, this.challengeId ? "SHARE THIS CHALLENGE" : "SHARE AS CHALLENGE", () => this.share());
+        if (this.replayAllowed()) {
+          button(cx + 32, cy + 146, 76, 18, "VIEW MAP", () => (this.dialog = null));
+          button(cx + 122, cy + 146, 76, 18, "RETRY", () => this.retry(), 16 * 2 + 3);
+          button(cx + 212, cy + 146, 76, 18, "EXIT", () => this.onExit());
+        } else {
+          button(cx + 60, cy + 146, 90, 18, "VIEW MAP", () => (this.dialog = null));
+          button(cx + 170, cy + 146, 90, 18, "EXIT", () => this.onExit());
+        }
         break;
       }
     }
@@ -1710,6 +1740,46 @@ export class BattleScreen {
     const w = textWidth(this.assets.small, "BACK TO MATCHES") + 16;
     return { x: this.vw - w - 4, y: 4, w, h: 16 };
   }
+  private retryButtonRect() {
+    if (!this.replayAllowed()) return null;
+    const e = this.exitButtonRect();
+    const w = textWidth(this.assets.small, "RETRY") + 16;
+    return { x: e.x - w - 4, y: 4, w, h: 16 };
+  }
+
+  /** The battle is over, or your squad is out of it. */
+  private outOfIt(): boolean {
+    const b = this.b;
+    return !!b && (b.phase === Phase.FINISHED || !!b.players[this.you]?.eliminated);
+  }
+
+  /**
+   * Whether you may play this battle again from its start now (the server has the last word): once you're out of
+   * it, or while nobody but the AI fights you; a retry also gives up a battle still on, so not with teammates in it.
+   */
+  private replayAllowed(retry = false): boolean {
+    const b = this.b;
+    if (!b || !this.replayable) return false;
+    if (this.outOfIt()) return true;
+    if (b.players.some((p, i) => i !== this.you && !p.eliminated && !p.userId.startsWith("bot:"))) return false;
+    return !retry || !membersOf(b.players[this.you]).some((m) => m.userId !== this.me.id && !m.observer);
+  }
+
+  /** Starts over from the beginning of the battle, in a new match (a battle still on is given up). */
+  private async retry() {
+    try {
+      const r = await api<{ id: string }>(`/api/matches/${this.matchId}/retry`, { body: {} });
+      this.go(`/m/${r.id}`);
+    } catch (e) {
+      this.dialog = null;
+      this.say((e as Error).message);
+    }
+  }
+
+  private share() {
+    this.dialog = null;
+    shareDialog(this.root, this.matchId, this.b?.settings.name ?? "", this.challengeId, this.go);
+  }
 
   private inHud(x: number, y: number) {
     const ix = Math.floor((this.vw - ICONS_W) / 2), iy = this.vh - ICONS_H;
@@ -1769,9 +1839,10 @@ export class BattleScreen {
       if (this.dialog?.kind === "menu") this.dialog = null;
       return;
     }
-    if (this.b?.phase === Phase.FINISHED) {
-      const r = this.exitButtonRect();
+    if (this.outOfIt()) {
+      const r = this.exitButtonRect(), rr = this.retryButtonRect();
       if (inRect(x, y, r.x, r.y, r.w, r.h)) return this.onExit();
+      if (rr && inRect(x, y, rr.x, rr.y, rr.w, rr.h)) return this.retry();
     }
     const ai = this.hostAiRect;
     if (ai && inRect(x, y, ai.x, ai.y, ai.w, ai.h)) {

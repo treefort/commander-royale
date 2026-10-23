@@ -9,7 +9,8 @@ import { settingsReference } from "../shared/settings-docs.ts";
 let reference = "";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
-  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots } from "./game.ts";
+  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots,
+  retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = join(import.meta.dir, "..");
@@ -125,6 +126,22 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
           headers: { "content-type": "application/json", "content-disposition": "attachment; filename=match-records.json" },
         });
       }
+      // challenges: a battle's start shared for anyone to play
+      const c = path.match(/^\/api\/challenges(?:\/([A-Za-z0-9]+))?(?:\/(play))?$/);
+      if (c) {
+        if (!user) return err("Sign in first", 401);
+        const [, cid, play] = c;
+        if (!cid && req.method === "GET") return json(listChallenges(user));
+        if (cid && !play && req.method === "GET") {
+          const st = challengeState(cid, user);
+          return st ? json(st) : err("Challenge not found", 404);
+        }
+        if (cid && play && req.method === "POST") {
+          const r = acceptChallenge(cid, user);
+          return r.error ? err(r.error) : json(r);
+        }
+        return err("Not found", 404);
+      }
       const m = path.match(/^\/api\/matches(?:\/([A-Za-z0-9]+))?(?:\/(\w+))?$/);
       if (m) {
         const [, id, action] = m;
@@ -166,6 +183,14 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
               break;
             }
             case "squad": e = joinSquad(id, user, String((await body<{ leader?: string }>(req)).leader ?? "")); break;
+            case "retry": {
+              const r = retryMatch(id, user);
+              return r.error ? err(r.error) : json(r);
+            }
+            case "challenge": {
+              const r = shareChallenge(id, user, (await body<{ title?: string }>(req)).title);
+              return r.error ? err(r.error) : json(r);
+            }
             case "removebot": e = removeBot(id, user, String((await body<{ botId?: string }>(req)).botId ?? "")); break;
             default: return err("Unknown action", 404);
           }

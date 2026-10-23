@@ -9,6 +9,8 @@ import { itemRule } from "../rules/index.ts";
 import { resolveMapBlocks, type MatchSettings, type Recruit, type Loadout, type BotTuning, type SquadMember } from "../protocol.ts";
 import { dealUnits } from "./coop.ts";
 import { deployAll, newLandingZone } from "./deploy.ts";
+import { RNG } from "./rng.ts";
+import { newStats } from "./stats.ts";
 
 export interface SetupPlayer {
   userId: string;
@@ -125,6 +127,33 @@ export function joinBattle(b: Battle, p: SetupPlayer, pool: Recruit[], ev: Battl
   recalculateAllFOV(b);
   ev.msg("STR_JOINED_BATTLE", ev.all(), p.name);
   return seat;
+}
+
+/**
+ * A battle's starting point (as `createBattle` left it), made ready to play again by one person: `player` takes over
+ * the side in `seat` and commands all of its units, every other side is played by the AI (people's squads by the
+ * computer squads' default AI), and the dice are new (`seed`). Same map, units, gear, positions and turn order.
+ */
+export function replayBattle(b: Battle, seat: number, player: { userId: string; name: string }, seed: number): Battle {
+  const s = b.settings;
+  // one person, nobody watching: no game master, and nobody's units handed to the AI while they're away
+  b.settings = { ...s, coop: { ...s.coop, afkAI: false }, ...(s.mode === "coop" ? { scenario: { ...s.scenario, gmPlays: true } } : {}) };
+  b.players.forEach((p, i) => {
+    if (i === seat) {
+      p.userId = player.userId;
+      // a free-for-all squad goes by its commander's name; a co-op team keeps the scenario's
+      if (s.mode !== "coop") p.name = player.name;
+      p.members = [{ userId: player.userId, name: player.name, locked: false, afk: false, away: false }];
+      delete p.ai;
+    } else if (p.members) {
+      p.userId = `bot:standin:${i}`;
+      delete p.members;
+    }
+  });
+  for (const u of b.units) delete u.controller;
+  b.rng = new RNG(seed);
+  b.stats = newStats();
+  return b;
 }
 
 export { itemRule };

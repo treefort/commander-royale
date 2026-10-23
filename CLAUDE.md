@@ -97,6 +97,11 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   watching GM (`extractView(..., omniscient)`, `h.gmSent`). A scenario battle is seat 0 = the team (all players'
   loadouts merged, `controller` = hirer, GM as `observer` member), seat 1 = `bot:scenario:<id>` with `b.waves`; the
   enemy force is rebuilt deterministically from settings + seed (`buildEnemyForce`) for the match record.
+- Retries/challenges (2026-10-22): `startMatch` stores the battle as created (`matches.start_battle`) plus each
+  seat's loadout (`start_loadouts`, used for the match record). `replayBattle` (setup.ts) gives one seat to a person
+  and every other side to the AI, with new dice; `playFrom` (game.ts) makes a `solo` match from it (no joining; it
+  ends when the person's side is out). Challenges copy the start into the `challenges` table; each go is a row in
+  `challenge_attempts` (filled in by `finishAttempt`). `replayBlocked` stops replays while other people still fight.
 - Engine changes must keep the fog of war intact: clients only get what `extractView` sends; never leak enemy
   positions/inventories. The AI uses the authoritative battle but only "knows" enemies it has seen (OpenXcom
   rules, including its round-20 cheat).
