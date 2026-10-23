@@ -9,7 +9,7 @@ import { settingsReference } from "../shared/settings-docs.ts";
 let reference = "";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
-  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots,
+  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots, saveMemories,
   retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -229,4 +229,10 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
 
 setInterval(tickTimers, 3000);
 resumeBots();
+// a restart (a deploy: systemd stops us with SIGTERM) keeps what everyone has seen out of sight
+for (const sig of ["SIGTERM", "SIGINT"] as const)
+  process.on(sig, () => {
+    saveMemories();
+    process.exit(0);
+  });
 console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}${passkeyRequired() ? " — passkey required to play" : ""}`);

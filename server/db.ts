@@ -105,6 +105,8 @@ for (const sql of [
   // played again from a starting point by one person (nobody else can join); and the challenge it's a go at
   "ALTER TABLE matches ADD COLUMN solo INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE matches ADD COLUMN challenge_id TEXT",
+  // what each side had last seen out of sight (view.ts SavedMemory[]), kept over a server restart until reloaded
+  "ALTER TABLE matches ADD COLUMN view_memory TEXT",
 ]) {
   try {
     db.exec(sql);
@@ -114,7 +116,7 @@ for (const sql of [
 }
 
 export interface UserRow { id: string; google_sub: string | null; email: string | null; name: string; picture: string | null; created: number; unlocked?: number }
-export interface MatchRow { id: string; owner: string; settings: string; status: string; seed: number; pool: string; battle: string | Uint8Array | null; turn_deadline: number | null; created: number; updated: number; start_battle: Uint8Array | null; start_loadouts: string | null; solo: number; challenge_id: string | null }
+export interface MatchRow { id: string; owner: string; settings: string; status: string; seed: number; pool: string; battle: string | Uint8Array | null; turn_deadline: number | null; created: number; updated: number; start_battle: Uint8Array | null; start_loadouts: string | null; solo: number; challenge_id: string | null; view_memory: string | null }
 export interface PlayerRow { match_id: string; user_id: string; seat: number; name: string; loadout: string | null; ready: number; squad_of: string | null; ai: string | null }
 
 export function randomId(len = 12): string {

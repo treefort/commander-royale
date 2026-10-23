@@ -128,4 +128,9 @@ test("retries and challenges on the server", async () => {
   expect(game.lobbyState(again, cat)!.battle!.over).toBe(true);
   expect(battleOf(again).players[seat].surrendered).toBe(true);
   expect(game.challengeState(ch.id!, cat)!.attempts.map((a) => [a.matchId, !!a.finished])).toEqual([[go, true], [again, true], [third, false]]);
+  // shutting down keeps what each side has seen, for battles still on (rules.test covers what it holds)
+  game.saveMemories();
+  const memory = (mid: string) => (db.query("SELECT view_memory FROM matches WHERE id = ?").get(mid) as { view_memory: string | null }).view_memory;
+  expect(JSON.parse(memory(third)!).length).toBe(battleOf(third).players.length);
+  expect(memory(again)).toBeNull();
 });

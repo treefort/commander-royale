@@ -19,7 +19,7 @@ import { buildEnemyForce } from "../shared/rules/scenario.ts";
 import { buildSquad, STRATEGIES, type Strategy } from "../shared/rules/squads.ts";
 import { RNG } from "../shared/engine/rng.ts";
 import { recalcAllLighting } from "../shared/engine/tileengine.ts";
-import { extractView, newSentState, type SentState } from "../shared/engine/view.ts";
+import { extractView, newSentState, saveMemory, restoreMemory, type SentState, type SavedMemory } from "../shared/engine/view.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
 
 export const GAME_DIR = process.env.GAME_DIR ?? join(import.meta.dir, "..", "gamedata");
@@ -574,10 +574,37 @@ function loadHost(id: string): Host | null {
   recalcAllLighting(battle);
   h = newHost(id, battle);
   hosts.set(id, h);
+  // what everyone had seen before the server restarted (see saveMemories); used once, then it goes stale
+  if (m.view_memory) {
+    try {
+      (JSON.parse(m.view_memory) as SavedMemory[]).forEach((mem, seat) => {
+        if (seat < h!.sent.length) h!.sent[seat] = restoreMemory(battle, seat, mem);
+      });
+    } catch (e) {
+      console.error("restoring view memory failed", id, e);
+    }
+    db.query("UPDATE matches SET view_memory = NULL WHERE id = ?").run(id);
+  }
   // nobody is connected yet: people who stay away get the AI (if the match uses it) after the grace period
   scheduleAwayCheck(h);
   runAI(h);
   return h;
+}
+
+/**
+ * On shutdown: what each side of every running battle last saw of ground now out of their sight. It only lives in
+ * memory (`Host.sent`); without this a restart (a deploy) would make people's maps forget it when they reload.
+ */
+export function saveMemories() {
+  for (const h of hosts.values()) {
+    if (h.battle.phase !== Phase.PLAYING) continue;
+    try {
+      const mem = h.sent.map((s, seat) => saveMemory(h.battle, seat, s));
+      db.query("UPDATE matches SET view_memory = ? WHERE id = ?").run(JSON.stringify(mem), h.id);
+    } catch (e) {
+      console.error("saving view memory failed", h.id, e);
+    }
+  }
 }
 
 function seatOf(h: Host, userId: string): number {

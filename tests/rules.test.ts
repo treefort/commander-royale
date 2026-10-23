@@ -8,8 +8,9 @@ import { RNG } from "../shared/engine/rng.ts";
 import { createUnit, giveItem, spawnGroundItem } from "../shared/engine/units.ts";
 import { GameRules } from "../shared/engine/actions.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
-import { recalcAllLighting, recalculateAllFOV } from "../shared/engine/tileengine.ts";
-import { extractView, newSentState } from "../shared/engine/view.ts";
+import { recalcAllLighting, recalculateAllFOV, canSeeTile } from "../shared/engine/tileengine.ts";
+import { extractView, newSentState, saveMemory, restoreMemory } from "../shared/engine/view.ts";
+import { serializeBattle, deserializeBattle } from "../shared/engine/serialize.ts";
 import { SOLDIER, unitRule } from "../shared/rules/index.ts";
 
 /** A flat 30x30 field of desert sand, 2 levels high. */
@@ -99,6 +100,37 @@ test("a grenade left to go off at the end of the turn is seen to explode by its 
   expect(boom.vis & 1).toBe(1);
   // what it did to the unseen enemy stays hidden
   expect(res.events.list.filter((r) => r.e.t === "damage").every((r) => !(r.vis & 1))).toBe(true);
+});
+
+test("what a player saw on ground now out of sight survives a server restart", () => {
+  const b = field();
+  const u = createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 2, y: 2, z: 0 }, 2);
+  createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 28, y: 28, z: 0 }, 6);
+  const t = b.idx(6, 2, 0);
+  const loot = [spawnGroundItem(b, "STR_RIFLE", t), spawnGroundItem(b, "STR_GRENADE", t)];
+  start(b);
+  const sent = newSentState();
+  const seen = (v: ReturnType<typeof extractView>) => v.ground.find(([g]) => g === t)?.[1].map((i) => i.type) ?? [];
+  expect(seen(extractView(b, 0, sent, true))).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  // looking the other way, the loot is blown up; and a smoke cloud drifts over a tile out of sight
+  u.dir = 6;
+  expect(canSeeTile(b, 0, t)).toBe(false);
+  for (const it of loot) b.removeItem(it);
+  const far = b.idx(9, 2, 0);
+  b.smoke[far] = 9;
+  expect(seen(extractView(b, 0, sent, true))).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  // the server restarts: the battle and the player's memory are saved, and both come back
+  const mem = JSON.parse(JSON.stringify(saveMemory(b, 0, sent)));
+  const again = deserializeBattle(serializeBattle(b), files);
+  const restored = restoreMemory(again, 0, mem);
+  const v = extractView(again, 0, restored, true);
+  expect(seen(v)).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  expect(v.tiles.find((r) => r[0] === far)?.[6] ?? 0).toBe(0);
+  // without it, the reload would have forgotten them
+  expect(seen(extractView(again, 0, newSentState(), true))).toEqual([]);
+  // once seen again, it's the truth
+  again.units.find((x) => x.id === u.id)!.dir = 2;
+  expect(extractView(again, 0, restored, false).ground.find(([g]) => g === t)?.[1]).toEqual([]);
 });
 
 test("reaction fire: a watcher with a loaded rifle snap-fires at an enemy walking into view", () => {

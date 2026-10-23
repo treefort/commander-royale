@@ -98,6 +98,59 @@ function allSeen(b: Battle): Uint8Array {
   return a;
 }
 
+/** A tile as a player is sent it: [tile, p0, p1, p2, p3, fire, smoke, doorOpen, discovered]. */
+function tileRow(b: Battle, i: number, d: number): number[] {
+  return [i, b.parts[i * 4], b.parts[i * 4 + 1], b.parts[i * 4 + 2], b.parts[i * 4 + 3], b.fire[i], b.smoke[i], b.doorOpen[i], d];
+}
+function groundList(b: Battle, t: number): ItemView[] {
+  return b.itemsOnTile(t).map((id) => itemView(b, b.item(id)!, false));
+}
+
+/**
+ * The part of a player's memory (what they were last sent) that differs from the battle as it is: the ground and
+ * terrain they last saw where it has changed out of their sight. Kept with the saved battle, it survives a server
+ * restart (`restoreMemory`); without it a player reloading afterwards would lose what they'd seen.
+ */
+export interface SavedMemory {
+  tiles: [number, string][];
+  /** "" for ground last seen empty */
+  ground: [number, string][];
+}
+
+export function saveMemory(b: Battle, player: number, sent: SentState): SavedMemory {
+  const disc = b.discovered[player];
+  const tiles: [number, string][] = [];
+  for (const [i, key] of sent.tiles) if (disc[i] && key !== tileRow(b, i, disc[i]).join(",")) tiles.push([i, key]);
+  const ground: [number, string][] = [];
+  const groundTiles = new Set(sent.ground.keys());
+  for (const it of b.items) if (it.tile >= 0) groundTiles.add(it.tile);
+  for (const t of groundTiles) {
+    if (!(disc[t] & 4)) continue;
+    const list = groundList(b, t);
+    const now = list.length ? JSON.stringify(list) : "";
+    const seen = sent.ground.get(t) ?? "";
+    if (seen !== now) ground.push([t, seen]);
+  }
+  return { tiles, ground };
+}
+
+/** A player's memory after a restart: what they've discovered as it is now, except where `saved` says otherwise. */
+export function restoreMemory(b: Battle, player: number, saved: SavedMemory): SentState {
+  const disc = b.discovered[player];
+  const sent = newSentState();
+  for (let i = 0; i < b.size; i++) if (disc[i]) sent.tiles.set(i, tileRow(b, i, disc[i]).join(","));
+  for (const it of b.items) {
+    if (it.tile < 0 || !(disc[it.tile] & 4) || sent.ground.has(it.tile)) continue;
+    sent.ground.set(it.tile, JSON.stringify(groundList(b, it.tile)));
+  }
+  for (const [i, key] of saved.tiles) sent.tiles.set(i, key);
+  for (const [t, key] of saved.ground) {
+    if (key) sent.ground.set(t, key);
+    else sent.ground.delete(t);
+  }
+  return sent;
+}
+
 /**
  * What `player` may know. `omniscient` is a co-op scenario's game master watching from that side: the whole
  * map and every unit (only ever sent to them).
@@ -111,7 +164,7 @@ export function extractView(b: Battle, player: number, sent: SentState, full: bo
     if (!d) continue;
     // the game master's whole map: open air needn't be sent (unless something there changed)
     if (omniscient && b.isVoid(i) && !b.fire[i] && !sent.tiles.has(i)) continue;
-    const row = [i, b.parts[i * 4], b.parts[i * 4 + 1], b.parts[i * 4 + 2], b.parts[i * 4 + 3], b.fire[i], b.smoke[i], b.doorOpen[i], d];
+    const row = tileRow(b, i, d);
     const key = row.join(",");
     const prev = sent.tiles.get(i);
     if (prev !== undefined && prev !== key && !sees(i)) {
@@ -147,7 +200,7 @@ export function extractView(b: Battle, player: number, sent: SentState, full: bo
   for (const t of sent.ground.keys()) groundTiles.add(t);
   for (const t of groundTiles) {
     if (!(disc[t] & 4)) continue;
-    const list = b.itemsOnTile(t).map((id) => itemView(b, b.item(id)!, false));
+    const list = groundList(b, t);
     const key = JSON.stringify(list);
     const prev = sent.ground.get(t);
     if (prev !== key && !sees(t)) {
