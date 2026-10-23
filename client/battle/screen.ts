@@ -98,7 +98,7 @@ export class BattleScreen {
   hud: HudState = { reserve: "none", reserveKneel: false, pressed: null, showLayers: false, warning: "", warningTime: 0, tooltip: "" };
   queue: { events: BattleEvent[]; view: PlayerView; deadline: number | null; by: string }[] = [];
   processing = false;
-  /** the update being animated is someone else's (a co-op teammate's): it doesn't hold up your own orders */
+  /** the update being animated doesn't hold up your orders: a co-op teammate's, or a walk of your own */
   processingOthers = false;
   /** the match creator: may have the AI play for whoever holds up a turn */
   isHost = false;
@@ -110,7 +110,10 @@ export class BattleScreen {
   busy = false;
   seq = 0;
   pending = new Map<number, (r: { ok: boolean; error?: string; private?: any }) => void>();
-  waitingUpdate: (() => void) | null = null;
+  /** our orders whose updates haven't played out yet, oldest first (the server answers them in order) */
+  private ownWaiters: { done: () => void; early: boolean }[] = [];
+  /** units walking on orders that haven't played out yet: they take their next order once they've arrived */
+  private walking = new Map<number, number>();
   action: { kind: ActionKind; hand: Hand | "innate"; waypoints: Pos[] } | null = null;
   pathTarget: Pos | null = null;
   dialog: Dialog | null = null;
@@ -242,7 +245,8 @@ export class BattleScreen {
     this.generation++;
     this.queue.splice(0, stale);
     this.pending.clear();
-    this.waitingUpdate = null;
+    this.ownWaiters = [];
+    this.walking.clear();
     this.busy = false;
     this.st.anims.clear();
     this.st.poses.clear();
@@ -266,56 +270,75 @@ export class BattleScreen {
   }
 
   private send(cmd: Command): Promise<{ ok: boolean; error?: string; private?: any }> {
-    return this.sendMsg({ t: "cmd", cmd });
+    // a unit still walking takes its next order once it has arrived (until then we only know where it was)
+    if ("unit" in cmd && typeof cmd.unit === "number" && this.walking.has(cmd.unit)) return Promise.resolve({ ok: false, error: "STR_BUSY" });
+    // a walk lets you go on giving the other units orders while it plays out, like the original game
+    return this.sendMsg({ t: "cmd", cmd }, cmd.c === "move" ? cmd.unit : undefined);
   }
 
-  /** Sends a message that gets a result (and, normally, an update of ours) back. */
-  private sendMsg(msg: Record<string, unknown>): Promise<{ ok: boolean; error?: string; private?: any }> {
+  /**
+   * Sends a message that gets a result (and, normally, an update of ours) back. Input waits until that update has
+   * played out, except for a walk (`walker`: the unit): then only that unit waits, and the promise resolves with
+   * the result.
+   */
+  private sendMsg(msg: Record<string, unknown>, walker?: number): Promise<{ ok: boolean; error?: string; private?: any }> {
     // one command at a time: the server resolves each action fully before the next
     if (this.busy) return Promise.resolve({ ok: false, error: "STR_BUSY" });
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.warn("STR_NOT_CONNECTED");
       return Promise.resolve({ ok: false, error: "STR_NOT_CONNECTED" });
     }
+    const early = walker !== undefined;
     return new Promise((resolve) => {
       const seq = ++this.seq;
-      this.busy = true;
+      if (early) this.walking.set(walker, (this.walking.get(walker) ?? 0) + 1);
+      else this.busy = true;
       let gotResult: { ok: boolean; error?: string; private?: any } | null = null;
       let gotUpdate = false;
       const finish = () => {
-        if (gotResult && gotUpdate) {
-          this.busy = false;
+        if (gotResult && (gotUpdate || early)) {
+          if (!early) this.busy = false;
           resolve(gotResult);
         }
       };
-      this.pending.set(seq, (r) => {
-        gotResult = r;
-        // turned away before anything happened: no update follows
-        if ((r as { noUpdate?: boolean }).noUpdate) gotUpdate = true;
-        if (!r.ok && r.error) this.warn(r.error);
-        finish();
-      });
-      this.waitingUpdate = () => {
-        gotUpdate = true;
-        finish();
+      const waiter = {
+        early,
+        done: () => {
+          if (gotUpdate) return;
+          gotUpdate = true;
+          if (early) {
+            const n = (this.walking.get(walker) ?? 1) - 1;
+            if (n > 0) this.walking.set(walker, n);
+            else this.walking.delete(walker);
+          }
+          finish();
+        },
       };
-      // never lock the UI forever if something goes missing
-      const timer = setTimeout(() => {
-        if (!gotResult || !gotUpdate) {
-          this.pending.delete(seq);
-          this.waitingUpdate = null;
-          this.busy = false;
-          resolve(gotResult ?? { ok: false, error: "STR_TIMEOUT" });
-        }
-      }, 15000);
+      this.ownWaiters.push(waiter);
+      // no update coming after all: stop waiting for one
+      const giveUp = (r: { ok: boolean; error?: string }) => {
+        this.pending.delete(seq);
+        const i = this.ownWaiters.indexOf(waiter);
+        if (i >= 0) this.ownWaiters.splice(i, 1);
+        gotResult ??= r;
+        waiter.done();
+      };
+      this.pending.set(seq, (r) => {
+        // answered: the update is on its way right behind (however long the updates ahead of it take to play)
+        clearTimeout(timer);
+        gotResult = r;
+        if (!r.ok && r.error) this.warn(r.error);
+        // turned away before anything happened: no update follows
+        if ((r as { noUpdate?: boolean }).noUpdate) giveUp(r);
+        else finish();
+      });
+      // never lock the UI forever if the answer goes missing
+      const timer: ReturnType<typeof setTimeout> = setTimeout(() => giveUp({ ok: false, error: "STR_TIMEOUT" }), 15000);
       try {
         this.ws!.send(JSON.stringify({ ...msg, seq }));
       } catch {
         clearTimeout(timer);
-        this.pending.delete(seq);
-        this.waitingUpdate = null;
-        this.busy = false;
-        resolve({ ok: false, error: "STR_NOT_CONNECTED" });
+        giveUp({ ok: false, error: "STR_NOT_CONNECTED" });
       }
     });
   }
@@ -330,7 +353,7 @@ export class BattleScreen {
         const wasMyTurn = this.myTurn();
         const ours = u.by === this.me.id;
         this.incoming = u.view;
-        this.processingOthers = !ours;
+        this.processingOthers = !ours || !!this.ownWaiters[0]?.early;
         // something happens where we can see it (shots at us, a move into view...): never play it behind the
         // "waiting for..." screen
         if (!ours && this.dialog?.kind === "nextturn" && this.dialog.title === "TURN OVER" && u.events.some((e) => e.t !== "msg")) this.dialog = null;
@@ -353,11 +376,7 @@ export class BattleScreen {
         }
         this.refreshPath();
         // only the update our own order caused completes it (teammates act at the same time)
-        if (ours) {
-          const w = this.waitingUpdate;
-          this.waitingUpdate = null;
-          w?.();
-        }
+        if (ours) this.ownWaiters.shift()?.done();
         if (!wasMyTurn && this.myTurn()) {
           // the turn came back round: a quiet chime, in case you're looking at another tab
           playTurnChime();
@@ -494,7 +513,8 @@ export class BattleScreen {
         u.dir = e.dir;
         if (!this.onScreen(e.to) && (u.owner !== this.you || u.id === this.st.selected)) this.centerOn(e.to);
         this.st.camera.z = Math.max(this.st.camera.z, Math.min(e.to.z, b.sz - 1));
-        if ((u.owner === this.you && this.mayCommand(u)) || u.id === this.st.selected) this.st.camera.z = e.to.z;
+        // (one of yours walking while you give someone else orders leaves your view where it is)
+        if (u.id === this.st.selected) this.st.camera.z = e.to.z;
         const anim = { from: e.from, to: e.to, phase: 0, end };
         this.st.anims.set(u.id, anim);
         const stepMs = fast ? 8 : 28;
