@@ -373,7 +373,7 @@ export class MapRenderer {
         const bob = [0, 1, 2, 1, 0, 1, 2, 1][st.animFrame];
         s.blit(ARROW, cx - 4, cy - 9 + bob);
       } else {
-        const color = st.teamColors[u.owner] ?? 16;
+        const color = st.teamColors[u.owner % st.teamColors.length] ?? 16;
         s.blit(this.marker(color), cx - 2, cy - 6);
       }
     }

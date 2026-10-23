@@ -1,7 +1,7 @@
 # X-COM Battlescape (multiplayer) — notes for Claude sessions
 
 A browser port of the X-COM: UFO Defense **battlescape only** (no geoscape): free-for-all multiplayer matches
-between 2–8 squads (people and/or AI), asynchronous turns, Google sign-in, running on Bun. The rules are ported
+between any number of squads (people and/or AI; joinable mid-battle), asynchronous turns, Google sign-in, running on Bun. The rules are ported
 from OpenXcom's faithful reimplementation; graphics/sounds/music come from the user's own GOG copy. Read
 `README.md` for the player-facing feature list, setup, controls and the balance/stats tools — this file is
 about how to work on it.
@@ -11,7 +11,23 @@ about how to work on it.
 - Game data: full GOG install at `C:\Program Files (x86)\GOG Galaxy\Games\X-COM UFO Defense`, copied to
   `gamedata/` (gitignored; the repo's `xcom/` folder is only the old demo — ignore it). Assets are served by our
   own server to signed-in players only (private deployment for friends).
-- Free-for-all only, last squad standing wins. Sequential async turns, optional turn timer.
+- Free-for-all between squads, last squad standing wins. Sequential async turns, optional turn timer.
+- No player cap (2026-10-22): `maxPlayers` is gone. Anyone can join a battle in progress (or deploy late if not
+  ready at the start): `joinBattle` (setup.ts) adds a side last in turn order with a new edge landing zone
+  (`newLandingZone`), or adds a person to an existing side. Map size defaults to auto (`mapBlocks: 0`, settled at
+  start). `MAX_SIDES` = 30 is only the technical limit of the 32-bit event visibility masks.
+- Training (2026-10-22): soldiers can be trained while hiring, in named courses (`COURSES` in catalog.ts, up to
+  `MAX_SESSIONS` each, capped at the original stat caps), priced at the value model's price increase × 1.25
+  (`TRAINING_PREMIUM`, owner's choice: a natural veteran stays slightly better value), $1,000 a session minimum.
+  `SquadMember.training`; `trainedRecruit` applies it at deployment.
+- Co-op scenario mode (2026-10-22, `settings.mode = "coop"`): the creator is a game master who designs the enemy
+  (groups by type/count/weapon/placement/arrival round, AI tactics) and the battlefield; 1–10 people form one team,
+  each filling `seatsPerPlayer` Skyranger seats (large units take 4) and commanding those units; the team lands
+  together or apart (each person in their own zone, `teamStart`). Turn ends on lock-in (default), a daily time, or the timer;
+  offline players' units stay put. A GM who doesn't play watches everything (omniscient view) and commands nothing.
+- Co-op (2026-10-22): up to 10 people can share one squad, each commanding the units dealt to them, all acting
+  at once on its turn; the turn ends when everyone locks in (or only on the timer). AFK/offline people's units
+  are played by the AI. Computer squads have tunable AI (aggression, memory, explosives, cheat round, strength).
 - Hire pool mixes humans, every alien race/rank and tanks, priced by capability; any unit except tanks carries
   items (yes, a Chryssalid with a grenade). Picked-up gear is usable at once (no research).
 - In: psionics/mind control, armor, HWPs. Out: civilians, morale/panic/berserk.
@@ -26,10 +42,12 @@ about how to work on it.
   helpers and previews): `state.ts` (Battle/Unit/Item), `tileengine.ts` (voxel LOS/LOF, lighting, explosions,
   doors, gravity), `pathfinding.ts`, `actions.ts` (`GameRules.apply` — every command goes through here),
   `mapgen.ts`, `setup.ts`, `view.ts` (per-player fog-of-war views/diffs), `ai.ts` (OpenXcom AIModule port),
+  `coop.ts` (co-op squads: who controls which unit, lock-ins, AFK — the engine itself only knows squads),
+  `deploy.ts` (placing units: landing zone, UFO, middle, scattered; also reinforcement waves),
   `stats.ts`/`record.ts` (per-unit match statistics), `serialize.ts`.
 - `shared/rules/` — `generated.json` (from `tools/convert-rules.ts`, OpenXcom xcom1 rulesets), `catalog.ts`
   (prices, pool generation, loadout validation, budget guide), `value.ts` (price model), `calibration.json`
-  (measured price corrections), `squads.ts` (bot hiring strategies).
+  (measured price corrections), `squads.ts` (bot hiring strategies), `scenario.ts` (co-op scenario enemy forces).
 - `shared/protocol.ts` — `MatchSettings` + `sanitizeSettings` (all settings pass through it), recruits, loadouts.
 - `server/` — Bun.serve (`index.ts` routes), Google OAuth + dev login (`auth.ts`), SQLite (`db.ts`), lobby,
   battle hosting, websocket, bots, match records (`game.ts`).
@@ -71,6 +89,19 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   sources. Prefer the Edit tool for exact multi-line edits; if scripting, normalize `\r\n` first.
 - **Bun/JavaScriptCore does proper tail calls**: accidental self-recursion hangs forever instead of throwing a
   stack overflow (this froze the server once via `armorPrice`). Watch for it after search-and-replace edits.
+- Co-op lives in the server + `coop.ts`: a battle "player" is a squad; `PlayerState.members` are its people,
+  `Unit.controller` who commands a unit. Server-side checks (`mayCommand`) gate commands; "endturn" from a member
+  is a lock-in toggle. Updates carry `by` (who acted) so a client only waits for its own; rejected commands reply
+  `noUpdate`. Bot and AFK play share `runAI` (`turnSteps(rules, only)` plays a subset without ending the turn).
+  `publish` builds one view diff per side (`SentState` is per seat — never extract per socket) plus one for a
+  watching GM (`extractView(..., omniscient)`, `h.gmSent`). A scenario battle is seat 0 = the team (all players'
+  loadouts merged, `controller` = hirer, GM as `observer` member), seat 1 = `bot:scenario:<id>` with `b.waves`; the
+  enemy force is rebuilt deterministically from settings + seed (`buildEnemyForce`) for the match record.
+- Retries/challenges (2026-10-22): `startMatch` stores the battle as created (`matches.start_battle`) plus each
+  seat's loadout (`start_loadouts`, used for the match record). `replayBattle` (setup.ts) gives one seat to a person
+  and every other side to the AI, with new dice; `playFrom` (game.ts) makes a `solo` match from it (no joining; it
+  ends when the person's side is out). Challenges copy the start into the `challenges` table; each go is a row in
+  `challenge_attempts` (filled in by `finishAttempt`). `replayBlocked` stops replays while other people still fight.
 - Engine changes must keep the fog of war intact: clients only get what `extractView` sends; never leak enemy
   positions/inventories. The AI uses the authoritative battle but only "knows" enemies it has seen (OpenXcom
   rules, including its round-20 cheat).
@@ -78,9 +109,13 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
   psi — those multipliers are floored at 0.2). Real-player data from `match_records` should drive the next
   rebalance; don't hand-tweak calibration without re-running duels.
 - Commit/push/deploy only when the user asks. Git: `master`, remote `origin` = github.com/treefort/xcom-battlescape (**private**). Never commit the
-  original game's files: `gamedata/` (incl. rendered music) stays gitignored, as do `data/` and `tools/.cache/`. Deployment (`python deploy/deploy-xcom.py --deploy --credentials <client.json> [--admin-email ...]`,
-  target xcom.evanbooth.com, port 4320) has **never been run**: it's waiting on the user's Google OAuth
-  web-client JSON and an explicit go-ahead.
+  original game's files: `gamedata/` (incl. rendered music) stays gitignored, as do `data/` and `tools/.cache/`. **Deployed** 2026-10-22 to https://xcom.evanbooth.com
+  (port 4320, `/opt/xcom/releases/<stamp>` + `current`, `xcom.service`, secrets in `/etc/xcom/environment`, data in
+  `/var/lib/xcom/xcom.sqlite`). Routine deploy (the user ships small changes often; keep it fast):
+  `bun test && bun run build && python deploy/deploy-xcom.py --deploy` — no credentials needed, keeps the server's
+  secrets. `--credentials <json> --passkey <...>` rewrites the secrets (both together); `--setup` redoes nginx /
+  certificate / unit; `--upload-gamedata` re-sends game files. Signing in is Google-only; playing needs the
+  `PASSKEY` (entered once per account, `server/access.ts`); sign-ins and passkey attempts are in `access_log`.
 - The droplet is shared with other sites: be conservative with nginx/system changes. SSH credentials live in a
   local file referenced by `~/Documents/ai/hosting/AGENTS.md` — treat it as secret; never print or commit it.
 
@@ -89,5 +124,7 @@ bun tools/render-map.ts out.png URBAN 5 none day  # render a whole map offline
 Playable end to end locally: lobby (hire/equip shop with drag-and-drop, budget bar, AI squads, settings reuse,
 host message, random environment/time), battlescape (original rules, fog of war, reaction fire, psi, explosives,
 blaster waypoints, supply drops/crates, minimap, exposure readout on move preview, music + sfx toggles, turn
-chime), match statistics + reports, bot tournaments and price calibration. Optional/not done: HUD rank icons,
+chime), match statistics + reports, bot tournaments and price calibration, co-op squads (lock-in turns, AFK →
+AI, unit hand-over) and per-bot AI settings (branch `feature/coop-squads`), co-op scenario mode with a game master
+(branch `feature/coop-scenarios`, built on the former). Optional/not done: HUD rank icons,
 alien UFOpaedia portraits, a TFTD-style narrower damage roll (offered, not requested).

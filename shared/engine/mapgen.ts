@@ -16,6 +16,8 @@ interface Placed {
 export interface GeneratedMap {
   battle: Battle;
   zones: { x: number; y: number; w: number; h: number }[];
+  /** the landed UFO's footprint in tiles */
+  ufo: { x: number; y: number; w: number; h: number } | null;
 }
 
 const UFO_TYPES = ["STR_SMALL_SCOUT", "STR_MEDIUM_SCOUT", "STR_LARGE_SCOUT", "STR_HARVESTER", "STR_ABDUCTOR", "STR_TERROR_SHIP", "STR_SUPPLY_SHIP"];
@@ -210,7 +212,8 @@ export function generateMap(settings: MatchSettings, players: number, seed: numb
   if (settings.biome === "UBASE") digTunnels(battle, placed, n);
 
   const zones = zc.map(([x, y]) => ({ x: x * 10, y: y * 10, w: 10, h: 10 }));
-  return { battle, zones };
+  const ufoRect = ufo ? { x: ufo.cx * 10, y: ufo.cy * 10, w: ufo.rule.mapBlocks[0].width, h: ufo.rule.mapBlocks[0].length } : null;
+  return { battle, zones, ufo: ufoRect };
 }
 
 /** Copies a MAP block into the battle. Values index the concatenated MCD list starting at `start`. */

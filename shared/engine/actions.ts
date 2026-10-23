@@ -20,6 +20,7 @@ import {
   ITEMS, type SlotId, type ItemRule, tr,
 } from "../rules/index.ts";
 import { createUnit, spawnGroundItem } from "./units.ts";
+import { deployAll } from "./deploy.ts";
 import { openSkyTiles, canStand } from "./mapgen.ts";
 import { rollSupplyDrop } from "../rules/catalog.ts";
 import { recordCommand, recordEvents } from "./stats.ts";
@@ -446,7 +447,9 @@ export class GameRules {
     const b = this.b;
     const radius = explosionRadius(ammo);
     const tile = b.idx(at.x >> 4, at.y >> 4, Math.floor(at.z / 24));
-    const vis = ev.tileSeers(tile) | ev.seers(b.unitOnTile(tile));
+    // whoever set it off sees it go off, also out of sight (they know where they threw it): a grenade left to
+    // explode at the end of the turn must not seem to fizzle. What it does to unseen units and terrain stays hidden.
+    const vis = ev.tileSeers(tile) | ev.seers(b.unitOnTile(tile)) | (attacker ? 1 << attacker.owner : 0);
     if (radius > 0) {
       ev.push({ t: "explosion", at: { ...at }, power: ammo.power, frame: ammo.hitAnimation >= 0 ? ammo.hitAnimation : 0, small: ammo.power <= 80 }, vis);
       explode(b, ev, at, ammo.power, ammo.damageType, radius, attacker);
@@ -1130,7 +1133,8 @@ export class GameRules {
     if (b.phase !== Phase.PLAYING) return;
     for (const p of b.players) {
       if (p.eliminated) continue;
-      const alive = b.units.some((u) => u.originalOwner === p.index && !isOut(u) && u.health > 0);
+      // co-op scenarios: a side with reinforcements on the way isn't beaten yet
+      const alive = b.units.some((u) => u.originalOwner === p.index && !isOut(u) && u.health > 0) || b.waves.some((w) => w.seat === p.index);
       if (!alive) {
         p.eliminated = true;
         this.releaseControlled(p.index);
@@ -1272,7 +1276,25 @@ export class GameRules {
     calculateTerrainLighting(b);
     for (const u of b.units) if (u.status === UnitStatus.UNCONSCIOUS) this.revive(u, ev);
     this.supplyDrops(ev);
+    this.reinforcements(ev);
     this.settle(ev);
+  }
+
+  /** Co-op scenarios: enemy waves due this round land where the game master put them. */
+  private reinforcements(ev: BattleEvents) {
+    const b = this.b;
+    const due = b.waves.filter((w) => w.round <= b.round);
+    if (!due.length) return;
+    b.waves = b.waves.filter((w) => w.round > b.round);
+    for (const w of due) {
+      const p = b.players[w.seat];
+      if (!p || p.eliminated) continue;
+      const entries = w.members.map((m) => ({ m, r: w.recruits.find((r) => r.id === m.recruitId)! })).filter((e) => e.r);
+      const n = deployAll(b, w.seat, entries).length;
+      if (n) ev.msg("STR_REINFORCEMENTS_ARRIVED", ev.all(), p.name);
+    }
+    calculateUnitLighting(b);
+    recalculateAllFOV(b);
   }
 
   /** Units standing in fire burn; smoke knocks people out (Tile::prepareNewTurn). */
@@ -1300,6 +1322,10 @@ export class GameRules {
     const b = this.b;
     b.current = player;
     b.hitBy.clear();
+    for (const m of b.players[player].members ?? []) {
+      m.locked = false;
+      delete m.aiThisTurn;
+    }
     for (const u of b.units) if (u.owner === player) prepareUnitTurn(b, u);
     calculateUnitLighting(b);
     recalculateAllFOV(b);
@@ -1354,7 +1380,7 @@ export class GameRules {
     // favour the middle of the map so everyone has a fair run at it
     const central = spots.filter((p) => Math.abs(p.x - cx) < b.sx * 0.3 && Math.abs(p.y - cy) < b.sy * 0.3);
     const pos = this.reachableDropSpot(central.length ? central : spots) ?? b.rng.pick(central.length ? central : spots);
-    const items = rollSupplyDrop(b.rng, sd.tier, b.settings.psionics);
+    const items = rollSupplyDrop(b.rng, sd.tier, b.settings.psionics, sd.kits);
     const drop = { id: b.supply.length + 1, pos, dropRound: nextRound, announcedRound: b.round, dropped: false, items };
     b.supply.push(drop);
     ev.push({ t: "supply", pos, dropped: false, round: nextRound }, ev.all());

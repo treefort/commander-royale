@@ -6,10 +6,13 @@ an nginx vhost that proxies HTTP + WebSockets to 127.0.0.1:4320, and a certbot w
 
 Usage (explicit go-ahead required):
     bun run build
-    python deploy/deploy-xcom.py --deploy --credentials <google-oauth-web-client.json>
+    python deploy/deploy-xcom.py --deploy --credentials <google-oauth-web-client.json>   # first deploy
+    python deploy/deploy-xcom.py --deploy                                                  # later: keeps the server's secrets
 
-The game data (GAME_DIR) is uploaded once to /opt/xcom/gamedata and only re-sent with --upload-gamedata.
-No credentials are printed.
+Routine deploys are quick: upload the code, unpack it as a new release, switch, restart, check /health (old
+releases beyond the last few are removed). The one-time host setup (service user, runtime, nginx vhost,
+certificate, systemd unit) only runs on the first deploy or with --setup. The game data (GAME_DIR) is uploaded
+once to /opt/xcom/gamedata and only re-sent with --upload-gamedata. No credentials are printed.
 """
 from __future__ import annotations
 
@@ -29,6 +32,7 @@ HOST = "xcom.evanbooth.com"
 BASE = "/opt/xcom"
 PORT = 4320
 BUN_VERSION = "1.3.14"
+KEEP_RELEASES = 5
 HELPERS = Path.home() / "Documents/ai/focus/assistant"
 sys.path.insert(0, str(HELPERS))
 from ssh_access import load_access  # noqa: E402
@@ -127,29 +131,37 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser()
     ap.add_argument("--deploy", action="store_true", required=True)
-    ap.add_argument("--credentials", required=True, help="Google OAuth web client JSON (downloaded from the Cloud console)")
+    ap.add_argument("--credentials", help="Google OAuth web client JSON (downloaded from the Cloud console); needed on the first deploy, or to change the secrets")
     ap.add_argument("--upload-gamedata", action="store_true", help="(re)upload the X-COM data folder")
+    ap.add_argument("--setup", action="store_true", help="redo the one-time host setup (nginx, certificate, service unit)")
     ap.add_argument("--gamedata", default=str(ROOT / "gamedata"))
-    ap.add_argument("--admin-email", action="append", default=[], help="Google account allowed to download match statistics (repeatable)")
+    ap.add_argument("--admin-email", action="append", default=[], help="Google account allowed to download match statistics and the access log (repeatable)")
+    ap.add_argument("--passkey", default="", help="what signed-in players must enter once before they can play (empty: anyone signed in plays); set together with --credentials")
     args = ap.parse_args()
 
     if not (ROOT / "dist" / "main.js").exists():
         raise SystemExit("Run `bun run build` first.")
-    creds = json.loads(Path(args.credentials).read_text())
-    web = creds.get("web") or creds
-    env = {
-        "PORT": str(PORT),
-        "PUBLIC_URL": f"https://{HOST}",
-        "GOOGLE_CLIENT_ID": web["client_id"],
-        "GOOGLE_CLIENT_SECRET": web["client_secret"],
-        "DB_PATH": "/var/lib/xcom/xcom.sqlite",
-        "GAME_DIR": f"{BASE}/gamedata",
-        "DEV_LOGIN": "0",
-        "ADMIN_EMAILS": ",".join(args.admin_email),
-    }
-    if any(c in v for v in env.values() for c in "\n\r\"\\"):
-        raise SystemExit("Unexpected characters in configuration")
-    env_bytes = "".join(f'{k}="{v}"\n' for k, v in env.items()).encode()
+    env_bytes = None
+    if args.credentials:
+        creds = json.loads(Path(args.credentials).read_text())
+        web = creds.get("web") or creds
+        redirect = f"https://{HOST}/auth/google/callback"
+        if redirect not in web.get("redirect_uris", [redirect]):
+            raise SystemExit(f"The OAuth client doesn't list {redirect} as a redirect URI")
+        env = {
+            "PORT": str(PORT),
+            "PUBLIC_URL": f"https://{HOST}",
+            "GOOGLE_CLIENT_ID": web["client_id"],
+            "GOOGLE_CLIENT_SECRET": web["client_secret"],
+            "DB_PATH": "/var/lib/xcom/xcom.sqlite",
+            "GAME_DIR": f"{BASE}/gamedata",
+            "DEV_LOGIN": "0",
+            "ADMIN_EMAILS": ",".join(args.admin_email),
+            "PASSKEY": args.passkey,
+        }
+        if any(c in v for v in env.values() for c in "\n\r\"\\"):
+            raise SystemExit("Unexpected characters in configuration")
+        env_bytes = "".join(f'{k}="{v}"\n' for k, v in env.items()).encode()
 
     access = load_access()
     if access["host"] != "167.71.26.113" or access["user"] != "gemmarius":
@@ -184,61 +196,74 @@ def main() -> None:
             f.write(data)
         return path
 
-    print("Checking host...", flush=True)
-    run("nginx -t", sudo=True)
-    run("df -h /", sudo=True)
-    first = not run(f"test -e {BASE}/current && echo yes || true", sudo=True).strip()
-    if first:
-        run(f"! ss -ltnH | awk '{{print $4}}' | grep -q ':{PORT}$'", sudo=True)
+    # one round trip to see whether this is a routine deploy or the box still needs setting up
+    state = run(f"test -e {BASE}/current && echo installed; test -s /etc/xcom/environment && echo secrets; true", sudo=True)
+    setup = args.setup or "installed" not in state
+    if env_bytes is None and "secrets" not in state:
+        raise SystemExit("No secrets on the server yet: pass --credentials")
 
-    print("Uploading release...", flush=True)
+    print("Uploading...", flush=True)
     release = put("release.tar.gz", make_tar([ROOT / p for p in RELEASE_FILES], ROOT))
-    envp = put("environment", env_bytes)
-    unit = put("service", SERVICE.encode())
-    ngx = put("nginx", NGINX.encode())
-    http = put("http", HTTP.encode())
+    envp = put("environment", env_bytes) if env_bytes is not None else None
     game = None
-    if first or args.upload_gamedata:
+    if setup or args.upload_gamedata:
         gd = Path(args.gamedata)
-        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS"] if (gd / d).exists()]
+        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS", "FRONT"] if (gd / d).exists()]
         game = put("gamedata.tar.gz", make_tar(dirs, gd))
 
-    print("Installing...", flush=True)
-    run(f"""id xcom >/dev/null 2>&1 || useradd --system --home-dir /var/lib/xcom --shell /usr/sbin/nologin xcom
+    if setup:
+        # first deploy (or --setup): user, directories, runtime, nginx, certificate, service unit
+        print("Setting up the host...", flush=True)
+        if "installed" not in state:
+            run(f"! ss -ltnH | awk '{{print $4}}' | grep -q ':{PORT}$'", sudo=True)
+        unit = put("service", SERVICE.encode())
+        ngx = put("nginx", NGINX.encode())
+        http = put("http", HTTP.encode())
+        run(f"""id xcom >/dev/null 2>&1 || useradd --system --home-dir /var/lib/xcom --shell /usr/sbin/nologin xcom
 install -d -m 0755 -o root -g root {BASE} {BASE}/releases {BASE}/runtime
-install -d -m 0755 -o root -g root {BASE}/releases/{stamp}
 install -d -m 0700 -o xcom -g xcom /var/lib/xcom
 install -d -m 0700 -o root -g root /etc/xcom
 install -d -m 0755 /var/lib/xcom-acme
-tar -xzf {release} -C {BASE}/releases/{stamp}
-install -m 0600 -o root -g root {envp} /etc/xcom/environment
 if [ ! -x {BASE}/runtime/bun ]; then cp /opt/gc-study/runtime/bun {BASE}/runtime/bun; fi
 {BASE}/runtime/bun --version | grep -q '^{BUN_VERSION}$'
-cd {BASE}/releases/{stamp} && {BASE}/runtime/bun install --production --frozen-lockfile
-""", sudo=True, timeout=600)
-    if game:
-        run(f"install -d -m 0755 {BASE}/gamedata && tar -xzf {game} -C {BASE}/gamedata && chmod -R a+rX {BASE}/gamedata", sudo=True, timeout=600)
-
-    if first:
-        print("First deploy: HTTP vhost + certificate...", flush=True)
-        run(f"install -m 0644 {http} /etc/nginx/sites-available/{HOST} && ln -sf /etc/nginx/sites-available/{HOST} /etc/nginx/sites-enabled/{HOST} && nginx -t && systemctl reload nginx", sudo=True)
-        run(f"certbot certonly --webroot -w /var/lib/xcom-acme -d {HOST} --non-interactive --agree-tos --register-unsafely-without-email", sudo=True, timeout=300)
-
-    print("Switching to the new release...", flush=True)
-    run(f"""cp -a /etc/nginx/sites-available/{HOST} /etc/nginx/sites-available/{HOST}.bak.{stamp} 2>/dev/null || true
-install -m 0644 {ngx} /etc/nginx/sites-available/{HOST}
-nginx -t
 install -m 0644 {unit} /etc/systemd/system/xcom.service
-ln -sfn {BASE}/releases/{stamp} {BASE}/current.new && mv -T {BASE}/current.new {BASE}/current
 systemctl daemon-reload
 systemctl enable xcom.service
+""", sudo=True, timeout=300)
+        if not run(f"test -e /etc/letsencrypt/live/{HOST}/fullchain.pem && echo yes || true", sudo=True).strip():
+            # the box hosts other sites: a config that fails `nginx -t` never stays in place
+            run(f"""install -m 0644 {http} /etc/nginx/sites-available/{HOST}
+ln -sf /etc/nginx/sites-available/{HOST} /etc/nginx/sites-enabled/{HOST}
+if ! nginx -t; then rm -f /etc/nginx/sites-enabled/{HOST} /etc/nginx/sites-available/{HOST}; exit 1; fi
+systemctl reload nginx""", sudo=True)
+            run(f"certbot certonly --webroot -w /var/lib/xcom-acme -d {HOST} --non-interactive --agree-tos --register-unsafely-without-email", sudo=True, timeout=300)
+        run(f"""cp -a /etc/nginx/sites-available/{HOST} /etc/nginx/sites-available/{HOST}.bak 2>/dev/null || true
+install -m 0644 {ngx} /etc/nginx/sites-available/{HOST}
+ln -sf /etc/nginx/sites-available/{HOST} /etc/nginx/sites-enabled/{HOST}
+if ! nginx -t; then cp -a /etc/nginx/sites-available/{HOST}.bak /etc/nginx/sites-available/{HOST}; exit 1; fi
+systemctl reload nginx""", sudo=True)
+        if game:
+            run(f"install -d -m 0755 {BASE}/gamedata && tar -xzf {game} -C {BASE}/gamedata && chmod -R a+rX {BASE}/gamedata", sudo=True, timeout=600)
+    elif game:
+        run(f"install -d -m 0755 {BASE}/gamedata && tar -xzf {game} -C {BASE}/gamedata && chmod -R a+rX {BASE}/gamedata", sudo=True, timeout=600)
+
+    # the routine part: unpack, (re)install dependencies only if the lockfile changed, switch, restart
+    print("Deploying...", flush=True)
+    rel = f"{BASE}/releases/{stamp}"
+    run(f"""install -d -m 0755 -o root -g root {rel}
+tar -xzf {release} -C {rel}
+{f"install -m 0600 -o root -g root {envp} /etc/xcom/environment" if envp else "true"}
+if [ -d {BASE}/current/node_modules ] && cmp -s {BASE}/current/bun.lock {rel}/bun.lock; then cp -al {BASE}/current/node_modules {rel}/node_modules
+else cd {rel} && {BASE}/runtime/bun install --production --frozen-lockfile >/dev/null; fi
+ln -sfn {rel} {BASE}/current.new && mv -T {BASE}/current.new {BASE}/current
 systemctl restart xcom.service
-systemctl reload nginx
 rm -f {staging}-*
-""", sudo=True)
-    time.sleep(3)
-    print(run(f"curl -fsS http://127.0.0.1:{PORT}/health", sudo=True).strip())
-    print(f"Deployed release {stamp} to https://{HOST}")
+# keep the last few releases to roll back to
+cd {BASE}/releases && ls -1d 2*Z 2>/dev/null | sort | head -n -{KEEP_RELEASES} | xargs -r rm -rf --
+for i in $(seq 30); do curl -fsS http://127.0.0.1:{PORT}/health >/dev/null 2>&1 && exit 0; sleep 0.5; done
+journalctl -u xcom.service -n 30 --no-pager; exit 1
+""", sudo=True, timeout=300)
+    print(f"Deployed {stamp} to https://{HOST}")
 
 
 if __name__ == "__main__":

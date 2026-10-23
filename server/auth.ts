@@ -1,6 +1,7 @@
 // Google sign-in (OAuth 2.0 authorization code flow) and cookie sessions.
 // Without GOOGLE_CLIENT_ID a local "dev login" is offered instead (never enable it in production).
 import { db, randomId, type UserRow } from "./db.ts";
+import { logAccess } from "./access.ts";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
@@ -58,6 +59,8 @@ function safeNext(next: string | null | undefined): string {
 
 export function logout(req: Request): Response {
   const sid = cookies(req).sid;
+  const user = currentUser(req);
+  if (user) logAccess(req, user, "logout");
   if (sid) db.query("DELETE FROM sessions WHERE id = ?").run(sid);
   return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": cookie("sid", "", 0) } });
 }
@@ -103,7 +106,9 @@ export async function googleCallback(req: Request): Promise<Response> {
     user = db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   } else {
     db.query("UPDATE users SET email = ?, picture = ? WHERE id = ?").run(claims.email ?? null, claims.picture ?? null, user.id);
+    user = { ...user, email: claims.email ?? null };
   }
+  logAccess(req, user, "login");
   return startSession(user.id, next);
 }
 
@@ -120,6 +125,7 @@ export function devLogin(req: Request): Response {
     db.query("INSERT INTO users (id, google_sub, email, name, picture, created) VALUES (?, ?, NULL, ?, NULL, ?)").run(id, sub, name, Date.now());
     user = db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   }
+  logAccess(req, user, "login");
   return startSession(user.id, url.searchParams.get("next") ?? "/");
 }
 

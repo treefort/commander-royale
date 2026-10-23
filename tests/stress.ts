@@ -7,7 +7,7 @@ import { GameRules } from "../shared/engine/actions.ts";
 import { isOut } from "../shared/engine/state.ts";
 import { serializeBattle } from "../shared/engine/serialize.ts";
 import { extractView, newSentState } from "../shared/engine/view.ts";
-const s = { ...defaultSettings(), maxPlayers: 8, mapBlocks: 8, poolSize: 80, biome: "URBAN" as const };
+const s = { ...defaultSettings(), mapBlocks: 8, poolSize: 80, biome: "URBAN" as const };
 const pool = generatePool(s, 1);
 const players = Array.from({ length: 8 }, (_, i) => ({ userId: "u" + i, name: "P" + i, loadout: { squad: pool.filter((p) => p.kind !== "hwp").slice(i * 9, i * 9 + 9).map((r) => ({ recruitId: r.id, armor: "STR_NONE_UC", items: [{ type: "STR_RIFLE", slot: "STR_RIGHT_HAND", x: 0, y: 0, ammo: "STR_RIFLE_CLIP" }] })), stash: [] } }));
 let t = performance.now();

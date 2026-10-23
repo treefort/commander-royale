@@ -67,6 +67,8 @@ export function playSound(index: number, pan = 0) {
 // ------------------------------------------------------------------------------------------
 
 let musicGain: GainNode | null = null;
+/** fades the music out while the page isn't in front (another tab or window), and back in after */
+let focusGain: GainNode | null = null;
 let musicSrc: AudioBufferSourceNode | null = null;
 let musicTrack = "";
 const musicCache = new Map<string, Promise<AudioBuffer | null>>();
@@ -93,7 +95,7 @@ export async function playMusic(name: string, loop = true) {
   if (!buf || !ctx || musicTrack !== name) return;
   if (!musicGain) {
     musicGain = ctx.createGain();
-    musicGain.connect(ctx.destination);
+    musicGain.connect(musicOut(ctx));
   }
   musicGain.gain.cancelScheduledValues(ctx.currentTime);
   musicGain.gain.setValueAtTime(0, ctx.currentTime);
@@ -115,9 +117,34 @@ function stopCurrentMusic() {
   g.gain.setValueAtTime(musicLevel(), ctx.currentTime);
   g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
   src.disconnect();
-  src.connect(g).connect(ctx.destination);
+  src.connect(g).connect(musicOut(ctx));
   src.stop(ctx.currentTime + 0.85);
 }
+
+function pageInFront(): boolean {
+  return !document.hidden && document.hasFocus();
+}
+
+function musicOut(c: AudioContext): GainNode {
+  if (!focusGain) {
+    focusGain = c.createGain();
+    focusGain.gain.value = pageInFront() ? 1 : 0;
+    focusGain.connect(c.destination);
+  }
+  return focusGain;
+}
+
+/** Fades the music down when the tab or window loses focus, and back up when it's in front again. */
+function onFocusChange() {
+  if (!ctx || !focusGain) return;
+  const up = pageInFront();
+  const g = focusGain.gain;
+  g.cancelScheduledValues(ctx.currentTime);
+  g.setValueAtTime(g.value, ctx.currentTime);
+  g.linearRampToValueAtTime(up ? 1 : 0, ctx.currentTime + (up ? 1 : 1.5));
+}
+for (const ev of ["focus", "blur"]) window.addEventListener(ev, onFocusChange);
+document.addEventListener("visibilitychange", onFocusChange);
 
 export function stopMusic() {
   musicTrack = "";

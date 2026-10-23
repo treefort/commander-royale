@@ -3,7 +3,7 @@ import { type MapData, TilePart, parseMcd, parseLoftemps } from "../formats/terr
 import { type Pos, UnitStatus, DIR_UP } from "./defs.ts";
 import { RNG } from "./rng.ts";
 import type { Stats, SlotId } from "../rules/index.ts";
-import type { MatchSettings } from "../protocol.ts";
+import type { MatchSettings, BotTuning, Recruit, SquadMember } from "../protocol.ts";
 import { newStats, type BattleStats } from "./stats.ts";
 
 /** Supplies raw game files (server: from disk, client: from the asset cache). */
@@ -95,6 +95,8 @@ export interface Unit {
   value: number; // hire price, for scoring
   recruitId: string; // pool entry the unit was hired from ("spawn" for zombies etc.)
   hwp: boolean;
+  /** co-op: user id of the squad member who commands this unit ("" or missing: anyone in the squad) */
+  controller?: string;
 }
 
 export interface Item {
@@ -120,6 +122,27 @@ export interface PlayerState {
   eliminated: boolean;
   surrendered: boolean;
   endedTurnCount: number;
+  /** the people sharing this squad, its leader (userId) first; missing for computer squads and old saves */
+  members?: SquadMemberState[];
+  /** a computer squad's AI settings */
+  ai?: BotTuning;
+  /** the round a squad that joined the battle in progress landed in */
+  joinedRound?: number;
+}
+
+export interface SquadMemberState {
+  userId: string;
+  name: string;
+  /** done for this turn (cleared when the squad's next turn begins) */
+  locked: boolean;
+  /** asked the AI to play their units */
+  afk: boolean;
+  /** offline long enough that the AI plays their units (only with the co-op "afkAI" setting) */
+  away: boolean;
+  /** a co-op scenario's game master who isn't playing: sees the whole battle, commands nothing */
+  observer?: boolean;
+  /** the host had the AI play this person's moves for the rest of this turn (cleared when the squad's next turn begins) */
+  aiThisTurn?: boolean;
 }
 
 export interface SupplyDrop {
@@ -132,6 +155,21 @@ export interface SupplyDrop {
   /** client only (from the view): the landed crate still holds something, and where it lies */
   stocked?: boolean;
   at?: Pos;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Co-op scenario reinforcements: units that join `seat` at the start of `round`. */
+export interface Wave {
+  round: number;
+  seat: number;
+  recruits: Recruit[];
+  members: SquadMember[];
 }
 
 export const enum Phase { DEPLOY = 0, PLAYING = 1, FINISHED = 2 }
@@ -170,6 +208,13 @@ export class Battle {
   hitBy = new Map<number, Set<number>>();
   /** per-unit statistics for balance analysis (saved with the battle) */
   stats: BattleStats = newStats();
+  /** each squad's deployment area, and the landed UFO's (reinforcements arrive in them) */
+  zones: Rect[] = [];
+  /** every landing zone on the map and whose it is (a co-op team landing apart has one per person) */
+  landingZones: (Rect & { seat: number })[] = [];
+  ufoArea: Rect | null = null;
+  /** co-op scenarios: enemies still to arrive */
+  waves: Wave[] = [];
   /** the item doing the damage right now, for statistics (not saved) */
   actingWeapon = "";
 
@@ -199,6 +244,12 @@ export class Battle {
     this.unitAt = new Int32Array(n);
     this.discovered = Array.from({ length: playerCount }, () => new Uint8Array(n));
     this.personal = Array.from({ length: playerCount }, () => new Uint8Array(n));
+  }
+
+  /** Per-side maps for sides added since (a squad joining the battle in progress). */
+  growSides(playerCount: number) {
+    while (this.discovered.length < playerCount) this.discovered.push(new Uint8Array(this.size));
+    while (this.personal.length < playerCount) this.personal.push(new Uint8Array(this.size));
   }
 
   get size(): number {

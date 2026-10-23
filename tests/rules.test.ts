@@ -2,12 +2,15 @@ import { test, expect } from "bun:test";
 import { files } from "../tools/render-map.ts";
 import { Battle, TerrainLib, isOut } from "../shared/engine/state.ts";
 import { TilePart } from "../shared/formats/terrain.ts";
-import { defaultSettings, type Recruit } from "../shared/protocol.ts";
+import { defaultSettings, sanitizeSettings, type Recruit } from "../shared/protocol.ts";
+import { rollSupplyDrop } from "../shared/rules/catalog.ts";
+import { RNG } from "../shared/engine/rng.ts";
 import { createUnit, giveItem, spawnGroundItem } from "../shared/engine/units.ts";
 import { GameRules } from "../shared/engine/actions.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
-import { recalcAllLighting, recalculateAllFOV } from "../shared/engine/tileengine.ts";
-import { extractView, newSentState } from "../shared/engine/view.ts";
+import { recalcAllLighting, recalculateAllFOV, canSeeTile } from "../shared/engine/tileengine.ts";
+import { extractView, newSentState, saveMemory, restoreMemory } from "../shared/engine/view.ts";
+import { serializeBattle, deserializeBattle } from "../shared/engine/serialize.ts";
 import { SOLDIER, unitRule } from "../shared/rules/index.ts";
 
 /** A flat 30x30 field of desert sand, 2 levels high. */
@@ -80,6 +83,56 @@ test("inventory moves cost the original TUs and you can only grab items from you
   expect(u.tu).toBe(tu - 12);
 });
 
+test("a grenade left to go off at the end of the turn is seen to explode by its thrower, even out of sight", () => {
+  const b = field();
+  const u = createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 2, y: 2, z: 0 }, 2);
+  const enemy = createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 27, y: 27, z: 0 }, 6);
+  const g = spawnGroundItem(b, "STR_GRENADE", b.idx(27, 26, 0));
+  g.fuse = 0;
+  g.previousOwner = u.id;
+  const rules = start(b);
+  expect(new BattleEvents(b).tileSeers(g.tile) & 1).toBe(0);
+  const health = enemy.health;
+  const res = rules.apply(0, { c: "endturn" });
+  expect(b.items.includes(g)).toBe(false);
+  expect(enemy.health).toBeLessThan(health);
+  const boom = res.events.list.find((r) => r.e.t === "explosion")!;
+  expect(boom.vis & 1).toBe(1);
+  // what it did to the unseen enemy stays hidden
+  expect(res.events.list.filter((r) => r.e.t === "damage").every((r) => !(r.vis & 1))).toBe(true);
+});
+
+test("what a player saw on ground now out of sight survives a server restart", () => {
+  const b = field();
+  const u = createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 2, y: 2, z: 0 }, 2);
+  createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 28, y: 28, z: 0 }, 6);
+  const t = b.idx(6, 2, 0);
+  const loot = [spawnGroundItem(b, "STR_RIFLE", t), spawnGroundItem(b, "STR_GRENADE", t)];
+  start(b);
+  const sent = newSentState();
+  const seen = (v: ReturnType<typeof extractView>) => v.ground.find(([g]) => g === t)?.[1].map((i) => i.type) ?? [];
+  expect(seen(extractView(b, 0, sent, true))).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  // looking the other way, the loot is blown up; and a smoke cloud drifts over a tile out of sight
+  u.dir = 6;
+  expect(canSeeTile(b, 0, t)).toBe(false);
+  for (const it of loot) b.removeItem(it);
+  const far = b.idx(9, 2, 0);
+  b.smoke[far] = 9;
+  expect(seen(extractView(b, 0, sent, true))).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  // the server restarts: the battle and the player's memory are saved, and both come back
+  const mem = JSON.parse(JSON.stringify(saveMemory(b, 0, sent)));
+  const again = deserializeBattle(serializeBattle(b), files);
+  const restored = restoreMemory(again, 0, mem);
+  const v = extractView(again, 0, restored, true);
+  expect(seen(v)).toEqual(["STR_RIFLE", "STR_GRENADE"]);
+  expect(v.tiles.find((r) => r[0] === far)?.[6] ?? 0).toBe(0);
+  // without it, the reload would have forgotten them
+  expect(seen(extractView(again, 0, newSentState(), true))).toEqual([]);
+  // once seen again, it's the truth
+  again.units.find((x) => x.id === u.id)!.dir = 2;
+  expect(extractView(again, 0, restored, false).ground.find(([g]) => g === t)?.[1]).toEqual([]);
+});
+
 test("reaction fire: a watcher with a loaded rifle snap-fires at an enemy walking into view", () => {
   const b = field();
   const watcher = createUnit(b, rookie({ reactions: 100 }), "STR_NONE_UC", 1, { x: 15, y: 5, z: 0 }, 4);
@@ -144,7 +197,7 @@ test("a squad with nobody left standing is eliminated and the survivor wins", ()
 test("supply drops are announced ahead of time and land as a ground pile", () => {
   const s = defaultSettings();
   const b = field(2, s);
-  b.settings = { ...s, supplyDrops: { enabled: true, everyRounds: 2, warningRounds: 1, tier: "basic" } };
+  b.settings = { ...s, supplyDrops: { enabled: true, everyRounds: 2, warningRounds: 1, tier: "basic", kits: 3 } };
   createUnit(b, rookie(), "STR_NONE_UC", 0, { x: 1, y: 1, z: 0 }, 2);
   createUnit(b, rookie(), "STR_NONE_UC", 1, { x: 28, y: 28, z: 0 }, 6);
   const rules = start(b);
@@ -162,6 +215,19 @@ test("supply drops are announced ahead of time and land as a ground pile", () =>
   expect(landed).toBe(true);
   const d = b.supply.find((x) => x.dropped)!;
   expect(b.itemsOnTile(b.idxP(d.pos)).length).toBeGreaterThan(0);
+});
+
+test("the drop size setting sets how many kits each drop holds", () => {
+  const items = (kits: number | undefined, seed: number) => rollSupplyDrop(new RNG(seed), "basic", false, kits).length;
+  const avg = (kits: number | undefined) => Array.from({ length: 50 }, (_, i) => items(kits, i)).reduce((a, n) => a + n, 0) / 50;
+  // basic kits hold 1-3 items
+  expect(avg(1)).toBeLessThan(3);
+  expect(avg(8)).toBeGreaterThan(8);
+  expect(avg(8)).toBeGreaterThan(avg(3) * 2);
+  // battles from before the setting: 2 or 3 kits, as before
+  for (let i = 0; i < 20; i++) expect(items(undefined, i)).toBeGreaterThanOrEqual(2);
+  expect(sanitizeSettings({}).supplyDrops.kits).toBe(3);
+  expect(sanitizeSettings({ supplyDrops: { kits: 40 } } as never).supplyDrops.kits).toBe(12);
 });
 
 test("malformed commands are rejected (fake fire modes, non-hand slots, bad positions)", () => {

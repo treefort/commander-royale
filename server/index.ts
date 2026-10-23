@@ -2,9 +2,15 @@
 import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { currentUser, googleStart, googleCallback, devLogin, logout, DEV_LOGIN, googleEnabled, renameUser, PUBLIC_URL } from "./auth.ts";
+import { mayPlay, passkeyRequired, tryPasskey, accessLog } from "./access.ts";
+import { settingsReference } from "../shared/settings-docs.ts";
+
+/** The match settings reference for AI assistants (public: no secrets, and an assistant can't sign in). */
+let reference = "";
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
-  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, resumeBots } from "./game.ts";
+  resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots, saveMemories,
+  retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = join(import.meta.dir, "..");
@@ -67,6 +73,15 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     const user = currentUser(req);
 
     if (path === "/health") return json({ ok: true });
+    // the front page's art (cut from the box cover; see tools/front-art): public, the sign-in page shows it
+    if (path === "/front/ship.webp" || path === "/front/title.webp") {
+      const p = resolveGamePath(`FRONT/${path.slice(7)}`);
+      return p ? staticFile(p, "image/webp", "public, max-age=86400") : err("Not found", 404);
+    }
+    if (path === "/llms.txt" || path === "/docs/match-settings.md") {
+      reference ||= settingsReference(PUBLIC_URL);
+      return new Response(reference, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+    }
     if (path === "/auth/google") return googleEnabled() ? googleStart(req) : err("Google sign-in is not configured", 503);
     if (path === "/auth/google/callback") return googleCallback(req);
     if (path === "/auth/dev") return devLogin(req);
@@ -75,6 +90,7 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     if (path === "/ws") {
       const matchId = url.searchParams.get("match") ?? "";
       if (!user) return err("Sign in first", 401);
+      if (!mayPlay(user)) return err("Enter the passkey first", 403);
       if (srv.upgrade(req, { data: { user, matchId } })) return undefined;
       return err("WebSocket upgrade failed");
     }
@@ -86,7 +102,20 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
           if (b.name) renameUser(user.id, b.name);
           return json({ ok: true });
         }
-        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, devLogin: DEV_LOGIN, google: googleEnabled() });
+        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, needsPasskey: !!user && !mayPlay(user), devLogin: DEV_LOGIN, google: googleEnabled() });
+      }
+      if (path === "/api/passkey" && req.method === "POST") {
+        if (!user) return err("Sign in first", 401);
+        const e = tryPasskey(req, user, (await body<{ passkey?: string }>(req)).passkey);
+        return e ? err(e, 403) : json({ ok: true });
+      }
+      // signed in isn't enough to play: with a passkey set, the account has to have entered it
+      if (user && !mayPlay(user)) return json({ error: "Enter the passkey first", passkey: true }, 403);
+      // sign-ins and passkey attempts: admins only
+      if (path === "/api/admin/access-log" && req.method === "GET") {
+        if (!user) return err("Sign in first", 401);
+        if (!isAdmin(user)) return err("Not allowed", 403);
+        return json(accessLog(Number(url.searchParams.get("limit")) || 500));
       }
       // statistics export for balancing (tools/player-stats.ts --json): admins only
       if (path === "/api/admin/match-records" && req.method === "GET") {
@@ -96,6 +125,22 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
         return new Response(JSON.stringify(matchRecords(since)), {
           headers: { "content-type": "application/json", "content-disposition": "attachment; filename=match-records.json" },
         });
+      }
+      // challenges: a battle's start shared for anyone to play
+      const c = path.match(/^\/api\/challenges(?:\/([A-Za-z0-9]+))?(?:\/(play))?$/);
+      if (c) {
+        if (!user) return err("Sign in first", 401);
+        const [, cid, play] = c;
+        if (!cid && req.method === "GET") return json(listChallenges(user));
+        if (cid && !play && req.method === "GET") {
+          const st = challengeState(cid, user);
+          return st ? json(st) : err("Challenge not found", 404);
+        }
+        if (cid && play && req.method === "POST") {
+          const r = acceptChallenge(cid, user);
+          return r.error ? err(r.error) : json(r);
+        }
+        return err("Not found", 404);
       }
       const m = path.match(/^\/api\/matches(?:\/([A-Za-z0-9]+))?(?:\/(\w+))?$/);
       if (m) {
@@ -114,7 +159,11 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
         if (id && req.method === "POST") {
           let e: string | null = null;
           switch (action) {
-            case "join": e = joinMatch(id, user); break;
+            case "join": {
+              const o = await body<{ squad?: string }>(req);
+              e = joinMatch(id, user, o.squad ? String(o.squad) : undefined);
+              break;
+            }
             case "leave": e = leaveMatch(id, user); break;
             case "settings": e = updateSettings(id, user, (await body<{ settings?: object }>(req)).settings ?? {}); break;
             case "loadout": {
@@ -123,7 +172,25 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
             }
             case "ready": e = setReady(id, user, !!(await body<{ ready?: boolean }>(req)).ready); break;
             case "start": e = startMatch(id, user); break;
-            case "addbot": e = addBot(id, user, String((await body<{ strategy?: string }>(req)).strategy ?? "random")); break;
+            case "addbot": {
+              const o = await body<{ strategy?: string; ai?: object }>(req);
+              e = addBot(id, user, String(o.strategy ?? "random"), o.ai);
+              break;
+            }
+            case "tunebot": {
+              const o = await body<{ botId?: string; ai?: object }>(req);
+              e = tuneBot(id, user, String(o.botId ?? ""), o.ai);
+              break;
+            }
+            case "squad": e = joinSquad(id, user, String((await body<{ leader?: string }>(req)).leader ?? "")); break;
+            case "retry": {
+              const r = retryMatch(id, user);
+              return r.error ? err(r.error) : json(r);
+            }
+            case "challenge": {
+              const r = shareChallenge(id, user, (await body<{ title?: string }>(req)).title);
+              return r.error ? err(r.error) : json(r);
+            }
             case "removebot": e = removeBot(id, user, String((await body<{ botId?: string }>(req)).botId ?? "")); break;
             default: return err("Unknown action", 404);
           }
@@ -136,6 +203,7 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     // the original game's data files are served only to signed-in players
     if (path.startsWith("/game/")) {
       if (!user) return err("Sign in first", 401);
+      if (!mayPlay(user)) return err("Enter the passkey first", 403);
       let rel: string;
       try {
         rel = decodeURIComponent(path.slice(6));
@@ -161,4 +229,10 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
 
 setInterval(tickTimers, 3000);
 resumeBots();
-console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}`);
+// a restart (a deploy: systemd stops us with SIGTERM) keeps what everyone has seen out of sight
+for (const sig of ["SIGTERM", "SIGINT"] as const)
+  process.on(sig, () => {
+    saveMemories();
+    process.exit(0);
+  });
+console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}${passkeyRequired() ? " — passkey required to play" : ""}`);

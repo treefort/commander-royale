@@ -50,7 +50,7 @@ export { recruitKey, kitName };
 export function matchSettings(spec: MatchSpec): MatchSettings {
   const rng = new RNG(spec.seed ^ 0x51ab);
   const base = defaultSettings();
-  const s: Partial<MatchSettings> = { ...base, maxPlayers: spec.strategies.length };
+  const s: Partial<MatchSettings> = { ...base };
   if (spec.randomMap) {
     s.biome = rng.pick(BIOMES).id;
     s.timeOfDay = rng.pick(["day", "day", "dusk", "night"] as const);
