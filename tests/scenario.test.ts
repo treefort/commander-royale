@@ -221,7 +221,7 @@ test("a co-op scenario on the server: game master, team, lock-ins and the GM's v
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
   const mkUser = (id: string) => {
-    db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
+    db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const [gm, ann, ben, cat] = ["sc_gm", "sc_ann", "sc_ben", "sc_cat"].map(mkUser);
@@ -309,7 +309,7 @@ test("a daily turn end sets the team's deadline to the next daily time", async (
   if (!process.env.DB_PATH) process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), "xcom-scn-")), "test.sqlite");
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
-  db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES ('sc_dee', NULL, NULL, 'sc_dee', NULL, ?)").run(Date.now());
+  db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES ('sc_dee', NULL, NULL, 'sc_dee', NULL, ?)").run(Date.now());
   const dee = db.query("SELECT * FROM users WHERE id = 'sc_dee'").get() as UserRow;
   const s = scenarioSettings({ gmPlays: true });
   s.coop = { ...s.coop, turnEnd: "daily", dailyAt: "06:15", timeZone: "Asia/Tokyo" };

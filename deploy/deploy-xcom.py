@@ -1,4 +1,4 @@
-"""Deploy the X-COM battlescape server to xcom.evanbooth.com on the gemmarius droplet.
+"""Deploy the Commander Royale server to xcom.evanbooth.com on the gemmarius droplet.
 
 Mirrors the gc.evanbooth.com pattern (see ~/Documents/ai/hosting/AGENTS.md): an isolated system
 user, a pinned Bun runtime, releases/<timestamp> with a `current` symlink, a hardened systemd unit,
@@ -8,6 +8,9 @@ Usage (explicit go-ahead required):
     bun run build
     python deploy/deploy-xcom.py --deploy --credentials <google-oauth-web-client.json>   # first deploy
     python deploy/deploy-xcom.py --deploy                                                  # later: keeps the server's secrets
+
+Sign-in here is Google only (plugins/google.ts) plus the shared passkey (plugins/passkey.ts) when one is set; every
+deploy makes sure /etc/xcom/environment says so (AUTH="none", PLUGINS=...), whatever else it holds.
 
 Routine deploys are quick: upload the code, unpack it as a new release, switch, restart, check /health (old
 releases beyond the last few are removed). The one-time host setup (service user, runtime, nginx vhost,
@@ -116,7 +119,15 @@ MemoryMax=1G
 WantedBy=multi-user.target
 """
 
-RELEASE_FILES = ["package.json", "bun.lock", "tsconfig.json", "server", "shared", "client/index.html", "client/style.css", "dist"]
+RELEASE_FILES = ["package.json", "bun.lock", "tsconfig.json", "server", "shared", "plugins", "client/index.html", "client/style.css", "client/logo.webp", "dist"]
+
+# this site's sign-in, re-applied to /etc/xcom/environment on every deploy (the file keeps its secrets): Google only,
+# no name sign-in, the passkey plugin only when a passkey is set, and the server reachable only through nginx
+SIGN_IN = """f=/etc/xcom/environment
+sed -i '/^DEV_LOGIN=/d;/^AUTH=/d;/^PLUGINS=/d;/^HOST=/d' "$f"
+echo 'AUTH="none"' >> "$f"
+echo 'HOST="127.0.0.1"' >> "$f"
+if grep -q '^PASSKEY="[^"]' "$f"; then echo 'PLUGINS="plugins/google.ts,plugins/passkey.ts"' >> "$f"; else echo 'PLUGINS="plugins/google.ts"' >> "$f"; fi"""
 
 
 def make_tar(paths: list[Path], base: Path) -> bytes:
@@ -155,7 +166,6 @@ def main() -> None:
             "GOOGLE_CLIENT_SECRET": web["client_secret"],
             "DB_PATH": "/var/lib/xcom/xcom.sqlite",
             "GAME_DIR": f"{BASE}/gamedata",
-            "DEV_LOGIN": "0",
             "ADMIN_EMAILS": ",".join(args.admin_email),
             "PASSKEY": args.passkey,
         }
@@ -208,7 +218,7 @@ def main() -> None:
     game = None
     if setup or args.upload_gamedata:
         gd = Path(args.gamedata)
-        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS", "FRONT"] if (gd / d).exists()]
+        dirs = [gd / d for d in ["GEODATA", "GEOGRAPH", "MAPS", "MUSIC", "ROUTES", "SOUND", "TERRAIN", "UFOGRAPH", "UNITS"] if (gd / d).exists()]
         game = put("gamedata.tar.gz", make_tar(dirs, gd))
 
     if setup:
@@ -253,6 +263,7 @@ systemctl reload nginx""", sudo=True)
     run(f"""install -d -m 0755 -o root -g root {rel}
 tar -xzf {release} -C {rel}
 {f"install -m 0600 -o root -g root {envp} /etc/xcom/environment" if envp else "true"}
+{SIGN_IN}
 if [ -d {BASE}/current/node_modules ] && cmp -s {BASE}/current/bun.lock {rel}/bun.lock; then cp -al {BASE}/current/node_modules {rel}/node_modules
 else cd {rel} && {BASE}/runtime/bun install --production --frozen-lockfile >/dev/null; fi
 ln -sfn {rel} {BASE}/current.new && mv -T {BASE}/current.new {BASE}/current

@@ -1,0 +1,12 @@
+# cloudflared tunnel config (~/.cloudflared/config.yml): Cloudflare reaches the game through an outbound tunnel,
+# no open ports. Protect game.example.com with a Cloudflare Access application, then run the game with:
+#   HOST=127.0.0.1 PUBLIC_URL=https://game.example.com AUTH=header AUTH_HEADER=Cf-Access-Authenticated-User-Email bun run start
+# Set up with: cloudflared tunnel login; cloudflared tunnel create commander-royale;
+#              cloudflared tunnel route dns commander-royale game.example.com; cloudflared tunnel run commander-royale
+tunnel: commander-royale
+credentials-file: /home/you/.cloudflared/<tunnel id>.json
+
+ingress:
+  - hostname: game.example.com
+    service: http://localhost:3000
+  - service: http_status:404

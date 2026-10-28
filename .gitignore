@@ -8,3 +8,5 @@ dist/
 .env
 tools/.cache/
 .playwright-mcp/
+__pycache__/
+CLAUDE.local.md

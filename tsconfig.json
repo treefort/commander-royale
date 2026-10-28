@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["bun-types"]
   },
-  "include": ["client", "server", "shared", "tools", "tests"]
+  "include": ["client", "server", "shared", "plugins", "tools", "tests"]
 }

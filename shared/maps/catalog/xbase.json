@@ -1,0 +1,1302 @@
+{
+  "datasets": {
+    "XBASE1": [
+      {
+        "name": "base-floor",
+        "kind": "floor",
+        "part": 7,
+        "label": "grey tiled X-COM base floor"
+      },
+      {
+        "name": "base-floor-light",
+        "kind": "floor",
+        "part": 6,
+        "label": "grey base floor with a bright ceiling-light spot (one per room centre)"
+      },
+      {
+        "name": "lab-floor",
+        "kind": "floor",
+        "part": 10,
+        "label": "white/pale tiled floor (labs, workshop)"
+      },
+      {
+        "name": "lab-floor-light",
+        "kind": "floor",
+        "part": 9,
+        "label": "white floor with a ceiling-light spot"
+      },
+      {
+        "name": "base-wall",
+        "kind": "wall",
+        "west": 13,
+        "north": 12,
+        "label": "grey-pink panelled base wall"
+      },
+      {
+        "name": "base-wall-2",
+        "kind": "wall",
+        "west": 15,
+        "north": 14,
+        "label": "same base wall, alternate panel pattern (mixed with base-wall in runs)"
+      },
+      {
+        "name": "base-wall-3",
+        "kind": "wall",
+        "west": 17,
+        "north": 16,
+        "label": "same base wall, third panel pattern"
+      },
+      {
+        "name": "base-wall-corner",
+        "kind": "corner",
+        "part": 18,
+        "label": "thin post closing the corner of base-wall runs"
+      },
+      {
+        "name": "base-door",
+        "kind": "door",
+        "west": 32,
+        "north": 34,
+        "label": "white sliding door with red/yellow emblem (interior rooms)"
+      },
+      {
+        "name": "base-shutter-door",
+        "kind": "door",
+        "west": 38,
+        "north": 40,
+        "label": "grey ribbed sliding shutter (lift shaft, stores bays, hangar side doors)"
+      },
+      {
+        "name": "base-stairs-north",
+        "kind": "stairs",
+        "low": 26,
+        "high": 27,
+        "dir": "north",
+        "label": "grey concrete stairs"
+      },
+      {
+        "name": "base-stairs-west",
+        "kind": "stairs",
+        "low": 29,
+        "high": 28,
+        "dir": "west",
+        "label": "grey concrete stairs"
+      },
+      {
+        "name": "base-solid-earth",
+        "kind": "object",
+        "part": 1,
+        "blocks": true,
+        "label": "unexcavated earth block; fills everything outside the rooms"
+      },
+      {
+        "name": "base-corner-fill-nw",
+        "kind": "object",
+        "part": 2,
+        "blocks": true,
+        "label": "earth block with a wall face, cuts the NW corner of an octagonal room"
+      },
+      {
+        "name": "base-corner-fill-se",
+        "kind": "object",
+        "part": 3,
+        "blocks": true,
+        "label": "earth block cutting the SE corner of an octagonal room"
+      },
+      {
+        "name": "base-corner-fill-ne",
+        "kind": "object",
+        "part": 4,
+        "blocks": true,
+        "label": "earth block cutting the NE corner of an octagonal room"
+      },
+      {
+        "name": "base-corner-fill-sw",
+        "kind": "object",
+        "part": 5,
+        "blocks": true,
+        "label": "earth block cutting the SW corner of an octagonal room"
+      },
+      {
+        "name": "base-wall-block",
+        "kind": "object",
+        "part": 19,
+        "blocks": true,
+        "label": "free-standing diagonal wall block (inner octagon corners, NW/SE)"
+      },
+      {
+        "name": "base-wall-post",
+        "kind": "object",
+        "part": 20,
+        "blocks": true,
+        "label": "free-standing diagonal wall post (inner octagon corners, NE/SW)"
+      },
+      {
+        "name": "bunk-bed",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            45
+          ],
+          [
+            0,
+            1,
+            44
+          ]
+        ],
+        "label": "blue two-tier bunk bed, 1x2 (living quarters)"
+      },
+      {
+        "name": "office-chair-faces-east",
+        "kind": "object",
+        "part": 46,
+        "blocks": true,
+        "label": "blue swivel chair; placed on the west side of a table/desk"
+      },
+      {
+        "name": "office-chair-faces-northwest",
+        "kind": "object",
+        "part": 47,
+        "blocks": true,
+        "label": "blue swivel chair seen from behind; placed diagonally SE of a table"
+      },
+      {
+        "name": "office-chair-faces-north",
+        "kind": "object",
+        "part": 48,
+        "blocks": true,
+        "label": "blue swivel chair; placed south of a table"
+      },
+      {
+        "name": "office-chair-faces-west",
+        "kind": "object",
+        "part": 49,
+        "blocks": true,
+        "label": "blue swivel chair; placed east of a computer desk or table"
+      },
+      {
+        "name": "base-table",
+        "kind": "object",
+        "part": 50,
+        "blocks": true,
+        "label": "light-blue square table"
+      },
+      {
+        "name": "computer-cabinet",
+        "kind": "object",
+        "part": 51,
+        "blocks": true,
+        "label": "tall light-blue computer cabinet; stands against a west wall"
+      },
+      {
+        "name": "computer-cabinet-north",
+        "kind": "object",
+        "part": 52,
+        "blocks": true,
+        "label": "tall light-blue computer cabinet; stands against a north wall"
+      },
+      {
+        "name": "computer-desk",
+        "kind": "object",
+        "part": 53,
+        "blocks": true,
+        "label": "grey computer terminal on a blue desk"
+      },
+      {
+        "name": "lab-lamp-lit",
+        "kind": "object",
+        "part": 57,
+        "blocks": true,
+        "label": "angled lab lamp, lit"
+      },
+      {
+        "name": "lab-lamp-lit-2",
+        "kind": "object",
+        "part": 58,
+        "blocks": true,
+        "label": "angled lab lamp, lit, mirrored"
+      },
+      {
+        "name": "lab-lamp",
+        "kind": "object",
+        "part": 59,
+        "blocks": true,
+        "label": "angled lab lamp, unlit"
+      },
+      {
+        "name": "lab-lamp-2",
+        "kind": "object",
+        "part": 60,
+        "blocks": true,
+        "label": "angled lab lamp, unlit, mirrored"
+      },
+      {
+        "name": "lab-bench",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            62
+          ],
+          [
+            0,
+            1,
+            61
+          ]
+        ],
+        "label": "grey lab bench with blue lights, 1x2"
+      },
+      {
+        "name": "lab-microscope",
+        "kind": "object",
+        "part": 63,
+        "blocks": true,
+        "label": "lab console with a microscope arm"
+      },
+      {
+        "name": "workbench",
+        "kind": "object",
+        "part": 69,
+        "blocks": true,
+        "label": "grey workshop bench with tools"
+      },
+      {
+        "name": "hoist-crane",
+        "kind": "object",
+        "part": 70,
+        "blocks": true,
+        "label": "blue mobile hoist/crane (workshop, hangar)"
+      },
+      {
+        "name": "workshop-lathe",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            72
+          ],
+          [
+            0,
+            1,
+            71
+          ]
+        ],
+        "label": "grey machine tool, 1x2"
+      },
+      {
+        "name": "assembly-machine",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            76
+          ],
+          [
+            1,
+            0,
+            75
+          ],
+          [
+            0,
+            1,
+            74
+          ],
+          [
+            1,
+            1,
+            73
+          ]
+        ],
+        "label": "big blue fabrication machine, 2x2; usually with a robot-arm east of its NE part"
+      },
+      {
+        "name": "robot-arm",
+        "kind": "object",
+        "part": 77,
+        "blocks": true,
+        "label": "purple industrial robot arm"
+      },
+      {
+        "name": "robot-arm-2",
+        "kind": "object",
+        "part": 78,
+        "blocks": true,
+        "label": "purple industrial robot arm, mirrored"
+      },
+      {
+        "name": "wall-terminal-west",
+        "kind": "object",
+        "part": 89,
+        "label": "wall-mounted screen and keyboard on a west wall (walk-through)"
+      },
+      {
+        "name": "wall-terminal-north",
+        "kind": "object",
+        "part": 90,
+        "label": "wall-mounted screen and keyboard on a north wall (walk-through)"
+      },
+      {
+        "name": "storage-shelf",
+        "kind": "object",
+        "part": 91,
+        "blocks": true,
+        "label": "low shelving with orange parts; against a west wall"
+      },
+      {
+        "name": "storage-shelf-2",
+        "kind": "object",
+        "part": 92,
+        "blocks": true,
+        "label": "low shelving with metal parts; against a west wall"
+      },
+      {
+        "name": "storage-shelf-barrels",
+        "kind": "object",
+        "part": 93,
+        "blocks": true,
+        "label": "shelving with barrels and crates; against a north wall"
+      },
+      {
+        "name": "storage-shelf-north",
+        "kind": "object",
+        "part": 94,
+        "blocks": true,
+        "label": "low shelving with orange parts; against a north wall"
+      },
+      {
+        "name": "locker",
+        "kind": "object",
+        "part": 95,
+        "blocks": true,
+        "label": "blue double-door locker; against a west wall"
+      },
+      {
+        "name": "locker-north",
+        "kind": "object",
+        "part": 96,
+        "blocks": true,
+        "label": "blue double-door locker; against a north wall"
+      },
+      {
+        "name": "scorched-base-floor",
+        "kind": "debris",
+        "part": 8
+      },
+      {
+        "name": "scorched-lab-floor",
+        "kind": "debris",
+        "part": 11
+      },
+      {
+        "name": "base-rubble",
+        "kind": "debris",
+        "part": 21,
+        "label": "wall rubble"
+      },
+      {
+        "name": "broken-base-door",
+        "kind": "debris",
+        "part": 36
+      },
+      {
+        "name": "wrecked-cabinet",
+        "kind": "debris",
+        "part": 54
+      },
+      {
+        "name": "wrecked-machine",
+        "kind": "debris",
+        "part": 83
+      },
+      {
+        "name": "earth-rubble",
+        "kind": "debris",
+        "part": 0,
+        "label": "loose earth patch (impassable)"
+      }
+    ],
+    "XBASE2": [
+      {
+        "name": "small-radar-dish",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            2
+          ],
+          [
+            2,
+            0,
+            5
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            4
+          ],
+          [
+            2,
+            1,
+            7
+          ],
+          [
+            0,
+            2,
+            3
+          ],
+          [
+            1,
+            2,
+            6
+          ],
+          [
+            2,
+            2,
+            8
+          ]
+        ],
+        "label": "tilted radar dish, 3x3"
+      },
+      {
+        "name": "large-radar-dish",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            9
+          ],
+          [
+            1,
+            0,
+            11
+          ],
+          [
+            0,
+            1,
+            12
+          ],
+          [
+            1,
+            1,
+            10
+          ]
+        ],
+        "label": "dish on a pedestal, 2x2 (large radar has four)"
+      },
+      {
+        "name": "psi-lab-station",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            15
+          ],
+          [
+            1,
+            0,
+            13
+          ],
+          [
+            0,
+            1,
+            14
+          ]
+        ],
+        "label": "psi-amp chair with headset and cabled equipment, L-shaped 3 tiles"
+      },
+      {
+        "name": "containment-glass",
+        "kind": "wall",
+        "west": 20,
+        "north": 19,
+        "label": "blue glass containment wall (blocks sight)"
+      },
+      {
+        "name": "containment-floor",
+        "kind": "floor",
+        "part": 21,
+        "label": "blue grid floor (alien containment, psi lab)"
+      },
+      {
+        "name": "barrel",
+        "kind": "object",
+        "part": 25,
+        "blocks": true,
+        "label": "brown oil drum"
+      },
+      {
+        "name": "hangar-floor",
+        "kind": "floor",
+        "part": 26,
+        "label": "pale blue hangar floor"
+      },
+      {
+        "name": "hangar-floor-stripe-ns",
+        "kind": "floor",
+        "part": 27,
+        "label": "hangar floor with a painted stripe running north-south"
+      },
+      {
+        "name": "hangar-floor-stripe-ew",
+        "kind": "floor",
+        "part": 28,
+        "label": "hangar floor with a painted stripe running east-west"
+      },
+      {
+        "name": "hangar-floor-stripe-corner",
+        "kind": "floor",
+        "part": 29,
+        "label": "hangar floor where painted stripes meet"
+      },
+      {
+        "name": "missile-rack",
+        "kind": "object",
+        "part": 31,
+        "blocks": true,
+        "label": "missile body (lower level of a missile defense silo; tile 3x3)"
+      },
+      {
+        "name": "missile-rack-nose",
+        "kind": "object",
+        "part": 32,
+        "blocks": true,
+        "label": "missile nose cones (upper level above missile-rack)"
+      },
+      {
+        "name": "laser-defense",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            36
+          ],
+          [
+            1,
+            0,
+            34
+          ],
+          [
+            0,
+            1,
+            35
+          ],
+          [
+            1,
+            1,
+            33
+          ]
+        ],
+        "label": "laser defense emitter, blue coils, 2x2"
+      },
+      {
+        "name": "plasma-defense",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            38
+          ],
+          [
+            1,
+            0,
+            37
+          ],
+          [
+            0,
+            1,
+            40
+          ],
+          [
+            1,
+            1,
+            39
+          ]
+        ],
+        "label": "plasma defense emitter, green coils, 2x2"
+      },
+      {
+        "name": "fusion-defense",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            41
+          ],
+          [
+            1,
+            0,
+            44
+          ],
+          [
+            0,
+            1,
+            42
+          ],
+          [
+            1,
+            1,
+            43
+          ]
+        ],
+        "label": "fusion ball launcher, purple/gold pods, 2x2"
+      },
+      {
+        "name": "mind-shield",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            45
+          ],
+          [
+            1,
+            0,
+            46
+          ],
+          [
+            0,
+            1,
+            48
+          ],
+          [
+            1,
+            1,
+            47
+          ]
+        ],
+        "label": "purple dome generator, 2x2"
+      },
+      {
+        "name": "hyperwave-decoder",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            51
+          ],
+          [
+            1,
+            0,
+            52
+          ],
+          [
+            0,
+            1,
+            50
+          ],
+          [
+            1,
+            1,
+            49
+          ]
+        ],
+        "label": "purple console with blue lights, 2x2"
+      },
+      {
+        "name": "grav-shield-pylon",
+        "kind": "object",
+        "part": 61,
+        "blocks": true,
+        "label": "tall blue cylinder (grav shield)"
+      },
+      {
+        "name": "broken-containment-glass",
+        "kind": "debris",
+        "part": 22
+      },
+      {
+        "name": "broken-containment-floor",
+        "kind": "debris",
+        "part": 24
+      },
+      {
+        "name": "scorched-hangar-floor",
+        "kind": "debris",
+        "part": 30
+      },
+      {
+        "name": "wrecked-defense",
+        "kind": "debris",
+        "part": 53,
+        "label": "burnt dark machinery (defense/shield wreck)"
+      },
+      {
+        "name": "wrecked-psi-station",
+        "kind": "debris",
+        "part": 16
+      }
+    ],
+    "PLANE": [
+      {
+        "name": "skyranger-floor",
+        "kind": "floor",
+        "part": 2,
+        "label": "Skyranger troop-bay deck"
+      },
+      {
+        "name": "skyranger-cockpit-floor",
+        "kind": "floor",
+        "part": 54,
+        "label": "cockpit deck (not walkable, tuWalk 255)"
+      },
+      {
+        "name": "skyranger-roof",
+        "kind": "floor",
+        "part": 60,
+        "roof": true,
+        "label": "fuselage roof, port half"
+      },
+      {
+        "name": "skyranger-roof-2",
+        "kind": "floor",
+        "part": 61,
+        "roof": true,
+        "label": "fuselage roof, starboard half"
+      },
+      {
+        "name": "skyranger-cockpit-roof",
+        "kind": "floor",
+        "part": 52,
+        "roof": true,
+        "label": "roof over the cockpit"
+      },
+      {
+        "name": "skyranger-wing",
+        "kind": "floor",
+        "part": 21,
+        "roof": true,
+        "label": "wing surface (one of many shaped wing pieces 15-40; walkable)"
+      },
+      {
+        "name": "skyranger-landing-gear",
+        "kind": "object",
+        "part": 0,
+        "blocks": true,
+        "label": "wheeled landing strut"
+      },
+      {
+        "name": "skyranger-landing-gear-2",
+        "kind": "object",
+        "part": 1,
+        "blocks": true,
+        "label": "twin landing strut"
+      },
+      {
+        "name": "skyranger-hull-port",
+        "kind": "object",
+        "part": 4,
+        "blocks": true,
+        "label": "port (west) fuselage side"
+      },
+      {
+        "name": "skyranger-hull-starboard",
+        "kind": "object",
+        "part": 10,
+        "blocks": true,
+        "label": "starboard (east) fuselage side"
+      },
+      {
+        "name": "skyranger-hull-rear-port",
+        "kind": "object",
+        "part": 6,
+        "blocks": true,
+        "label": "rear port fuselage corner by the ramp"
+      },
+      {
+        "name": "skyranger-hull-rear-starboard",
+        "kind": "object",
+        "part": 12,
+        "blocks": true,
+        "label": "rear starboard fuselage corner by the ramp"
+      },
+      {
+        "name": "skyranger-engine-port",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            44
+          ],
+          [
+            0,
+            1,
+            42
+          ],
+          [
+            0,
+            2,
+            42
+          ],
+          [
+            0,
+            3,
+            41
+          ]
+        ],
+        "label": "engine nacelle, 1x4"
+      },
+      {
+        "name": "skyranger-engine-starboard",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            43
+          ],
+          [
+            0,
+            1,
+            42
+          ],
+          [
+            0,
+            2,
+            42
+          ],
+          [
+            0,
+            3,
+            41
+          ]
+        ],
+        "label": "engine nacelle, 1x4"
+      },
+      {
+        "name": "skyranger-cockpit",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            58
+          ],
+          [
+            1,
+            0,
+            51
+          ],
+          [
+            2,
+            0,
+            49
+          ],
+          [
+            3,
+            0,
+            47
+          ],
+          [
+            0,
+            1,
+            59
+          ],
+          [
+            1,
+            1,
+            48
+          ],
+          [
+            2,
+            1,
+            50
+          ],
+          [
+            1,
+            2,
+            57
+          ],
+          [
+            2,
+            2,
+            45
+          ]
+        ],
+        "label": "nose/cockpit objects (also needs W part 46 at offset (3,1))"
+      },
+      {
+        "name": "skyranger-ramp",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            64
+          ],
+          [
+            1,
+            0,
+            64
+          ],
+          [
+            0,
+            1,
+            63
+          ],
+          [
+            1,
+            1,
+            63
+          ],
+          [
+            0,
+            2,
+            62
+          ],
+          [
+            1,
+            2,
+            62
+          ]
+        ],
+        "label": "boarding ramp 2x3, rises toward +y (south) to the deck one level up"
+      }
+    ],
+    "AVENGER": [
+      {
+        "name": "avenger-floor",
+        "kind": "floor",
+        "part": 34,
+        "label": "Avenger troop deck"
+      },
+      {
+        "name": "avenger-floor-corner-nw",
+        "kind": "floor",
+        "part": 38
+      },
+      {
+        "name": "avenger-floor-corner-ne",
+        "kind": "floor",
+        "part": 36
+      },
+      {
+        "name": "avenger-floor-corner-sw",
+        "kind": "floor",
+        "part": 35
+      },
+      {
+        "name": "avenger-floor-corner-se",
+        "kind": "floor",
+        "part": 37
+      },
+      {
+        "name": "avenger-roof",
+        "kind": "floor",
+        "part": 56,
+        "roof": true,
+        "label": "Avenger roof centre"
+      },
+      {
+        "name": "avenger-roof-edge",
+        "kind": "floor",
+        "part": 3,
+        "roof": true,
+        "label": "Avenger roof edge strip"
+      },
+      {
+        "name": "avenger-console",
+        "kind": "object",
+        "part": 41,
+        "blocks": true,
+        "label": "grey pedestal console (cockpit)"
+      },
+      {
+        "name": "avenger-wall-console",
+        "kind": "object",
+        "part": 42,
+        "blocks": true,
+        "label": "wall block with yellow screens"
+      },
+      {
+        "name": "avenger-wall-panel",
+        "kind": "object",
+        "part": 43,
+        "blocks": true,
+        "label": "grey panelled interior wall block"
+      },
+      {
+        "name": "avenger-hull",
+        "kind": "object",
+        "part": 31,
+        "blocks": true,
+        "label": "hull block"
+      },
+      {
+        "name": "avenger-hull-emblem",
+        "kind": "object",
+        "part": 30,
+        "blocks": true,
+        "label": "hull block with the X-COM emblem"
+      },
+      {
+        "name": "avenger-landing-gear",
+        "kind": "object",
+        "part": 49,
+        "blocks": true,
+        "label": "landing strut"
+      },
+      {
+        "name": "avenger-landing-gear-2",
+        "kind": "object",
+        "part": 50,
+        "blocks": true,
+        "label": "landing strut"
+      },
+      {
+        "name": "avenger-engine-pod-port",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            22
+          ],
+          [
+            0,
+            1,
+            21
+          ],
+          [
+            0,
+            2,
+            20
+          ]
+        ],
+        "label": "wing engine pod, 1x3"
+      },
+      {
+        "name": "avenger-engine-pod-starboard",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            28
+          ],
+          [
+            0,
+            1,
+            21
+          ],
+          [
+            0,
+            2,
+            20
+          ]
+        ],
+        "label": "wing engine pod, 1x3"
+      },
+      {
+        "name": "avenger-ramp",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            55
+          ],
+          [
+            1,
+            0,
+            55
+          ],
+          [
+            0,
+            1,
+            54
+          ],
+          [
+            1,
+            1,
+            54
+          ],
+          [
+            0,
+            2,
+            53
+          ],
+          [
+            1,
+            2,
+            53
+          ]
+        ],
+        "label": "boarding ramp 2x3, rises toward +y (south) to the deck one level up"
+      },
+      {
+        "name": "avenger-hatch",
+        "kind": "door",
+        "north": 51,
+        "label": "purple sliding hatch (not used in the stock map)"
+      }
+    ],
+    "LIGHTNIN": [
+      {
+        "name": "lightning-floor",
+        "kind": "floor",
+        "part": 21,
+        "label": "Lightning cabin deck"
+      },
+      {
+        "name": "lightning-floor-edge",
+        "kind": "floor",
+        "part": 22,
+        "label": "triangular deck edge piece (22-25 are the four diagonal edges)"
+      },
+      {
+        "name": "lightning-roof",
+        "kind": "floor",
+        "part": 33,
+        "roof": true,
+        "label": "Lightning roof"
+      },
+      {
+        "name": "lightning-roof-hatch",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            29
+          ],
+          [
+            1,
+            0,
+            31
+          ],
+          [
+            0,
+            1,
+            30
+          ],
+          [
+            1,
+            1,
+            32
+          ]
+        ],
+        "label": "roof equipment/hatch 2x2 (roof level)"
+      },
+      {
+        "name": "lightning-seat",
+        "kind": "object",
+        "part": 26,
+        "blocks": true,
+        "label": "white passenger seat"
+      },
+      {
+        "name": "lightning-seat-2",
+        "kind": "object",
+        "part": 27,
+        "blocks": true,
+        "label": "white passenger seat"
+      },
+      {
+        "name": "lightning-seat-3",
+        "kind": "object",
+        "part": 28,
+        "blocks": true,
+        "label": "white passenger seat"
+      },
+      {
+        "name": "lightning-side-table",
+        "kind": "object",
+        "part": 18,
+        "blocks": true,
+        "label": "small grey stand"
+      },
+      {
+        "name": "lightning-centre-pedestal",
+        "kind": "object",
+        "part": 41,
+        "label": "brown stepped pedestal in the cabin centre (walkable)"
+      },
+      {
+        "name": "lightning-door",
+        "kind": "object",
+        "part": 40,
+        "label": "sliding hatch at the top of the ramp (object-type UFO door)"
+      },
+      {
+        "name": "lightning-hull",
+        "kind": "object",
+        "part": 1,
+        "blocks": true,
+        "label": "hull wall block"
+      },
+      {
+        "name": "lightning-hull-console",
+        "kind": "object",
+        "part": 12,
+        "blocks": true,
+        "label": "hull wall block with screens"
+      },
+      {
+        "name": "lightning-landing-gear",
+        "kind": "object",
+        "part": 14,
+        "blocks": true,
+        "label": "landing strut"
+      },
+      {
+        "name": "lightning-ramp",
+        "kind": "stairs",
+        "low": 38,
+        "high": 39,
+        "dir": "west",
+        "label": "boarding ramp on the east side of the craft"
+      }
+    ]
+  },
+  "blocks": {
+    "XBASE_00": "Access lift: octagonal two-storey room; the lift pad (base-floor-light) sits in a 3x5 shaft walled by grey shutter doors on both levels. Outer row/column (x=9,y=9) is solid earth like every module.",
+    "XBASE_01": "Living quarters: upper level full of bunk beds in rows; lower level is a cross-shaped corridor with small side rooms (lockers, desks) and stairs up in the NE.",
+    "XBASE_02": "Laboratory: upper level of white floor with lab benches, microscopes, lamps and cabinets; lower level has a corridor cross, side rooms with tables/cabinets and stairs.",
+    "XBASE_03": "Workshop: upper level with two big assembly machines, robot arms, lathes, workbenches and hoists; lower level corridors and side rooms with stairs.",
+    "XBASE_04": "Small radar: octagonal room with a 3x3 tilted dish in the middle, desks and cabinets around; lower level is an empty octagon with stairs (NW).",
+    "XBASE_05": "Large radar: square room with four 2x2 pedestal dishes; lower level is a walled inner square holding the stairs.",
+    "XBASE_06": "Missile defense: octagonal room with a central 3x3 missile silo inside an inner octagonal wall; stairs in the NE.",
+    "XBASE_07": "General stores: walled bays with shelves, lockers and cabinets; lower bays closed by grey shutter doors, upper rooms by white doors.",
+    "XBASE_08": "Alien containment: upper level is cells of blue glass walls on blue floor with doors; lower level has a corridor cross and side rooms (chairs, table) with stairs.",
+    "XBASE_09": "Laser defense: cross-shaped room, eight 2x2 laser emitters around the walls, open centre; lower level is an inner walled square with stairs.",
+    "XBASE_10": "Plasma defense: same layout as laser defense with eight 2x2 plasma emitters.",
+    "XBASE_11": "Fusion ball defense: same layout with eight 2x2 fusion launchers.",
+    "XBASE_12": "Grav shield: octagonal room with a grid of tall blue pylons (impassable columns, good cover); stairs below.",
+    "XBASE_13": "Mind shield: octagonal room with four 2x2 purple dome generators and a desk; stairs below.",
+    "XBASE_14": "Psionic lab: upper level of glass-walled cubicles each with a psi-amp station, computer desks in the south; lower level side rooms and stairs.",
+    "XBASE_15": "Hyperwave decoder: octagonal room with four 2x2 decoder consoles, desks and a table.",
+    "XBASE_16": "Hangar NW quarter (hangar is 2x2 blocks): wide open pale-blue floor with painted stripes, walls on north/west, a hoist and barrels; small shutter doorway in the SW.",
+    "XBASE_17": "Hangar NE quarter: open striped floor, walls on north/east with a small walled alcove, a barrel.",
+    "XBASE_18": "Hangar SW quarter: open striped floor, walls on west/south with a small alcove and shutter door.",
+    "XBASE_19": "Hangar SE quarter: almost entirely open striped floor; earth on the outer edges.",
+    "XBASE_20": "Solid earth (unbuilt ground between facilities).",
+    "PLANE": "Skyranger (10x20, craft map): troop bay deck one level up reached by a 2-wide ramp at the north (rear) end, cockpit at the south nose, engine nacelles and wings on both sides, landing gear underneath.",
+    "AVENGER": "Avenger (10x20): troop deck 4x9 one level up via a rear ramp at the north end, cockpit with consoles at the south, engine pods on the wings, landing struts below.",
+    "LIGHTNIN": "Lightning (20x10): roughly round cabin one level up, seats and stands around a central pedestal, entered through a hatch from a ramp on the east side."
+  },
+  "notes": "XBASE modules are 2 storeys (MAP level 0 = lower floor with stairs and side rooms, level 1 = upper floor with the facility equipment); hangar blocks 16-19 are one open storey forming a 20x20 hangar (16 NW, 17 NE, 18 SW, 19 SE). Each 10x10 module's x=9 column and y=9 row are solid-earth and the walls have no doorways in the files: OpenXcom drills connecting corridors between adjacent modules at generation time. Block-to-facility mapping is from OpenXcom's xcom1 facilities (00 lift ... 15 hyperwave, 16-19 hangar), not stored in generated.json. Base-wall variants 12-17 look almost identical. Office chair facings are inferred from placement, not certain. PLANE is the Skyranger, not an airliner. Craft parts all have armor 255; hull pieces are impassable shaped fragments and only representative ones are named. Craft ramps rise toward +y onto the deck one level up; their levels are -4/-12/-20 so they are given as multi, not stairs (Lightning 38/39 are a normal -8/-16 pair climbing west). Avenger 51/52 (N ufo doors, open states 57/58) are not used in AVENGER.MAP; 52 mirrors 51. XBASE1 30/31 are destroyed stairs; 64-68 and 79-88 and XBASE2 53-60 are wreck forms."
+}

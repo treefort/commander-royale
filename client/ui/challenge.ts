@@ -13,7 +13,7 @@ interface Challenge {
   yours: boolean;
   created: number;
   summary: {
-    biome: string; timeOfDay: string; mapBlocks: number; mode: string; turnTimer: number;
+    biome: string; timeOfDay: string; mapBlocks: number; mode: string; turnTimer: number; mapName?: string;
     sides: { name: string; units: number; yours: boolean; reinforcements: number }[];
     squad: { name: string; type: string; armor: string; items: string[] }[];
   };
@@ -68,7 +68,7 @@ export async function renderChallenge(root: HTMLElement, me: Me, id: string, go:
   const briefing = el("div", { class: "panel" },
     el("h1", {}, c.title.toUpperCase()),
     el("div", { class: "muted" }, `Challenge set by ${c.by}${c.yours ? " (you)" : ""} · ${new Date(c.created).toLocaleDateString()}`),
-    el("p", {}, `${biomeName(s.biome)}, ${s.timeOfDay} · ${s.mapBlocks}x${s.mapBlocks} map${s.turnTimer ? ` · ${Math.round(s.turnTimer / 60) || 1} min turns` : ""}`),
+    el("p", {}, `${s.mapName ? `${s.mapName} (${biomeName(s.biome)})` : biomeName(s.biome)}, ${s.timeOfDay} · ${s.mapBlocks}x${s.mapBlocks} map${s.turnTimer ? ` · ${Math.round(s.turnTimer / 60) || 1} min turns` : ""}`),
     el("h3", {}, "TURN ORDER"),
     el("ol", { class: "challenge-sides" }, ...sides),
     el("p", { class: "muted" }, "You command the squad below from the very start of the battle; everyone else is the AI. Same map, same soldiers and gear, same starting positions; the dice are your own."),

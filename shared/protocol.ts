@@ -24,6 +24,13 @@ export interface MatchSettings {
   mapBlocks: number;
   /** set when an auto map size was decided at the start, so reusing these settings sizes it again */
   autoMap?: boolean;
+  /**
+   * a custom map (made in the map editor) by id, "" = a map generated from the settings above. A custom map has
+   * its own size, terrain, landing zones and any UFO, so `biome`, `ufo` and `mapBlocks` don't apply
+   */
+  map: string;
+  /** the custom map's name (the server fills it in) */
+  mapName?: string;
   budget: number;
   squadLimit: number; // seats; large units take 4
   poolSize: number;
@@ -299,6 +306,7 @@ export function defaultSettings(): MatchSettings {
     timeOfDay: "day",
     ufo: "none",
     mapBlocks: 0,
+    map: "",
     budget: 400_000,
     squadLimit: 14,
     poolSize: 40,
@@ -338,6 +346,8 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     ufo: UFO_CHOICES.some((u) => u.id === s.ufo) ? (s.ufo as string) : d.ufo,
     // 0 (or nothing) is auto; reusing a finished match's settings, an auto size that was decided goes back to auto
     mapBlocks: s.autoMap || !(Number(s.mapBlocks) > 0) ? 0 : clamp(s.mapBlocks, 4, 10, d.mapBlocks),
+    map: /^[A-Za-z0-9]{1,24}$/.test(String(s.map ?? "")) ? String(s.map) : "",
+    ...(s.map && s.mapName ? { mapName: String(s.mapName).slice(0, 40) } : {}),
     budget: clamp(s.budget, 50_000, 5_000_000, d.budget),
     squadLimit: clamp(s.squadLimit, 1, 30, d.squadLimit),
     poolSize: clamp(s.poolSize, 10, 80, d.poolSize),

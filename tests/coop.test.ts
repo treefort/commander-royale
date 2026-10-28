@@ -111,7 +111,7 @@ test("co-op on the server: joining a squad, lock-ins, AFK and AI tuning", async 
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
   const mkUser = (id: string) => {
-    db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
+    db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const [ann, ben, dot, eli] = ["co_ann", "co_ben", "co_dot", "co_eli"].map(mkUser);
@@ -188,7 +188,7 @@ test("computer squads take AI settings, and their strength scales what they hire
   if (!process.env.DB_PATH) process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), "xcom-coop-")), "test.sqlite");
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
-  db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES ('co_fay', NULL, NULL, 'co_fay', NULL, ?)").run(Date.now());
+  db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES ('co_fay', NULL, NULL, 'co_fay', NULL, ?)").run(Date.now());
   const fay = db.query("SELECT * FROM users WHERE id = 'co_fay'").get() as never;
   const { id } = game.createMatch(fay, { budget: 150_000, biome: "CULTA", timeOfDay: "day" });
   expect(game.addBot(id, fay, "swarm", { aggression: 3, strength: 100 })).toBeNull();
@@ -212,7 +212,7 @@ test("the host can have the AI play the turn of someone who isn't responding", a
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
   const mkUser = (id: string) => {
-    db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
+    db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const [hal, ivy] = ["ha_hal", "ha_ivy"].map(mkUser);

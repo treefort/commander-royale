@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "xcom-battlescape-mp",
+      "name": "commander-royale",
       "devDependencies": {
         "bun-types": "^1.4.3",
         "spessasynth_core": "4.3.22",

@@ -47,7 +47,7 @@ test("retries and challenges on the server", async () => {
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
   const mkUser = (id: string) => {
-    db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
+    db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(id, id, Date.now());
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   };
   const battleOf = (id: string, col = "battle") => {

@@ -1,0 +1,1697 @@
+{
+  "datasets": {
+    "DESERT": [
+      {
+        "name": "sand",
+        "kind": "floor",
+        "part": 0,
+        "label": "plain desert sand"
+      },
+      {
+        "name": "sand-skull",
+        "kind": "floor",
+        "part": 1,
+        "label": "sand with a small skull"
+      },
+      {
+        "name": "sand-pit",
+        "kind": "floor",
+        "part": 2,
+        "label": "sand with a small dark hole"
+      },
+      {
+        "name": "sand-cow-skull",
+        "kind": "floor",
+        "part": 3,
+        "label": "sand with a horned animal skull"
+      },
+      {
+        "name": "sand-snake",
+        "kind": "floor",
+        "part": 4,
+        "label": "sand with a long brown snake"
+      },
+      {
+        "name": "sand-snake-2",
+        "kind": "floor",
+        "part": 5,
+        "label": "sand with a shorter snake"
+      },
+      {
+        "name": "sand-bone",
+        "kind": "floor",
+        "part": 6,
+        "label": "sand with a bleached bone"
+      },
+      {
+        "name": "sand-scrub",
+        "kind": "floor",
+        "part": 7,
+        "label": "sand with a low green desert shrub"
+      },
+      {
+        "name": "sand-tumbleweed",
+        "kind": "floor",
+        "part": 8,
+        "label": "sand with a dry brown brush clump"
+      },
+      {
+        "name": "sand-coiled-snake",
+        "kind": "floor",
+        "part": 9,
+        "label": "sand with a coiled rattlesnake"
+      },
+      {
+        "name": "sand-hollow",
+        "kind": "floor",
+        "part": 19,
+        "label": "sand with a dark shallow depression"
+      },
+      {
+        "name": "sand-hollow-2",
+        "kind": "floor",
+        "part": 20,
+        "label": "larger dark depression in the sand"
+      },
+      {
+        "name": "barrel-cactus",
+        "kind": "object",
+        "part": 10,
+        "blocks": true,
+        "label": "squat round barrel cactus"
+      },
+      {
+        "name": "saguaro-cactus",
+        "kind": "object",
+        "part": 12,
+        "blocks": true,
+        "label": "tall saguaro cactus with arms"
+      },
+      {
+        "name": "flowering-cactus",
+        "kind": "object",
+        "part": 14,
+        "blocks": true,
+        "label": "cactus with red flowers/fruit"
+      },
+      {
+        "name": "dead-desert-tree",
+        "kind": "object",
+        "part": 16,
+        "blocks": true,
+        "label": "dry dead tree, leaning"
+      },
+      {
+        "name": "charred-tree",
+        "kind": "object",
+        "part": 17,
+        "blocks": true,
+        "label": "black dead tree"
+      },
+      {
+        "name": "desert-rock",
+        "kind": "object",
+        "part": 22,
+        "label": "grey rock (walkable, low cover)"
+      },
+      {
+        "name": "desert-rock-round",
+        "kind": "object",
+        "part": 23,
+        "label": "small rounded grey rock (walkable)"
+      },
+      {
+        "name": "desert-rock-flat",
+        "kind": "object",
+        "part": 24,
+        "label": "wide flat grey rock slab (walkable)"
+      },
+      {
+        "name": "desert-rock-2",
+        "kind": "object",
+        "part": 25,
+        "label": "grey rock (walkable)"
+      },
+      {
+        "name": "desert-pebbles",
+        "kind": "object",
+        "part": 26,
+        "label": "a few small pebbles (walkable)"
+      },
+      {
+        "name": "sand-corner-out-low-ne",
+        "kind": "object",
+        "part": 27,
+        "label": "sand dune outer (convex) corner slope (ground to 8), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "sand-ramp-low-east",
+        "kind": "object",
+        "part": 28,
+        "label": "sand dune ramp (ground to 8), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "sand-corner-out-low-se",
+        "kind": "object",
+        "part": 29,
+        "label": "sand dune outer (convex) corner slope (ground to 8), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "sand-ramp-low-south",
+        "kind": "object",
+        "part": 30,
+        "label": "sand dune ramp (ground to 8), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "sand-corner-out-low-sw",
+        "kind": "object",
+        "part": 31,
+        "label": "sand dune outer (convex) corner slope (ground to 8), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "sand-ramp-low-north",
+        "kind": "object",
+        "part": 32,
+        "label": "sand dune ramp (ground to 8), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "sand-ramp-low-west",
+        "kind": "object",
+        "part": 33,
+        "label": "sand dune ramp (ground to 8), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "sand-corner-out-low-nw",
+        "kind": "object",
+        "part": 34,
+        "label": "sand dune outer (convex) corner slope (ground to 8), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "sand-corner-in-low-ne",
+        "kind": "object",
+        "part": 35,
+        "label": "sand dune inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-low-sw",
+        "kind": "object",
+        "part": 36,
+        "label": "sand dune inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-low-nw",
+        "kind": "object",
+        "part": 37,
+        "label": "sand dune inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-low-se",
+        "kind": "object",
+        "part": 38,
+        "label": "sand dune inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-out-mid-ne",
+        "kind": "object",
+        "part": 41,
+        "label": "sand dune outer (convex) corner slope (8 to 16), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "sand-ramp-mid-east",
+        "kind": "object",
+        "part": 42,
+        "label": "sand dune ramp (8 to 16), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "sand-corner-out-mid-se",
+        "kind": "object",
+        "part": 43,
+        "label": "sand dune outer (convex) corner slope (8 to 16), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "sand-ramp-mid-south",
+        "kind": "object",
+        "part": 44,
+        "label": "sand dune ramp (8 to 16), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "sand-corner-out-mid-sw",
+        "kind": "object",
+        "part": 45,
+        "label": "sand dune outer (convex) corner slope (8 to 16), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "sand-ramp-mid-north",
+        "kind": "object",
+        "part": 46,
+        "label": "sand dune ramp (8 to 16), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "sand-ramp-mid-west",
+        "kind": "object",
+        "part": 47,
+        "label": "sand dune ramp (8 to 16), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "sand-corner-out-mid-nw",
+        "kind": "object",
+        "part": 48,
+        "label": "sand dune outer (convex) corner slope (8 to 16), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "sand-corner-in-mid-ne",
+        "kind": "object",
+        "part": 49,
+        "label": "sand dune inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-mid-sw",
+        "kind": "object",
+        "part": 50,
+        "label": "sand dune inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-mid-nw",
+        "kind": "object",
+        "part": 51,
+        "label": "sand dune inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-mid-se",
+        "kind": "object",
+        "part": 52,
+        "label": "sand dune inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-out-high-ne",
+        "kind": "object",
+        "part": 54,
+        "label": "sand dune outer (convex) corner slope (16 to 24), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "sand-ramp-high-east",
+        "kind": "object",
+        "part": 55,
+        "label": "sand dune ramp (16 to 24), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "sand-corner-out-high-se",
+        "kind": "object",
+        "part": 56,
+        "label": "sand dune outer (convex) corner slope (16 to 24), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "sand-ramp-high-south",
+        "kind": "object",
+        "part": 57,
+        "label": "sand dune ramp (16 to 24), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "sand-corner-out-high-sw",
+        "kind": "object",
+        "part": 58,
+        "label": "sand dune outer (convex) corner slope (16 to 24), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "sand-ramp-high-north",
+        "kind": "object",
+        "part": 59,
+        "label": "sand dune ramp (16 to 24), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "sand-ramp-high-west",
+        "kind": "object",
+        "part": 60,
+        "label": "sand dune ramp (16 to 24), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "sand-corner-out-high-nw",
+        "kind": "object",
+        "part": 61,
+        "label": "sand dune outer (convex) corner slope (16 to 24), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "sand-corner-in-high-ne",
+        "kind": "object",
+        "part": 62,
+        "label": "sand dune inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-high-sw",
+        "kind": "object",
+        "part": 63,
+        "label": "sand dune inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-high-nw",
+        "kind": "object",
+        "part": 64,
+        "label": "sand dune inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-corner-in-high-se",
+        "kind": "object",
+        "part": 65,
+        "label": "sand dune inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "sand-raised-8",
+        "kind": "object",
+        "part": 39,
+        "label": "flat raised sand, 8 high (fill/top of the low tier)"
+      },
+      {
+        "name": "sand-raised-16",
+        "kind": "object",
+        "part": 53,
+        "label": "flat raised sand, 16 high (fill/top of the mid tier)"
+      },
+      {
+        "name": "sand-block",
+        "kind": "object",
+        "part": 40,
+        "label": "solid sand a full tile (24) high: dune summit; units stand on its top"
+      },
+      {
+        "name": "scorched-sand",
+        "kind": "debris",
+        "part": 21,
+        "label": "burnt sand (what destroyed sand floors become)"
+      },
+      {
+        "name": "broken-cactus",
+        "kind": "debris",
+        "part": 11,
+        "label": "cactus remains (13 and 15 are the other cacti's remains)"
+      },
+      {
+        "name": "burnt-stump",
+        "kind": "debris",
+        "part": 18,
+        "label": "stump left by the dead trees"
+      }
+    ],
+    "MOUNT": [
+      {
+        "name": "mountain-ground",
+        "kind": "floor",
+        "part": 0,
+        "label": "grey stony ground with snow flecks (the default)"
+      },
+      {
+        "name": "mountain-lichen",
+        "kind": "floor",
+        "part": 1,
+        "label": "stony ground with golden lichen / dry grass"
+      },
+      {
+        "name": "mountain-puddle",
+        "kind": "floor",
+        "part": 2,
+        "label": "stony ground with a blue icy puddle"
+      },
+      {
+        "name": "mountain-stream",
+        "kind": "floor",
+        "part": 3,
+        "label": "stony ground with a thin blue trickle"
+      },
+      {
+        "name": "mountain-heather",
+        "kind": "floor",
+        "part": 4,
+        "label": "stony ground with a pink patch"
+      },
+      {
+        "name": "mountain-grass",
+        "kind": "floor",
+        "part": 5,
+        "label": "green grassy ground"
+      },
+      {
+        "name": "mountain-grass-sparse",
+        "kind": "floor",
+        "part": 6,
+        "label": "sparse grass tufts"
+      },
+      {
+        "name": "mountain-earth",
+        "kind": "floor",
+        "part": 7,
+        "label": "bare brown earth"
+      },
+      {
+        "name": "rock-crack-1",
+        "kind": "floor",
+        "part": 8,
+        "label": "pale ground with a dark rock streak (8-14 are tileable crack pieces)"
+      },
+      {
+        "name": "rock-crack-2",
+        "kind": "floor",
+        "part": 9
+      },
+      {
+        "name": "rock-crack-3",
+        "kind": "floor",
+        "part": 10
+      },
+      {
+        "name": "rock-crack-4",
+        "kind": "floor",
+        "part": 11
+      },
+      {
+        "name": "rock-crack-5",
+        "kind": "floor",
+        "part": 12
+      },
+      {
+        "name": "rock-crack-6",
+        "kind": "floor",
+        "part": 13
+      },
+      {
+        "name": "rock-crack-7",
+        "kind": "floor",
+        "part": 14,
+        "label": "branching dark crack"
+      },
+      {
+        "name": "mountain-mud-1",
+        "kind": "floor",
+        "part": 17,
+        "label": "brown mud patch piece (see mud-patch)"
+      },
+      {
+        "name": "mountain-mud-2",
+        "kind": "floor",
+        "part": 18
+      },
+      {
+        "name": "mountain-mud-3",
+        "kind": "floor",
+        "part": 19
+      },
+      {
+        "name": "mountain-mud-4",
+        "kind": "floor",
+        "part": 20
+      },
+      {
+        "name": "mountain-mud-mound",
+        "kind": "floor",
+        "part": 21,
+        "label": "small brown earth mound"
+      },
+      {
+        "name": "mountain-mud-mound-2",
+        "kind": "floor",
+        "part": 22
+      },
+      {
+        "name": "mountain-mud-mound-3",
+        "kind": "floor",
+        "part": 23
+      },
+      {
+        "name": "mud-patch",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            17
+          ],
+          [
+            1,
+            0,
+            19
+          ],
+          [
+            0,
+            1,
+            18
+          ],
+          [
+            1,
+            1,
+            20
+          ]
+        ],
+        "label": "2x2 brown mud patch (floors)"
+      },
+      {
+        "name": "rock-crevice",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            11
+          ],
+          [
+            1,
+            0,
+            13
+          ],
+          [
+            0,
+            1,
+            12
+          ],
+          [
+            1,
+            1,
+            14
+          ]
+        ],
+        "label": "2x2 dark rock crevice (floors)"
+      },
+      {
+        "name": "mountain-bush",
+        "kind": "object",
+        "part": 15,
+        "blocks": true,
+        "label": "small dead bush"
+      },
+      {
+        "name": "mountain-dead-tree",
+        "kind": "object",
+        "part": 16,
+        "blocks": true,
+        "label": "bare dead tree"
+      },
+      {
+        "name": "snowy-boulder",
+        "kind": "object",
+        "part": 24,
+        "blocks": true,
+        "label": "large boulder with snow and blue ice"
+      },
+      {
+        "name": "rock-spire",
+        "kind": "object",
+        "part": 25,
+        "blocks": true,
+        "label": "small dark rock spire"
+      },
+      {
+        "name": "big-boulder",
+        "kind": "object",
+        "part": 26,
+        "blocks": true,
+        "label": "big snow-capped boulder on brown earth"
+      },
+      {
+        "name": "white-boulder",
+        "kind": "object",
+        "part": 69,
+        "blocks": true,
+        "label": "white snow-covered boulder"
+      },
+      {
+        "name": "white-boulders",
+        "kind": "object",
+        "part": 70,
+        "blocks": true,
+        "label": "pair of white snow-covered boulders"
+      },
+      {
+        "name": "tree-stump",
+        "kind": "object",
+        "part": 71,
+        "blocks": true,
+        "label": "tall broken tree trunk"
+      },
+      {
+        "name": "mountain-hollow-log",
+        "kind": "object",
+        "part": 72,
+        "blocks": true,
+        "label": "fallen hollow log"
+      },
+      {
+        "name": "fallen-log",
+        "kind": "object",
+        "part": 73,
+        "blocks": true,
+        "label": "broken fallen log"
+      },
+      {
+        "name": "boulder-cluster",
+        "kind": "multi",
+        "parts": [
+          [
+            1,
+            0,
+            26
+          ],
+          [
+            0,
+            1,
+            24
+          ],
+          [
+            1,
+            1,
+            25
+          ]
+        ],
+        "label": "three-tile boulder group (big-boulder behind, snowy-boulder and rock-spire in front)"
+      },
+      {
+        "name": "rock-corner-out-low-ne",
+        "kind": "object",
+        "part": 27,
+        "label": "rocky outer (convex) corner slope (ground to 8), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "rock-ramp-low-east",
+        "kind": "object",
+        "part": 28,
+        "label": "rocky ramp (ground to 8), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "rock-corner-out-low-se",
+        "kind": "object",
+        "part": 29,
+        "label": "rocky outer (convex) corner slope (ground to 8), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "rock-ramp-low-south",
+        "kind": "object",
+        "part": 30,
+        "label": "rocky ramp (ground to 8), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "rock-corner-out-low-sw",
+        "kind": "object",
+        "part": 31,
+        "label": "rocky outer (convex) corner slope (ground to 8), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "rock-ramp-low-north",
+        "kind": "object",
+        "part": 32,
+        "label": "rocky ramp (ground to 8), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "rock-ramp-low-west",
+        "kind": "object",
+        "part": 33,
+        "label": "rocky ramp (ground to 8), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "rock-corner-out-low-nw",
+        "kind": "object",
+        "part": 34,
+        "label": "rocky outer (convex) corner slope (ground to 8), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "rock-corner-in-low-ne",
+        "kind": "object",
+        "part": 35,
+        "label": "rocky inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-low-sw",
+        "kind": "object",
+        "part": 36,
+        "label": "rocky inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-low-nw",
+        "kind": "object",
+        "part": 37,
+        "label": "rocky inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-low-se",
+        "kind": "object",
+        "part": 38,
+        "label": "rocky inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-out-mid-ne",
+        "kind": "object",
+        "part": 41,
+        "label": "rocky outer (convex) corner slope (8 to 16), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "rock-ramp-mid-east",
+        "kind": "object",
+        "part": 42,
+        "label": "rocky ramp (8 to 16), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "rock-corner-out-mid-se",
+        "kind": "object",
+        "part": 43,
+        "label": "rocky outer (convex) corner slope (8 to 16), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "rock-ramp-mid-south",
+        "kind": "object",
+        "part": 44,
+        "label": "rocky ramp (8 to 16), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "rock-corner-out-mid-sw",
+        "kind": "object",
+        "part": 45,
+        "label": "rocky outer (convex) corner slope (8 to 16), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "rock-ramp-mid-north",
+        "kind": "object",
+        "part": 46,
+        "label": "rocky ramp (8 to 16), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "rock-ramp-mid-west",
+        "kind": "object",
+        "part": 47,
+        "label": "rocky ramp (8 to 16), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "rock-corner-out-mid-nw",
+        "kind": "object",
+        "part": 48,
+        "label": "rocky outer (convex) corner slope (8 to 16), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "rock-corner-in-mid-ne",
+        "kind": "object",
+        "part": 49,
+        "label": "rocky inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-mid-sw",
+        "kind": "object",
+        "part": 50,
+        "label": "rocky inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-mid-nw",
+        "kind": "object",
+        "part": 51,
+        "label": "rocky inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-mid-se",
+        "kind": "object",
+        "part": 52,
+        "label": "rocky inner (concave) corner slope (8 to 16), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-out-high-ne",
+        "kind": "object",
+        "part": 54,
+        "label": "rocky outer (convex) corner slope (16 to 24), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "rock-ramp-high-east",
+        "kind": "object",
+        "part": 55,
+        "label": "rocky ramp (16 to 24), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "rock-corner-out-high-se",
+        "kind": "object",
+        "part": 56,
+        "label": "rocky outer (convex) corner slope (16 to 24), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "rock-ramp-high-south",
+        "kind": "object",
+        "part": 57,
+        "label": "rocky ramp (16 to 24), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "rock-corner-out-high-sw",
+        "kind": "object",
+        "part": 58,
+        "label": "rocky outer (convex) corner slope (16 to 24), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "rock-ramp-high-north",
+        "kind": "object",
+        "part": 59,
+        "label": "rocky ramp (16 to 24), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "rock-ramp-high-west",
+        "kind": "object",
+        "part": 60,
+        "label": "rocky ramp (16 to 24), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "rock-corner-out-high-nw",
+        "kind": "object",
+        "part": 61,
+        "label": "rocky outer (convex) corner slope (16 to 24), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "rock-corner-in-high-ne",
+        "kind": "object",
+        "part": 62,
+        "label": "rocky inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-high-sw",
+        "kind": "object",
+        "part": 63,
+        "label": "rocky inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-high-nw",
+        "kind": "object",
+        "part": 64,
+        "label": "rocky inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-corner-in-high-se",
+        "kind": "object",
+        "part": 65,
+        "label": "rocky inner (concave) corner slope (16 to 24), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "rock-raised-8",
+        "kind": "object",
+        "part": 39,
+        "label": "flat raised rock, 8 high"
+      },
+      {
+        "name": "rock-raised-16",
+        "kind": "object",
+        "part": 53,
+        "label": "flat raised rock, 16 high"
+      },
+      {
+        "name": "rock-block",
+        "kind": "object",
+        "part": 40,
+        "label": "solid rock a full tile (24) high: plateau/cliff core; stack on higher levels for taller cliffs; units stand on top"
+      },
+      {
+        "name": "rock-cliff-1",
+        "kind": "object",
+        "part": 66,
+        "label": "full-height rock block with a streaked blue cliff face (used on exposed cliff edges)"
+      },
+      {
+        "name": "rock-cliff-2",
+        "kind": "object",
+        "part": 67,
+        "label": "cliff-face block variant"
+      },
+      {
+        "name": "rock-cliff-3",
+        "kind": "object",
+        "part": 68,
+        "label": "cliff-face block variant"
+      },
+      {
+        "name": "mountain-scorch",
+        "kind": "debris",
+        "part": 77,
+        "label": "burnt ground patch"
+      },
+      {
+        "name": "log-debris",
+        "kind": "debris",
+        "part": 74,
+        "label": "splintered log remains (also 75, 76)"
+      }
+    ],
+    "POLAR": [
+      {
+        "name": "snow",
+        "kind": "floor",
+        "part": 32,
+        "label": "plain snow (the default)"
+      },
+      {
+        "name": "snow-rocky",
+        "kind": "floor",
+        "part": 33,
+        "label": "snow with a few grey rocks"
+      },
+      {
+        "name": "snow-cracked",
+        "kind": "floor",
+        "part": 34,
+        "label": "snow with grey cracks"
+      },
+      {
+        "name": "snow-stones",
+        "kind": "floor",
+        "part": 35,
+        "label": "snow with stones"
+      },
+      {
+        "name": "snow-stones-2",
+        "kind": "floor",
+        "part": 36
+      },
+      {
+        "name": "snow-rubble",
+        "kind": "floor",
+        "part": 37,
+        "label": "snow with grey rubble"
+      },
+      {
+        "name": "snow-rubble-2",
+        "kind": "floor",
+        "part": 38
+      },
+      {
+        "name": "snow-pebbles",
+        "kind": "floor",
+        "part": 39
+      },
+      {
+        "name": "snow-dirt",
+        "kind": "floor",
+        "part": 2,
+        "label": "snow with a brown dirt patch"
+      },
+      {
+        "name": "snow-dirt-2",
+        "kind": "floor",
+        "part": 3
+      },
+      {
+        "name": "snow-dirt-3",
+        "kind": "floor",
+        "part": 4
+      },
+      {
+        "name": "snow-dirt-4",
+        "kind": "floor",
+        "part": 5
+      },
+      {
+        "name": "snow-gravel",
+        "kind": "floor",
+        "part": 6,
+        "label": "snow with brown gravel"
+      },
+      {
+        "name": "ice-hole",
+        "kind": "floor",
+        "part": 0,
+        "label": "single dark-blue ice hole (impassable water)"
+      },
+      {
+        "name": "polar-water",
+        "kind": "floor",
+        "part": 78,
+        "label": "open dark-blue water (impassable)"
+      },
+      {
+        "name": "polar-water-2",
+        "kind": "floor",
+        "part": 79,
+        "label": "open water variant (impassable)"
+      },
+      {
+        "name": "polar-water-3",
+        "kind": "floor",
+        "part": 80,
+        "label": "open water variant (impassable)"
+      },
+      {
+        "name": "polar-water-4",
+        "kind": "floor",
+        "part": 68,
+        "label": "open water variant (impassable)"
+      },
+      {
+        "name": "water-ice-floe",
+        "kind": "floor",
+        "part": 73,
+        "label": "water with a floating ice chunk (impassable)"
+      },
+      {
+        "name": "water-ice-floes",
+        "kind": "floor",
+        "part": 74,
+        "label": "water with several small floes (impassable)"
+      },
+      {
+        "name": "water-ice-lump",
+        "kind": "floor",
+        "part": 75,
+        "label": "water with a big ice lump (impassable)"
+      },
+      {
+        "name": "shore-north",
+        "kind": "floor",
+        "part": 64,
+        "label": "water tile with snowy shore along its north edge (a lake's north side; impassable)"
+      },
+      {
+        "name": "shore-north-2",
+        "kind": "floor",
+        "part": 67,
+        "label": "variant of shore-north"
+      },
+      {
+        "name": "shore-south",
+        "kind": "floor",
+        "part": 76,
+        "label": "water tile with shore along its south edge"
+      },
+      {
+        "name": "shore-west",
+        "kind": "floor",
+        "part": 63,
+        "label": "water tile with shore along its west edge"
+      },
+      {
+        "name": "shore-west-2",
+        "kind": "floor",
+        "part": 66,
+        "label": "variant of shore-west"
+      },
+      {
+        "name": "shore-east",
+        "kind": "floor",
+        "part": 77,
+        "label": "water tile with shore along its east edge"
+      },
+      {
+        "name": "shore-corner-nw",
+        "kind": "floor",
+        "part": 69,
+        "label": "lake's NW (outer) corner"
+      },
+      {
+        "name": "shore-corner-ne",
+        "kind": "floor",
+        "part": 71,
+        "label": "lake's NE corner"
+      },
+      {
+        "name": "shore-corner-sw",
+        "kind": "floor",
+        "part": 70,
+        "label": "lake's SW corner"
+      },
+      {
+        "name": "shore-corner-se",
+        "kind": "floor",
+        "part": 72,
+        "label": "lake's SE corner"
+      },
+      {
+        "name": "shore-inner-nw",
+        "kind": "floor",
+        "part": 65,
+        "label": "concave lake corner: water with land only at the NW diagonal"
+      },
+      {
+        "name": "shore-inner-ne",
+        "kind": "object",
+        "part": 61,
+        "label": "concave lake corner, land at the NE diagonal (an object in the original, no floor under it)"
+      },
+      {
+        "name": "shore-inner-se",
+        "kind": "object",
+        "part": 60,
+        "label": "concave lake corner, land at the SE diagonal"
+      },
+      {
+        "name": "shore-inner-sw",
+        "kind": "object",
+        "part": 62,
+        "label": "concave lake corner, land at the SW diagonal"
+      },
+      {
+        "name": "snow-pressure-ridge",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            40
+          ],
+          [
+            1,
+            0,
+            42
+          ],
+          [
+            0,
+            1,
+            41
+          ],
+          [
+            1,
+            1,
+            43
+          ]
+        ],
+        "label": "2x2 lumpy snow ridge (floors)"
+      },
+      {
+        "name": "snow-drift",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            44
+          ],
+          [
+            1,
+            0,
+            46
+          ],
+          [
+            0,
+            1,
+            45
+          ],
+          [
+            1,
+            1,
+            47
+          ]
+        ],
+        "label": "2x2 smooth snow drift (floors)"
+      },
+      {
+        "name": "ice-crack-ring",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            48
+          ],
+          [
+            1,
+            0,
+            50
+          ],
+          [
+            0,
+            1,
+            49
+          ],
+          [
+            1,
+            1,
+            51
+          ]
+        ],
+        "label": "2x2 ring of cracked ice (floors)"
+      },
+      {
+        "name": "crevasse",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            52
+          ],
+          [
+            1,
+            0,
+            54
+          ],
+          [
+            0,
+            1,
+            53
+          ],
+          [
+            1,
+            1,
+            55
+          ]
+        ],
+        "label": "2x2 dark crevasse (floors, walkable)"
+      },
+      {
+        "name": "crevasse-2",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            56
+          ],
+          [
+            1,
+            0,
+            58
+          ],
+          [
+            0,
+            1,
+            57
+          ],
+          [
+            1,
+            1,
+            59
+          ]
+        ],
+        "label": "2x2 crevasse variant (floors)"
+      },
+      {
+        "name": "ice-outcrop",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            11
+          ],
+          [
+            1,
+            0,
+            12
+          ],
+          [
+            0,
+            1,
+            13
+          ],
+          [
+            1,
+            1,
+            14
+          ]
+        ],
+        "label": "2x2 jagged blue-white ice block (walkable objects, gives cover)"
+      },
+      {
+        "name": "fallen-ice-slab",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            9
+          ],
+          [
+            1,
+            0,
+            10
+          ],
+          [
+            0,
+            1,
+            7
+          ],
+          [
+            1,
+            1,
+            8
+          ]
+        ],
+        "label": "2x2 toppled ice pillar lying on the snow (walkable)"
+      },
+      {
+        "name": "snow-corner-out-ne",
+        "kind": "object",
+        "part": 19,
+        "label": "snow outer (convex) corner slope (ground to 8), rises toward NE; goes on the hill's SW corner"
+      },
+      {
+        "name": "snow-ramp-east",
+        "kind": "object",
+        "part": 20,
+        "label": "snow ramp (ground to 8), climbs east; goes on the hill's west edge"
+      },
+      {
+        "name": "snow-corner-out-se",
+        "kind": "object",
+        "part": 21,
+        "label": "snow outer (convex) corner slope (ground to 8), rises toward SE; goes on the hill's NW corner"
+      },
+      {
+        "name": "snow-ramp-south",
+        "kind": "object",
+        "part": 22,
+        "label": "snow ramp (ground to 8), climbs south; goes on the hill's north edge"
+      },
+      {
+        "name": "snow-corner-out-sw",
+        "kind": "object",
+        "part": 23,
+        "label": "snow outer (convex) corner slope (ground to 8), rises toward SW; goes on the hill's NE corner"
+      },
+      {
+        "name": "snow-corner-out-nw",
+        "kind": "object",
+        "part": 24,
+        "label": "snow outer (convex) corner slope (ground to 8), rises toward NW; goes on the hill's SE corner"
+      },
+      {
+        "name": "snow-ramp-north",
+        "kind": "object",
+        "part": 25,
+        "label": "snow ramp (ground to 8), climbs north; goes on the hill's south edge"
+      },
+      {
+        "name": "snow-ramp-west",
+        "kind": "object",
+        "part": 26,
+        "label": "snow ramp (ground to 8), climbs west; goes on the hill's east edge"
+      },
+      {
+        "name": "snow-corner-in-ne",
+        "kind": "object",
+        "part": 28,
+        "label": "snow inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NE; where a hill edge turns inward"
+      },
+      {
+        "name": "snow-corner-in-sw",
+        "kind": "object",
+        "part": 29,
+        "label": "snow inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SW; where a hill edge turns inward"
+      },
+      {
+        "name": "snow-corner-in-nw",
+        "kind": "object",
+        "part": 30,
+        "label": "snow inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward NW; where a hill edge turns inward"
+      },
+      {
+        "name": "snow-corner-in-se",
+        "kind": "object",
+        "part": 31,
+        "label": "snow inner (concave) corner slope (ground to 8), high ground on its N/S and E/W sides toward SE; where a hill edge turns inward"
+      },
+      {
+        "name": "snow-raised",
+        "kind": "object",
+        "part": 27,
+        "label": "flat raised snow, 8 high (top of a snow mound)"
+      },
+      {
+        "name": "scorched-snow",
+        "kind": "debris",
+        "part": 1,
+        "label": "burnt crater in the snow"
+      },
+      {
+        "name": "ice-rubble",
+        "kind": "debris",
+        "part": 15,
+        "label": "broken ice on snow (15-18; 17,18 are also placed side by side as a 2-tile drift)"
+      }
+    ],
+    "MARS": [
+      {
+        "name": "mars-sand",
+        "kind": "floor",
+        "part": 0,
+        "label": "orange Martian sand (the default)"
+      },
+      {
+        "name": "mars-craterlet",
+        "kind": "floor",
+        "part": 1,
+        "label": "sand with a small star-shaped impact"
+      },
+      {
+        "name": "mars-craterlet-2",
+        "kind": "floor",
+        "part": 2
+      },
+      {
+        "name": "mars-craterlet-3",
+        "kind": "floor",
+        "part": 3
+      },
+      {
+        "name": "mars-rock-bump",
+        "kind": "floor",
+        "part": 4,
+        "label": "low rocky bump (raised 4)"
+      },
+      {
+        "name": "crater-floor",
+        "kind": "floor",
+        "part": 22,
+        "label": "the hollow centre of big-crater"
+      },
+      {
+        "name": "alien-glow-floor",
+        "kind": "floor",
+        "part": 33,
+        "label": "glowing green alien floor (MARS10 pyramid chamber)"
+      },
+      {
+        "name": "mars-rock-pile",
+        "kind": "object",
+        "part": 5,
+        "label": "rock pile, 8 high, walkable"
+      },
+      {
+        "name": "mars-boulder",
+        "kind": "object",
+        "part": 6,
+        "blocks": true,
+        "label": "big rock boulder"
+      },
+      {
+        "name": "mars-twin-boulder",
+        "kind": "object",
+        "part": 7,
+        "blocks": true,
+        "label": "two big boulders"
+      },
+      {
+        "name": "small-crater",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            11
+          ],
+          [
+            1,
+            0,
+            12
+          ],
+          [
+            0,
+            1,
+            10
+          ],
+          [
+            1,
+            1,
+            13
+          ]
+        ],
+        "label": "2x2 crater, rim 4 high, walkable"
+      },
+      {
+        "name": "big-crater",
+        "kind": "multi",
+        "parts": [
+          [
+            0,
+            0,
+            16
+          ],
+          [
+            1,
+            0,
+            17
+          ],
+          [
+            2,
+            0,
+            18
+          ],
+          [
+            0,
+            1,
+            15
+          ],
+          [
+            1,
+            1,
+            22
+          ],
+          [
+            2,
+            1,
+            19
+          ],
+          [
+            0,
+            2,
+            14
+          ],
+          [
+            1,
+            2,
+            21
+          ],
+          [
+            2,
+            2,
+            20
+          ]
+        ],
+        "label": "3x3 crater: 8 rim objects (8 high, walkable) around the crater-floor centre"
+      },
+      {
+        "name": "pyramid-block",
+        "kind": "object",
+        "part": 23,
+        "blocks": true,
+        "label": "solid pyramid stone; fills the inside of a pyramid storey"
+      },
+      {
+        "name": "pyramid-side-north",
+        "kind": "object",
+        "part": 32,
+        "blocks": true,
+        "label": "sloped pyramid face on a storey's north edge"
+      },
+      {
+        "name": "pyramid-side-south",
+        "kind": "object",
+        "part": 25,
+        "blocks": true,
+        "label": "pyramid face on the south edge"
+      },
+      {
+        "name": "pyramid-side-west",
+        "kind": "object",
+        "part": 30,
+        "blocks": true,
+        "label": "pyramid face on the west edge"
+      },
+      {
+        "name": "pyramid-side-east",
+        "kind": "object",
+        "part": 27,
+        "blocks": true,
+        "label": "pyramid face on the east edge"
+      },
+      {
+        "name": "pyramid-corner-nw",
+        "kind": "object",
+        "part": 31,
+        "blocks": true,
+        "label": "pyramid corner, NW"
+      },
+      {
+        "name": "pyramid-corner-ne",
+        "kind": "object",
+        "part": 28,
+        "blocks": true,
+        "label": "pyramid corner, NE"
+      },
+      {
+        "name": "pyramid-corner-sw",
+        "kind": "object",
+        "part": 24,
+        "blocks": true,
+        "label": "pyramid corner, SW"
+      },
+      {
+        "name": "pyramid-corner-se",
+        "kind": "object",
+        "part": 26,
+        "blocks": true,
+        "label": "pyramid corner, SE"
+      },
+      {
+        "name": "pyramid-apex",
+        "kind": "object",
+        "part": 29,
+        "blocks": true,
+        "label": "single-tile pyramid point (unused in the original maps)"
+      },
+      {
+        "name": "metal-portal-frame",
+        "kind": "wall",
+        "west": 35,
+        "north": 34,
+        "label": "grey metal arch/frame, impassable (unused in the original maps)"
+      },
+      {
+        "name": "mars-scorch",
+        "kind": "debris",
+        "part": 8,
+        "label": "scorched sand"
+      },
+      {
+        "name": "mars-blast-crater",
+        "kind": "debris",
+        "part": 9,
+        "label": "blast crater (indestructible)"
+      }
+    ]
+  },
+  "blocks": {
+    "DESERT00": "Flat open sand with a few walkable rocks, skulls, bones and a snake; no real cover.",
+    "DESERT01": "Flat open sand with a few small rocks, a pit, tumbleweed and a scorched patch; no cover.",
+    "DESERT02": "Flat open sand dotted with green scrub and two broken cacti; no cover.",
+    "DESERT03": "Two low sand mounds (8 high): a 3x3 one in the NW and a 5x5 one in the centre-east, plus a saguaro, barrel cactus and rocks on the west side.",
+    "DESERT04": "Two small low dunes (NE 4x4, SW 3x3), a saguaro/flowering cactus pair in the north-west and a lone barrel cactus; otherwise open.",
+    "DESERT05": "Open sand with scattered impassable cacti (saguaro, barrel, flowering) and two dead trees; light cover.",
+    "DESERT06": "Dense cactus grove in the centre-north and south-west plus rocks to the east: the most cover in the desert set.",
+    "DESERT07": "One 8x8 dune filling the block, rising in two tiers to a flat 16-high top; ramps on every side.",
+    "DESERT08": "A 10x10 dune rising in three tiers to a 4x4 full-height (one storey) summit in the centre with a rock on top.",
+    "DESERT09": "20x20: two long dune ridges running roughly north-south (west one tops out at 16, east one reaches full-height summits) with a narrow sand valley between them; open sand on the edges.",
+    "DESERT10": "20x20 mesa: almost the whole block is a three-tier dune whose huge flat full-height (one storey) top carries cacti, rocks and a dead tree; ramps all round, flat sand only at the very edges.",
+    "DESERT11": "20x20 mostly open sand with four low mounds (one with a 16-high step), a cactus grove in the centre-west and rocks, dead trees and cacti in the north-west corner.",
+    "MOUNT00": "Flat open stony ground with grass, mud and puddle patches; no cover.",
+    "MOUNT01": "Flat open ground with dark rock cracks and two brown mud patches; no cover.",
+    "MOUNT02": "Flat open grassy ground with a crack and two mud patches; no cover.",
+    "MOUNT03": "A small 4x5 rock rise (8 high) in the north-centre and a 2x2 knoll to the south-east; boulder cluster, white boulders and a hollow log on the west.",
+    "MOUNT04": "Flat ground with plenty of single-tile cover: boulder cluster in the NW, white boulders, a tree stump and hollow logs.",
+    "MOUNT05": "A big low hill nearly filling the block, two tiers up to a 16-high plateau; ramps on all sides.",
+    "MOUNT06": "A three-tier hill rising to a 2x2 full-height rock summit in the centre with grass on top.",
+    "MOUNT07": "A one-storey rock plateau over most of the block (cliff faces to the south and east, ramps on the north and east edges); boulders, a dead tree and grass on top.",
+    "MOUNT08": "A one-storey cliff plateau in the west/north-west with sheer faces; terraced slopes descend to the south-east; logs, grass and mud on top.",
+    "MOUNT09": "A one-storey rock plateau in the east-centre with cliff faces south and east and ramps from the north-west; dead trees and boulders on top.",
+    "MOUNT10": "A rock pinnacle in the centre: a ramp ring around a one-storey core, then two more sheer storeys of cliff (upper terraces reachable only by flying); open ground around it.",
+    "MOUNT11": "20x20 big hill: three-tier ramps on all sides up to a broad one-storey plateau, on which a second smaller hill climbs to two-storey rock outcrops with boulders; dead trees and a crevice in the NW corner.",
+    "MOUNT12": "20x20 massif: a one-storey rock base with cliff faces and inner gullies, topped by a second three-tier hill rising to a large two-storey summit plateau with boulders; ramps up the outer edges, logs and stumps at the corners.",
+    "POLAR00": "Flat open snow with an ice hole in the west, a crevasse in the north-east, a pressure ridge in the south and some dirt patches; no cover.",
+    "POLAR01": "Flat open snow with brown dirt patches, a snow drift and ice rubble; no cover.",
+    "POLAR02": "Flat open snow with two crevasses and a cracked-ice ring; no cover.",
+    "POLAR03": "Snow with two 2x2 ice outcrops, a fallen ice slab, two small snow mounds in the west and an ice hole in the north-east.",
+    "POLAR04": "A 4x5 snow mound (8 high) in the north-centre, two small 2x2 mounds and an ice outcrop in the south-west.",
+    "POLAR05": "Several small 2x2 snow mounds and a 4x4 mound in the south-east, an ice hole, a snow drift and a cracked-ice ring.",
+    "POLAR06": "Four 4x4 snow mounds (8 high) in the corners with a crevasse and a pressure ridge between them; open snow crossroads through the middle.",
+    "POLAR07": "Four small frozen ponds (impassable water) near the corners, open snow between them.",
+    "POLAR08": "A roughly 6x6 lake (impassable) in the centre with open snow around it.",
+    "POLAR09": "Two L-shaped water channels along the west and east edges with a snow corridor running north-south through the middle.",
+    "POLAR10": "Two long lakes along the north and south edges with an east-west strip of snow through the middle.",
+    "POLAR11": "One big lake filling nearly the whole block; only a thin snow rim around the edge.",
+    "POLAR12": "20x20 mostly water: large lakes with a winding snow causeway running from the south-west to the north-east and two small snow islands.",
+    "POLAR13": "20x20 mostly water with winding snow paths along the edges and through the middle, and several small snow islands.",
+    "MARS00": "Flat open Martian sand with a few craterlets; no cover.",
+    "MARS01": "Open sand with two small craters and two boulders.",
+    "MARS02": "One big crater in the centre, a small crater in the north-west, scattered craterlets.",
+    "MARS03": "Crater field: two big craters, two small craters and a couple of boulders.",
+    "MARS04": "Two big craters on the east side, two small craters and a rock field in the south-west.",
+    "MARS05": "A field of rock piles and boulders across the centre-south (best cover on Mars); one small crater in the north-west.",
+    "MARS06": "Dense crater field: four big craters and three small ones.",
+    "MARS07": "Stepped pyramid (8x8 base, four storeys) with a hollow alien-floored chamber at ground level containing a few alien fittings; entrance on the south side.",
+    "MARS08": "Solid stepped pyramid pierced by narrow cross-shaped corridors at ground level, with entrances on all four sides.",
+    "MARS09": "Stepped pyramid with a ground-level alien chamber and a second-storey chamber above it (with a lift tile); entrances on the west and east sides.",
+    "MARS10": "Stepped pyramid whose whole ground level is one hollow chamber with a glowing green alien floor; entrance on the east side."
+  },
+  "notes": "DIRECTIONS: x+ = east, y+ = south (row 0 of a block is its north edge). Slope names say which way you climb (ramp-*-east climbs toward +x) and corner names say which way the corner rises (corner-out-*-ne rises toward the NE, so it sits at the hill's SW corner).\nHILLS (DESERT and MOUNT share the exact same layout of records 27-65): three tiers of 12 objects each: low = 27-38 (ground to 8, terrainLevel -4), mid = 41-52 (8 to 16, -12), high = 54-65 (16 to 24, -20); flat fills: 39 = raised-8, 53 = raised-16, 40 = full-height block (24). Inside each tier the order is: outer-NE, ramp-E, outer-SE, ramp-S, outer-SW, ramp-N, ramp-W, outer-NW, inner-NE, inner-SW, inner-NW, inner-SE (verified from neighbour heights across every map block). A hill is built on ONE level as concentric rings: outermost ring = low tier (ramps on the edges facing outward: north edge uses ramp-low-south, west edge ramp-low-east, etc.; outer corners at the 4 convex corners, inner corners at concave turns), next ring inward = mid tier, next = high tier, centre = sand-block/rock-block. Tiers can be skipped by using raised-8 or raised-16 as the flat top (DESERT03 is a 3x3 mound: 29 30 31 / 28 39 33 / 27 32 34). The top of a full block (40) is walkable at the next level's height; DESERT leaves the level above empty, MOUNT puts ordinary floors (mountain-ground/grass/mud) on z+1 above its blocks and may start another set of slope rings on z+1 on top of the blocks (MOUNT11/12: a second hill on the plateau). Sheer cliffs = full blocks next to lower ground with no ramp; MOUNT uses rock-cliff-1/2/3 (66-68) instead of 40 on the exposed edge tiles purely for the look, and stacks blocks on z1/z2 for multi-storey cliffs (MOUNT10). In MOUNT, 40, 53 and 66-68 are bigWall (fill the whole tile).\nPOLAR has only the low tier (19-31, ground to 8) in a different order: 19 outer-NE, 20 ramp-E, 21 outer-SE, 22 ramp-S, 23 outer-SW, 24 outer-NW, 25 ramp-N, 26 ramp-W, 27 flat raised-8, 28 inner-NE, 29 inner-SW, 30 inner-NW, 31 inner-SE (30 used once; its direction is inferred by elimination). A 2x2 snow mound = 21 23 / 19 24.\nPOLAR lakes: all water tiles (0, 63-80) are impassable floors (tuWalk 255). Build a lake as: corners 69 NW / 71 NE / 70 SW / 72 SE, edges 64|67 north, 76 south, 63|66 west, 77 east, open water inside (78/79/80/68, floes 73-75); concave turns use 65 (land NW, a floor) and objects 61 (land NE), 60 (land SE), 62 (land SW).\nMARS pyramids: each storey is a ring of side/corner pieces (impassable sloped faces) around pyramid-block fill, each storey one tile smaller on every side than the one below; MARS07-10 are 8x8 at z0 down to 2x2 (corners only) at z3. Hollow interiors and the doors/walls/floors inside them come from U_WALL02 (not labelled here). Mars crater rims (10-21) are walkable objects raised 4-8.\nThe 'die' numbers in the sheets behave like LOCAL indices into the same dataset (e.g. DESERT cactus 10 -> 11 broken cactus, sand floors -> 21 scorched sand, MOUNT 71 -> 73 -> 75), not global ids.\nOddities: DESERT09 has a stray rock (26) and sand floor floating on z2 at x14-15,y1; MOUNT floors list die 76 (log debris) which looks like an original data quirk; MARS 34/35 (metal frame) and 29 (pyramid apex) and MOUNT 74/76 are never used in the original maps. MOUNT crack floors 8-14 are combined freely (e.g. 11 9 / 8 10 in MOUNT07, 11 13 / 12 14 in MOUNT11), so only one 2x2 combo is given as a multi. Desert rocks and Mars rock piles/crater rims are walkable; cacti, dead trees, boulders and logs are not."
+}

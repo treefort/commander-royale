@@ -2,8 +2,8 @@
 import { api, el, money } from "../api.ts";
 import { topbar, settingsForm, type Me } from "./home.ts";
 import { biomeName, DEFAULT_BOT_TUNING, MAX_SIDES, type MatchSettings, type Recruit, type Loadout, type BotTuning } from "../../shared/protocol.ts";
-import { autoSquad } from "../../shared/rules/squads.ts";
-import { checkLoadout, budgetGuide, COURSES, MAX_SESSIONS, trainedStats, trainingCost, trainedRecruit, type CatalogEntry } from "../../shared/rules/catalog.ts";
+import { autoSquad, STRATEGY_NAMES } from "../../shared/rules/squads.ts";
+import { checkLoadout, budgetGuide, COURSES, MAX_SESSIONS, MIN_SESSION_PRICE, TRAINING_PREMIUM, trainedStats, trainingCost, trainedRecruit, type CatalogEntry } from "../../shared/rules/catalog.ts";
 import { forceSummary } from "../../shared/rules/scenario.ts";
 import { itemRule, unitRule, tr, livingWeaponFor, INVENTORY_SLOTS, SOLDIER, type SlotId } from "../../shared/rules/index.ts";
 import { InventoryScreen, type InvAdapter, type InvItem } from "./inventory.ts";
@@ -188,7 +188,7 @@ export class LobbyPage {
         el("div", { class: "row" }, el("span", {}, "Invite link:"), el("span", { class: "invite" }, url),
           el("button", { class: "small", onclick: () => navigator.clipboard?.writeText(url) }, "Copy")),
         el("div", { class: "muted", style: { marginTop: "6px" } },
-          `${biome} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · ${s.settings.mapBlocks ? `${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map` : "map sized at the start"} · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.seatsPerPlayer} seats each${s.settings.scenario.teamStart === "apart" ? ", landing apart" : ""}` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
+          `${s.settings.map ? `map: ${s.settings.mapName ?? "a custom map"}` : `${biome} · ${s.settings.mapBlocks ? `${s.settings.mapBlocks * 10}x${s.settings.mapBlocks * 10} map` : "map sized at the start"} · ${s.settings.ufo === "none" ? "no UFO" : "UFO: " + (s.settings.ufo === "random" ? "random" : tr(s.settings.ufo))}`} · ${s.settings.timeOfDay === "random" ? "random time of day" : s.settings.timeOfDay} · budget ${money(s.settings.budget)}${s.settings.mode === "coop" ? " each" : ""} · ${s.settings.mode === "coop" ? `${s.settings.scenario.seatsPerPlayer} seats each${s.settings.scenario.teamStart === "apart" ? ", landing apart" : ""}` : `${s.settings.squadLimit} seats`} · tech: ${s.settings.techLevel}` +
           `${s.settings.psionics ? " · psionics" : ""}${s.settings.allowAliens ? " · alien recruits" : ""}${s.settings.allowHWP ? " · tanks" : ""}` +
           `${s.settings.supplyDrops.enabled ? ` · supply drops every ${s.settings.supplyDrops.everyRounds} rounds (${s.settings.supplyDrops.kits ?? 3} ${s.settings.supplyDrops.tier} kits)` : ""}${s.settings.turnTimer ? ` · ${s.settings.turnTimer}s turns` : " · no turn timer"}${s.settings.stranger ? ` · Mysterious Stranger ${s.settings.stranger}%` : ""}`),
         // the creator's message to everyone joining
@@ -367,10 +367,7 @@ export class LobbyPage {
   /** Creator only: add a computer-controlled squad that hires with the chosen strategy. */
   private addBotRow(s: LobbyState): HTMLElement {
     const full = s.players.filter((p) => !p.squadOf).length >= MAX_SIDES;
-    const labels: Record<string, string> = {
-      random: "Wildcard (random hires)", swarm: "Swarm (lots of cheap soldiers)", elite: "Elite (few veterans, best gear)", balanced: "Balanced",
-      heavy: "Heavy weapons", monster: "Monster (one big alien + troops)", aliens: "Alien legion", tanks: "Armored (tanks)", psi: "Psionic",
-    };
+    const labels: Record<string, string> = STRATEGY_NAMES;
     const sel = el("select", {}, el("option", { value: "any" }, "Any strategy"), ...s.strategies.map((k) => el("option", { value: k }, labels[k] ?? k))) as HTMLSelectElement;
     sel.value = this.botStrategy;
     sel.addEventListener("change", () => (this.botStrategy = sel.value));
@@ -436,7 +433,9 @@ export class LobbyPage {
     };
     const parts = [...count("soldier", "soldier", "soldiers"), ...count("alien", "alien", "aliens"), ...count("hwp", "tank", "tanks")];
     const cost = checkLoadout(s.settings, s.pool, loadout).cost;
-    this.notice = `Configured ${parts.join(" and ")}, armed and kitted out for ${money(cost)} of your ${money(s.settings.budget)}. Change anything you like, then press ${s.battle ? "Deploy" : "Ready"}.`;
+    const trained = loadout.squad.filter((m) => m.training).length;
+    const training = trained ? `, ${trained === 1 ? "1 of them" : `${trained} of them`} trained with the money left over,` : "";
+    this.notice = `Configured ${parts.join(" and ")}, armed and kitted out${training} for ${money(cost)} of your ${money(s.settings.budget)}. Change anything you like, then press ${s.battle ? "Deploy" : "Ready"}.`;
     this.keepNotice = true;
     this.scheduleSave();
   }
@@ -517,7 +516,7 @@ export class LobbyPage {
       el("div", { class: "row", style: { marginTop: "6px" } },
         el("span", {}, changed.length ? changed.map((k) => `${STAT_NAMES[k]} ${r.stats[k]}→${now[k]}`).join(" · ") : "Untrained"),
         el("span", { class: "price" }, `training ${money(trainingCost(s.settings, r, m.training))}`)),
-      el("div", { class: "hint" }, `A session costs $1,000, or more where the price model rates the better stats higher (what they're worth plus a quarter), so a natural veteran stays slightly better value: training is for shaping a soldier you like. Stats stop at the original soldier caps.${s.settings.psionics ? " Psi training stands in for the original's psi lab." : ""}`));
+      el("div", { class: "hint" }, `A session costs ${money(MIN_SESSION_PRICE)}, or more where the price model rates the better stats higher (${TRAINING_PREMIUM}× what they're worth), so a natural veteran is far better value: training is a luxury for shaping a soldier you like. Stats stop at the original soldier caps.${s.settings.psionics ? " Psi training stands in for the original's psi lab." : ""}`));
   }
 
   private controllerSelect(m: Loadout["squad"][number], team: LobbyState["players"]): HTMLElement {

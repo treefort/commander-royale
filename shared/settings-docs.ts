@@ -1,13 +1,16 @@
-// Match settings for AI assistants: a plain-text reference (served as /llms.txt) generated from the real rules
-// and data, so it can't drift from the code, and a checker that says what a settings object would turn into.
+// The game for AI assistants: a plain-text reference (served as /llms.txt) to every match setting and to what
+// players can do outside the settings (computer squads, training, co-op controls, retries...), generated from the
+// real rules and data wherever possible so it can't drift from the code (tests check it covers every setting, AI
+// squad option, strategy and training course), and a checker that says what a settings object would turn into.
 // Players point their assistant at the reference, describe the match they want, and get back a link
-// (/?settings=<json>) or JSON to paste into the New Match form.
+// (/?settings=<json>) or JSON to paste into the New Match form. Adding a feature or an option? Describe it here too.
 import {
   BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_SIDES, DEFAULT_BOT_TUNING, defaultSettings, sanitizeSettings,
-  recommendedMapBlocks, recommendedScenarioBlocks, type MatchSettings,
+  recommendedMapBlocks, recommendedScenarioBlocks, type MatchSettings, type BotTuning,
 } from "./protocol.ts";
 import { UNITS, armorRule, itemRule, tr } from "./rules/index.ts";
-import { CATALOG, priceUnit, budgetGuide } from "./rules/catalog.ts";
+import { CATALOG, COURSES, MAX_SESSIONS, MIN_SESSION_PRICE, TRAINING_PREMIUM, priceUnit, budgetGuide } from "./rules/catalog.ts";
+import { STRATEGIES, STRATEGY_NAMES } from "./rules/squads.ts";
 import { enemyTypeChoices, weaponChoices } from "./rules/scenario.ts";
 
 export interface FieldDoc {
@@ -31,6 +34,7 @@ export const FIELDS: FieldDoc[] = [
   { path: "timeOfDay", type: list(["day", "dusk", "night", "random"]), text: "At night humans see 9 tiles except in lit areas (flares, fire); aliens see in the dark. Dusk is in between." },
   { path: "ufo", type: list(UFO_CHOICES.map((u) => u.id)), text: `A landed UFO in the middle of the map (cover, a building to fight over; co-op enemies can start inside it): ${UFO_CHOICES.filter((u) => u.id.startsWith("STR")).map((u) => `${u.id} = ${u.name}`).join(", ")}.` },
   { path: "mapBlocks", type: "integer", range: [0, 10], text: "Map edge in 10-tile blocks (5 = 50x50 tiles), 4–10. 0 (the default) = auto: sized when the battle starts for whoever is there (free-for-all: 5 for 2 squads, 6 for 3–4, 7 for 5–6, 8 for more, +1 at $1,000,000+; co-op: from the team's size and the enemy force). Only set it when the player asks for a particular size." },
+  { path: "map", type: "custom map id (string), or \"\"", text: "A custom map made in the map editor (/maps), by its id: the last part of its address, /maps/<id>. \"\" (the default) = a map generated from `biome`, `ufo` and `mapBlocks`. A custom map has its own terrain, size, landing zones and any UFO, so those three are ignored (`timeOfDay` still applies). Only use an id the player gave you; to make a new map, see /maps.txt." },
   { path: "budget", type: "integer (dollars)", range: [50_000, 5_000_000], text: "What each player (free-for-all: each squad's leader; co-op: each person) spends on hiring units, weapons and armor. See \"Budget rules of thumb\" below." },
   { path: "squadLimit", type: "integer (seats)", range: [1, 30], mode: "ffa", text: "Free-for-all squad size in Skyranger seats: soldiers and small aliens take 1, tanks and large aliens (Cyberdisc, Reaper, Sectopod) take 4. The original Skyranger holds 14." },
   { path: "poolSize", type: "integer", range: [10, 80], text: "How many recruits are in the hiring pool (everyone hires from an identical copy)." },
@@ -70,6 +74,16 @@ export const FIELDS: FieldDoc[] = [
   { path: "scenario.ai.cheatTurn", type: "integer", range: [1, 99], mode: "coop", text: "After this round it knows where everyone is (so battles don't stall)." },
   { path: "scenario.ai.personalities", type: "boolean", mode: "coop", text: "Each race plays to type (Sectoids cautious, Chryssalids reckless...) instead of the aggression above." },
 ];
+
+/** A computer squad's AI settings (free-for-all lobby, "AI settings" under each one; co-op uses scenario.ai). */
+export const BOT_TUNING_DOCS: Record<keyof BotTuning, { range?: [number, number]; text: string }> = {
+  aggression: { range: [0, 3], text: "0 cautious (aimed shots, falls back) .. 3 reckless (snap shots, charges)." },
+  difficulty: { range: [0, 4], text: "How keen it is on grenades and other explosives." },
+  intelligence: { range: [1, 10], text: "Rounds it remembers where it last saw an enemy." },
+  cheatTurn: { range: [1, 99], text: "After this round it knows where every enemy is." },
+  personalities: { text: "Each race plays to type (Sectoids cautious, Chryssalids reckless...)." },
+  strength: { range: [25, 400], text: "Its budget and seats as a % of the match's: handicap it, or make it a boss for several people to gang up on. Changing it rehires the squad." },
+};
 
 /** Natural-language requests and the settings that answer them (checked by tests: no warnings). */
 export const EXAMPLES: { ask: string; settings: Record<string, unknown> }[] = [
@@ -160,11 +174,17 @@ export function settingsReference(origin: string): string {
     return [`\`${w.id}\``, w.name, tech, String(power)];
   });
   const fieldRows = FIELDS.map((f) => [`\`${f.path}\``, f.type + (f.range ? ` (${f.range[0].toLocaleString("en-US")}–${f.range[1].toLocaleString("en-US")})` : ""), f.mode === "ffa" ? "free-for-all" : f.mode === "coop" ? "co-op" : "both", defaultAt(f.path), f.text]);
-  return `# X-COM Battlescape — match settings reference for AI assistants
+  const tuning = (Object.keys(BOT_TUNING_DOCS) as (keyof BotTuning)[]).map((k) => {
+    const t = BOT_TUNING_DOCS[k];
+    return `\`${k}\`${t.range ? ` (${t.range[0]}–${t.range[1]})` : ""}: ${t.text}`;
+  });
+  const courses = COURSES.map((c) => `${c.name} (${Object.entries(c.gains).map(([k, v]) => `+${v} ${k}`).join(", ")}${c.psionic ? "; needs psionics on" : ""})`);
+  return `# Commander Royale — game and match settings reference for AI assistants
 
-This server hosts multiplayer battles on the original X-COM: UFO Defense battlescape (turn-based squad tactics:
-time units, line of fire, destructible terrain, night vision, psionics). This page tells you everything needed to
-turn a player's description of a match into settings for the **New Match** form.
+Commander Royale hosts multiplayer battles on the original X-COM: UFO Defense battlescape (turn-based squad tactics:
+time units, line of fire, destructible terrain, night vision, psionics): free-for-all squad battles, and co-op
+scenarios against an enemy force a game master designs. This page tells you everything needed to turn a player's
+description of a match into settings for the **New Match** form, and what else the game lets them do.
 
 ## How to hand settings back
 
@@ -179,6 +199,8 @@ Rules:
   \`coop\`, \`scenario\`, \`scenario.ai\`, each enemy group) can be partial too. Leave out \`mapBlocks\` and the map
   is sized when the battle starts, for however many players are there.
 - There is no player limit to set: anyone with the invite link can join, before the battle or while it's on.
+- **Custom maps**: players make their own battle maps in the map editor (${origin}/maps), and you can design one
+  for them: ${origin}/maps.txt explains the map recipe format. A saved map is played on with \`"map": "<its id>"\`.
 - Numbers outside their range are clamped and unknown keys are ignored; the form lists every adjustment it made,
   so if the player pastes back a warning, fix that field.
 - Only the player can create the match (they're signed in; you aren't). The JSON is not secret.
@@ -199,6 +221,51 @@ Rules:
   everything (\`scenario.gmPlays\`).
 
 Both modes share the battlefield settings (environment, time, UFO, map size, tech level, supply drops, timers).
+
+## Everything else players can do (not settings, but worth knowing when advising them)
+
+**The rules** are the original UFO Defense battlescape's, ported faithfully (via OpenXcom): time units, snap / aimed /
+auto fire with the original accuracy, voxel line of fire, armor facing, fatal wounds, stun, reaction fire (from any
+other side's units that see the mover), explosions that wreck terrain, fire and smoke, doors and UFO doors,
+multi-level maps, flying, grenade fuses, proximity grenades, flares, medikits, motion scanner, mind probe, blaster
+bomb waypoints. Aliens see in the dark; humans see 9 tiles at night beyond lit areas. Mind control hands a unit to
+the attacker until their next turn begins; Chryssalid victims rise as zombies for the Chryssalid's side. Picked-up
+gear is usable at once (no research). There are no civilians and no morale or panic.
+
+**Hiring and equipping.** Everyone hires from an identical copy of a random pool (\`poolSize\`): human soldiers from
+rookie to commander, every alien race and rank (if \`allowAliens\`), and tanks (if \`allowHWP\`), priced by what they
+can do (time units, health × armor, accuracy, reactions, strength, psionics, built-in weapons, flight, night
+vision...). Any unit except a tank can carry gear (yes, a Chryssalid with a grenade). Weapons, ammo, explosives,
+equipment and armor are bought from the \`budget\` and put on units on the original inventory screen; anything left
+unequipped lands at the squad's deployment zone. **Auto-configure squad** hires and kits out a whole squad for the
+match in one click, to adjust afterwards; money it can't spend on units and gear goes on training them.
+
+**Training** (human soldiers, while hiring): ${courses.join(", ")}. Up to ${MAX_SESSIONS} sessions per course, never
+past the original stat caps, priced at what the better stats are worth ×${TRAINING_PREMIUM} ($${MIN_SESSION_PRICE.toLocaleString("en-US")} a session at
+least): a luxury for leftover money, since hiring a better soldier is far cheaper.
+
+**Computer squads** (free-for-all; the creator adds them in the lobby, not through settings): each hires with a
+strategy — ${STRATEGIES.map((k) => `\`${k}\` ${STRATEGY_NAMES[k]}`).join(", ")} — is always ready, and plays its
+turns on the server one action at a time. Each has AI settings (defaults \`${JSON.stringify(DEFAULT_BOT_TUNING)}\`):
+
+${tuning.map((t) => `- ${t}`).join("\n")}
+
+For "a few of us against one strong computer squad", suggest free-for-all with \`coop.squadSize\` set to their number
+(so they share one squad) and tell them to add a computer squad with a higher strength in the lobby — or co-op mode,
+where the settings describe the whole enemy force.
+
+**During a battle.** Turns are asynchronous unless \`turnTimer\` is set: close the tab and come back later. In a squad
+played by several people (and the co-op team) everyone moves at once, each on their own units; End Turn locks you in,
+G hands the selected unit to a teammate, Options → AFK lets the AI play your units, and the host gets an "AI: play
+this turn for ..." button whenever a turn is waiting on someone. People can join while the battle is on (the invite
+link still works): they hire, equip and press Deploy, landing in a new zone at the map edge (or with the co-op team).
+The move preview shows how exposed the destination is (share of sightlines, kneeling, enemies with a line of fire).
+Music and sound effects can be switched off in Options.
+
+**Afterwards.** Every battle keeps its starting point. **Retry** plays the same start again with fresh dice (you play
+your squad, the AI plays everyone else); **Share as challenge** makes a link (\`/c/<id>\`) where anyone can play your
+squad from that start against the AI, with every go ranked. A battle can't be retried or shared while other people
+are still fighting it. Every finished match keeps a statistics record (hires, gear, kills, accuracy...).
 
 ## Settings
 

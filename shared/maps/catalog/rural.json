@@ -1,0 +1,1867 @@
+{
+ "datasets": {
+  "CULTIVAT": [
+   {
+    "name": "farm-grass",
+    "kind": "floor",
+    "part": 0,
+    "label": "plain grass"
+   },
+   {
+    "name": "farm-dirt",
+    "kind": "floor",
+    "part": 2,
+    "label": "bare brown earth"
+   },
+   {
+    "name": "ploughed-field",
+    "kind": "floor",
+    "part": 3,
+    "label": "furrowed soil (wheat fields)"
+   },
+   {
+    "name": "seedling-dirt",
+    "kind": "floor",
+    "part": 6,
+    "label": "dirt with small dark seedlings"
+   },
+   {
+    "name": "cabbage-patch",
+    "kind": "floor",
+    "part": 7,
+    "label": "dirt with a cabbage/melon head"
+   },
+   {
+    "name": "wheat",
+    "kind": "object",
+    "part": 4,
+    "label": "tall golden wheat; walkable"
+   },
+   {
+    "name": "flower-crop",
+    "kind": "object",
+    "part": 5,
+    "label": "flowering green crop covering the tile; walkable"
+   },
+   {
+    "name": "vegetable-plants",
+    "kind": "object",
+    "part": 8,
+    "label": "row of leafy vegetable plants on dirt; walkable"
+   },
+   {
+    "name": "farm-apple-tree",
+    "kind": "object",
+    "part": 9,
+    "blocks": true,
+    "label": "fruit tree, blocks sight"
+   },
+   {
+    "name": "farm-tree",
+    "kind": "object",
+    "part": 12,
+    "blocks": true,
+    "label": "round bushy deciduous tree, blocks sight"
+   },
+   {
+    "name": "fieldstone-wall",
+    "kind": "wall",
+    "west": 14,
+    "north": 15,
+    "label": "grey dry-stone field wall, chest high (see-through, impassable)"
+   },
+   {
+    "name": "fieldstone-corner",
+    "kind": "corner",
+    "part": 20,
+    "label": "stone post closing a fieldstone-wall corner"
+   },
+   {
+    "name": "tall-hedge",
+    "kind": "fence",
+    "west": 16,
+    "north": 17,
+    "label": "tall hedge, blocks sight"
+   },
+   {
+    "name": "tall-hedge-corner",
+    "kind": "corner",
+    "part": 21
+   },
+   {
+    "name": "low-hedge",
+    "kind": "fence",
+    "west": 18,
+    "north": 19,
+    "label": "low hedge, see-through, impassable"
+   },
+   {
+    "name": "low-hedge-corner",
+    "kind": "corner",
+    "part": 22
+   },
+   {
+    "name": "wood-fence",
+    "kind": "fence",
+    "west": 23,
+    "north": 27,
+    "label": "wooden rail fence; the original alternates it with wood-fence-alt tile by tile"
+   },
+   {
+    "name": "wood-fence-alt",
+    "kind": "fence",
+    "west": 24,
+    "north": 28,
+    "label": "other half of the alternating wooden rail fence"
+   },
+   {
+    "name": "scorched-grass",
+    "kind": "debris",
+    "part": 1
+   },
+   {
+    "name": "scorched-dirt",
+    "kind": "debris",
+    "part": 10
+   },
+   {
+    "name": "burnt-wheat",
+    "kind": "debris",
+    "part": 11
+   },
+   {
+    "name": "burnt-tree",
+    "kind": "debris",
+    "part": 13,
+    "label": "dead blackened tree (destroyed farm-apple-tree or farm-tree), still impassable"
+   },
+   {
+    "name": "broken-fence",
+    "kind": "debris",
+    "part": 25
+   },
+   {
+    "name": "fieldstone-rubble",
+    "kind": "debris",
+    "part": 31
+   },
+   {
+    "name": "hedge-stubble",
+    "kind": "debris",
+    "part": 33
+   }
+  ],
+  "BARN": [
+   {
+    "name": "barn-wood-floor",
+    "kind": "floor",
+    "part": 0,
+    "label": "wooden plank floor (hay loft / upper storey)"
+   },
+   {
+    "name": "barn-wood-floor-knotty",
+    "kind": "floor",
+    "part": 1,
+    "label": "wooden plank floor variant, mixed with barn-wood-floor"
+   },
+   {
+    "name": "flagstone-floor",
+    "kind": "floor",
+    "part": 19,
+    "label": "grey flagstones (barn/stable ground floor)"
+   },
+   {
+    "name": "corrugated-roof",
+    "kind": "floor",
+    "part": 2,
+    "roof": true,
+    "label": "blue corrugated metal roof"
+   },
+   {
+    "name": "dark-blue-roof",
+    "kind": "floor",
+    "part": 20,
+    "roof": true,
+    "label": "dark blue roof panel with yellow trim (unused by the original blocks)"
+   },
+   {
+    "name": "hay-bale",
+    "kind": "object",
+    "part": 3,
+    "label": "hay bale, raised walkable (level -8)"
+   },
+   {
+    "name": "hay-bale-2",
+    "kind": "object",
+    "part": 4,
+    "label": "hay bale turned the other way, raised walkable (level -8)"
+   },
+   {
+    "name": "tan-brick-wall",
+    "kind": "wall",
+    "west": 11,
+    "north": 10,
+    "label": "tan brick barn wall (outer walls)"
+   },
+   {
+    "name": "tan-brick-window",
+    "kind": "window",
+    "west": 13,
+    "north": 12
+   },
+   {
+    "name": "tan-brick-corner",
+    "kind": "corner",
+    "part": 14
+   },
+   {
+    "name": "barn-plank-wall",
+    "kind": "wall",
+    "west": 6,
+    "north": 5,
+    "label": "dark wooden plank wall (stall partitions, loft walls)"
+   },
+   {
+    "name": "barn-plank-window",
+    "kind": "window",
+    "west": 8,
+    "north": 7,
+    "label": "plank wall with a small window"
+   },
+   {
+    "name": "barn-plank-corner",
+    "kind": "corner",
+    "part": 9
+   },
+   {
+    "name": "barn-door",
+    "kind": "door",
+    "west": 17,
+    "north": 18,
+    "label": "grey wooden door"
+   },
+   {
+    "name": "barn-stairs",
+    "kind": "stairs",
+    "low": 15,
+    "high": 16,
+    "dir": "north",
+    "label": "wooden stairs up to the hay loft"
+   },
+   {
+    "name": "barn-floor-rubble",
+    "kind": "debris",
+    "part": 27
+   },
+   {
+    "name": "barn-burnt-floor",
+    "kind": "debris",
+    "part": 28
+   },
+   {
+    "name": "plank-wall-debris",
+    "kind": "debris",
+    "part": 21
+   },
+   {
+    "name": "brick-wall-debris",
+    "kind": "debris",
+    "part": 23
+   }
+  ],
+  "FOREST": [
+   {
+    "name": "forest-grass",
+    "kind": "floor",
+    "part": 0,
+    "label": "plain grass"
+   },
+   {
+    "name": "red-flower-grass",
+    "kind": "floor",
+    "part": 1,
+    "label": "grass with red flowers"
+   },
+   {
+    "name": "red-flower-grass-sparse",
+    "kind": "floor",
+    "part": 2,
+    "label": "grass with a few red flowers"
+   },
+   {
+    "name": "rocky-grass",
+    "kind": "floor",
+    "part": 6,
+    "label": "grass with a grey stone patch"
+   },
+   {
+    "name": "puddle-grass",
+    "kind": "floor",
+    "part": 7,
+    "label": "grass with a small dark puddle"
+   },
+   {
+    "name": "long-grass",
+    "kind": "object",
+    "part": 4,
+    "label": "tuft of long grass; walkable"
+   },
+   {
+    "name": "thick-grass",
+    "kind": "object",
+    "part": 5,
+    "label": "thick bushy grass clump; walkable"
+   },
+   {
+    "name": "dead-tree-in-pond",
+    "kind": "object",
+    "part": 8,
+    "label": "bare dead sapling in a puddle; walkable"
+   },
+   {
+    "name": "big-stump",
+    "kind": "object",
+    "part": 9,
+    "blocks": true,
+    "label": "tall hollow tree stump"
+   },
+   {
+    "name": "broken-stump",
+    "kind": "object",
+    "part": 10,
+    "blocks": true,
+    "label": "tall split tree stump"
+   },
+   {
+    "name": "split-stump",
+    "kind": "object",
+    "part": 11,
+    "blocks": true,
+    "label": "low split stump with roots"
+   },
+   {
+    "name": "log",
+    "kind": "object",
+    "part": 12,
+    "label": "fallen log, can be stood on (level -8)"
+   },
+   {
+    "name": "branched-log",
+    "kind": "object",
+    "part": 13,
+    "blocks": true,
+    "label": "fallen log with a branch, impassable"
+   },
+   {
+    "name": "hollow-log",
+    "kind": "object",
+    "part": 14,
+    "label": "hollow fallen log, can be stood on (level -8)"
+   },
+   {
+    "name": "dead-branches",
+    "kind": "object",
+    "part": 15,
+    "blocks": true,
+    "label": "pile of dead branches"
+   },
+   {
+    "name": "fir-sapling",
+    "kind": "object",
+    "part": 16,
+    "blocks": true,
+    "label": "small young fir"
+   },
+   {
+    "name": "brambles",
+    "kind": "object",
+    "part": 17,
+    "blocks": true,
+    "label": "red-brown thorny brambles, see-through"
+   },
+   {
+    "name": "small-bush",
+    "kind": "object",
+    "part": 18,
+    "blocks": true
+   },
+   {
+    "name": "wide-bush",
+    "kind": "object",
+    "part": 19,
+    "blocks": true
+   },
+   {
+    "name": "berry-bush",
+    "kind": "object",
+    "part": 20,
+    "blocks": true,
+    "label": "leafy bush with red berries"
+   },
+   {
+    "name": "bare-tree",
+    "kind": "object",
+    "part": 21,
+    "blocks": true,
+    "label": "thin tree trunk with a few branches; also the trunk of tall-pine and broad-fir"
+   },
+   {
+    "name": "tall-pine",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      21,
+      0
+     ],
+     [
+      0,
+      0,
+      22,
+      1
+     ]
+    ],
+    "label": "one-tile pine two storeys tall: trunk on the ground, crown on the level above"
+   },
+   {
+    "name": "broad-fir",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      21,
+      0
+     ],
+     [
+      0,
+      0,
+      23,
+      1
+     ],
+     [
+      1,
+      0,
+      26,
+      1
+     ],
+     [
+      0,
+      1,
+      24,
+      1
+     ],
+     [
+      1,
+      1,
+      25,
+      1
+     ]
+    ],
+    "label": "fir with a 2x2 crown one level up, trunk under the crown's NW tile"
+   },
+   {
+    "name": "giant-fir",
+    "kind": "multi",
+    "parts": [
+     [
+      1,
+      1,
+      80,
+      0
+     ],
+     [
+      0,
+      0,
+      72,
+      1
+     ],
+     [
+      1,
+      0,
+      73,
+      1
+     ],
+     [
+      2,
+      0,
+      79,
+      1
+     ],
+     [
+      0,
+      1,
+      71,
+      1
+     ],
+     [
+      1,
+      1,
+      74,
+      1
+     ],
+     [
+      2,
+      1,
+      78,
+      1
+     ],
+     [
+      0,
+      2,
+      75,
+      1
+     ],
+     [
+      1,
+      2,
+      76,
+      1
+     ],
+     [
+      2,
+      2,
+      77,
+      1
+     ],
+     [
+      0,
+      0,
+      66,
+      2
+     ],
+     [
+      1,
+      0,
+      67,
+      2
+     ],
+     [
+      2,
+      0,
+      70,
+      2
+     ],
+     [
+      0,
+      1,
+      65,
+      2
+     ],
+     [
+      1,
+      1,
+      69,
+      2
+     ],
+     [
+      2,
+      1,
+      78,
+      2
+     ],
+     [
+      0,
+      2,
+      68,
+      2
+     ],
+     [
+      1,
+      2,
+      76,
+      2
+     ],
+     [
+      2,
+      2,
+      77,
+      2
+     ]
+    ],
+    "label": "huge fir three storeys tall: trunk in the middle of a 3x3 crown filling levels +1 and +2"
+   },
+   {
+    "name": "hill-low-edge-n",
+    "kind": "object",
+    "part": 30,
+    "label": "grassy hill slope, low ring (level -4): edge on the hill's N side, sloping down to the N"
+   },
+   {
+    "name": "hill-low-edge-e",
+    "kind": "object",
+    "part": 33,
+    "label": "grassy hill slope, low ring (level -4): edge on the hill's E side, sloping down to the E"
+   },
+   {
+    "name": "hill-low-edge-s",
+    "kind": "object",
+    "part": 32,
+    "label": "grassy hill slope, low ring (level -4): edge on the hill's S side, sloping down to the S"
+   },
+   {
+    "name": "hill-low-edge-w",
+    "kind": "object",
+    "part": 28,
+    "label": "grassy hill slope, low ring (level -4): edge on the hill's W side, sloping down to the W"
+   },
+   {
+    "name": "hill-low-corner-nw",
+    "kind": "object",
+    "part": 29,
+    "label": "grassy hill slope, low ring (level -4): outer (convex) NW corner"
+   },
+   {
+    "name": "hill-low-corner-ne",
+    "kind": "object",
+    "part": 31,
+    "label": "grassy hill slope, low ring (level -4): outer (convex) NE corner"
+   },
+   {
+    "name": "hill-low-corner-se",
+    "kind": "object",
+    "part": 34,
+    "label": "grassy hill slope, low ring (level -4): outer (convex) SE corner"
+   },
+   {
+    "name": "hill-low-corner-sw",
+    "kind": "object",
+    "part": 27,
+    "label": "grassy hill slope, low ring (level -4): outer (convex) SW corner"
+   },
+   {
+    "name": "hill-low-inner-nw",
+    "kind": "object",
+    "part": 38,
+    "label": "grassy hill slope, low ring (level -4): inner (concave) NW corner"
+   },
+   {
+    "name": "hill-low-inner-ne",
+    "kind": "object",
+    "part": 36,
+    "label": "grassy hill slope, low ring (level -4): inner (concave) NE corner"
+   },
+   {
+    "name": "hill-low-inner-se",
+    "kind": "object",
+    "part": 37,
+    "label": "grassy hill slope, low ring (level -4): inner (concave) SE corner"
+   },
+   {
+    "name": "hill-low-inner-sw",
+    "kind": "object",
+    "part": 35,
+    "label": "grassy hill slope, low ring (level -4): inner (concave) SW corner"
+   },
+   {
+    "name": "hill-mid-edge-n",
+    "kind": "object",
+    "part": 44,
+    "label": "grassy hill slope, mid ring (level -12): edge on the hill's N side, sloping down to the N"
+   },
+   {
+    "name": "hill-mid-edge-e",
+    "kind": "object",
+    "part": 47,
+    "label": "grassy hill slope, mid ring (level -12): edge on the hill's E side, sloping down to the E"
+   },
+   {
+    "name": "hill-mid-edge-s",
+    "kind": "object",
+    "part": 46,
+    "label": "grassy hill slope, mid ring (level -12): edge on the hill's S side, sloping down to the S"
+   },
+   {
+    "name": "hill-mid-edge-w",
+    "kind": "object",
+    "part": 42,
+    "label": "grassy hill slope, mid ring (level -12): edge on the hill's W side, sloping down to the W"
+   },
+   {
+    "name": "hill-mid-corner-nw",
+    "kind": "object",
+    "part": 43,
+    "label": "grassy hill slope, mid ring (level -12): outer (convex) NW corner"
+   },
+   {
+    "name": "hill-mid-corner-ne",
+    "kind": "object",
+    "part": 45,
+    "label": "grassy hill slope, mid ring (level -12): outer (convex) NE corner"
+   },
+   {
+    "name": "hill-mid-corner-se",
+    "kind": "object",
+    "part": 48,
+    "label": "grassy hill slope, mid ring (level -12): outer (convex) SE corner"
+   },
+   {
+    "name": "hill-mid-corner-sw",
+    "kind": "object",
+    "part": 41,
+    "label": "grassy hill slope, mid ring (level -12): outer (convex) SW corner"
+   },
+   {
+    "name": "hill-mid-inner-nw",
+    "kind": "object",
+    "part": 52,
+    "label": "grassy hill slope, mid ring (level -12): inner (concave) NW corner"
+   },
+   {
+    "name": "hill-mid-inner-ne",
+    "kind": "object",
+    "part": 50,
+    "label": "grassy hill slope, mid ring (level -12): inner (concave) NE corner"
+   },
+   {
+    "name": "hill-mid-inner-se",
+    "kind": "object",
+    "part": 51,
+    "label": "grassy hill slope, mid ring (level -12): inner (concave) SE corner"
+   },
+   {
+    "name": "hill-mid-inner-sw",
+    "kind": "object",
+    "part": 49,
+    "label": "grassy hill slope, mid ring (level -12): inner (concave) SW corner"
+   },
+   {
+    "name": "hill-high-edge-n",
+    "kind": "object",
+    "part": 57,
+    "label": "grassy hill slope, high ring (level -20): edge on the hill's N side, sloping down to the N"
+   },
+   {
+    "name": "hill-high-edge-e",
+    "kind": "object",
+    "part": 60,
+    "label": "grassy hill slope, high ring (level -20): edge on the hill's E side, sloping down to the E"
+   },
+   {
+    "name": "hill-high-edge-s",
+    "kind": "object",
+    "part": 59,
+    "label": "grassy hill slope, high ring (level -20): edge on the hill's S side, sloping down to the S"
+   },
+   {
+    "name": "hill-high-edge-w",
+    "kind": "object",
+    "part": 55,
+    "label": "grassy hill slope, high ring (level -20): edge on the hill's W side, sloping down to the W"
+   },
+   {
+    "name": "hill-high-corner-nw",
+    "kind": "object",
+    "part": 56,
+    "label": "grassy hill slope, high ring (level -20): outer (convex) NW corner"
+   },
+   {
+    "name": "hill-high-corner-ne",
+    "kind": "object",
+    "part": 58,
+    "label": "grassy hill slope, high ring (level -20): outer (convex) NE corner"
+   },
+   {
+    "name": "hill-high-corner-se",
+    "kind": "object",
+    "part": 61,
+    "label": "grassy hill slope, high ring (level -20): outer (convex) SE corner"
+   },
+   {
+    "name": "hill-high-corner-sw",
+    "kind": "object",
+    "part": 54,
+    "label": "grassy hill slope, high ring (level -20): outer (convex) SW corner"
+   },
+   {
+    "name": "hill-high-inner-nw",
+    "kind": "object",
+    "part": 82,
+    "label": "grassy hill slope, high ring (level -20): inner (concave) NW corner"
+   },
+   {
+    "name": "hill-high-inner-ne",
+    "kind": "object",
+    "part": 63,
+    "label": "grassy hill slope, high ring (level -20): inner (concave) NE corner"
+   },
+   {
+    "name": "hill-high-inner-se",
+    "kind": "object",
+    "part": 64,
+    "label": "grassy hill slope, high ring (level -20): inner (concave) SE corner"
+   },
+   {
+    "name": "hill-high-inner-sw",
+    "kind": "object",
+    "part": 62,
+    "label": "grassy hill slope, high ring (level -20): inner (concave) SW corner"
+   },
+   {
+    "name": "hill-step",
+    "kind": "object",
+    "part": 39,
+    "label": "flat grassy terrace at level -8 (filler between hill rings)"
+   },
+   {
+    "name": "hill-top",
+    "kind": "object",
+    "part": 53,
+    "label": "flat grassy hilltop at level -16"
+   },
+   {
+    "name": "hill-plateau",
+    "kind": "object",
+    "part": 40,
+    "label": "solid grassy block a full storey high (level -24); the original puts a normal floor on the level above to stand or put trees on it (FOREST11)"
+   },
+   {
+    "name": "small-hill",
+    "kind": "multi",
+    "parts": [
+     [
+      1,
+      0,
+      29
+     ],
+     [
+      2,
+      0,
+      30
+     ],
+     [
+      3,
+      0,
+      30
+     ],
+     [
+      4,
+      0,
+      30
+     ],
+     [
+      5,
+      0,
+      31
+     ],
+     [
+      0,
+      1,
+      29
+     ],
+     [
+      1,
+      1,
+      38
+     ],
+     [
+      2,
+      1,
+      43
+     ],
+     [
+      3,
+      1,
+      44
+     ],
+     [
+      4,
+      1,
+      45
+     ],
+     [
+      5,
+      1,
+      36
+     ],
+     [
+      6,
+      1,
+      31
+     ],
+     [
+      0,
+      2,
+      28
+     ],
+     [
+      1,
+      2,
+      43
+     ],
+     [
+      2,
+      2,
+      52
+     ],
+     [
+      3,
+      2,
+      53
+     ],
+     [
+      4,
+      2,
+      50
+     ],
+     [
+      5,
+      2,
+      45
+     ],
+     [
+      6,
+      2,
+      36
+     ],
+     [
+      7,
+      2,
+      31
+     ],
+     [
+      0,
+      3,
+      28
+     ],
+     [
+      1,
+      3,
+      42
+     ],
+     [
+      2,
+      3,
+      53
+     ],
+     [
+      3,
+      3,
+      53
+     ],
+     [
+      4,
+      3,
+      53
+     ],
+     [
+      5,
+      3,
+      50
+     ],
+     [
+      6,
+      3,
+      45
+     ],
+     [
+      7,
+      3,
+      33
+     ],
+     [
+      0,
+      4,
+      28
+     ],
+     [
+      1,
+      4,
+      42
+     ],
+     [
+      2,
+      4,
+      53
+     ],
+     [
+      3,
+      4,
+      53
+     ],
+     [
+      4,
+      4,
+      53
+     ],
+     [
+      5,
+      4,
+      53
+     ],
+     [
+      6,
+      4,
+      47
+     ],
+     [
+      7,
+      4,
+      33
+     ],
+     [
+      0,
+      5,
+      28
+     ],
+     [
+      1,
+      5,
+      41
+     ],
+     [
+      2,
+      5,
+      49
+     ],
+     [
+      3,
+      5,
+      53
+     ],
+     [
+      4,
+      5,
+      53
+     ],
+     [
+      5,
+      5,
+      53
+     ],
+     [
+      6,
+      5,
+      47
+     ],
+     [
+      7,
+      5,
+      33
+     ],
+     [
+      0,
+      6,
+      28
+     ],
+     [
+      1,
+      6,
+      39
+     ],
+     [
+      2,
+      6,
+      41
+     ],
+     [
+      3,
+      6,
+      46
+     ],
+     [
+      4,
+      6,
+      46
+     ],
+     [
+      5,
+      6,
+      46
+     ],
+     [
+      6,
+      6,
+      48
+     ],
+     [
+      7,
+      6,
+      33
+     ],
+     [
+      0,
+      7,
+      27
+     ],
+     [
+      1,
+      7,
+      35
+     ],
+     [
+      2,
+      7,
+      39
+     ],
+     [
+      3,
+      7,
+      39
+     ],
+     [
+      4,
+      7,
+      39
+     ],
+     [
+      5,
+      7,
+      39
+     ],
+     [
+      6,
+      7,
+      37
+     ],
+     [
+      7,
+      7,
+      34
+     ],
+     [
+      1,
+      8,
+      27
+     ],
+     [
+      2,
+      8,
+      32
+     ],
+     [
+      3,
+      8,
+      32
+     ],
+     [
+      4,
+      8,
+      32
+     ],
+     [
+      5,
+      8,
+      32
+     ],
+     [
+      6,
+      8,
+      34
+     ]
+    ],
+    "label": "8x9 two-ring grassy hill with a 4x4 flat top at level -16, exactly as in FOREST09"
+   },
+   {
+    "name": "burnt-forest-ground",
+    "kind": "debris",
+    "part": 3
+   },
+   {
+    "name": "fir-stump",
+    "kind": "debris",
+    "part": 81,
+    "label": "stump left when a giant fir is destroyed"
+   }
+  ],
+  "JUNGLE": [
+   {
+    "name": "jungle-grass",
+    "kind": "floor",
+    "part": 0,
+    "label": "plain jungle grass"
+   },
+   {
+    "name": "swamp-puddle",
+    "kind": "floor",
+    "part": 53,
+    "label": "grass with a swampy pool"
+   },
+   {
+    "name": "swamp-mud",
+    "kind": "floor",
+    "part": 54,
+    "label": "grass with a muddy swamp patch"
+   },
+   {
+    "name": "swamp-log",
+    "kind": "floor",
+    "part": 55,
+    "label": "swamp pool with a sunken branch"
+   },
+   {
+    "name": "dark-swamp",
+    "kind": "floor",
+    "part": 52,
+    "label": "dark swamp water (also the burnt ground left by every jungle part)"
+   },
+   {
+    "name": "jungle-mound",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      43
+     ],
+     [
+      1,
+      0,
+      45
+     ],
+     [
+      0,
+      1,
+      44
+     ],
+     [
+      1,
+      1,
+      46
+     ]
+    ],
+    "label": "2x2 lighter grassy mound (floor parts)"
+   },
+   {
+    "name": "jungle-tall-grass",
+    "kind": "object",
+    "part": 1,
+    "label": "tall grass; walkable"
+   },
+   {
+    "name": "jungle-shrub",
+    "kind": "object",
+    "part": 2,
+    "label": "low dark shrub; walkable (level -4)"
+   },
+   {
+    "name": "jungle-fruit-tree",
+    "kind": "object",
+    "part": 3,
+    "blocks": true,
+    "label": "dense round tree with white fruit, blocks sight"
+   },
+   {
+    "name": "jungle-wide-tree",
+    "kind": "object",
+    "part": 4,
+    "blocks": true,
+    "label": "dense wide tree, blocks sight"
+   },
+   {
+    "name": "jungle-tree",
+    "kind": "object",
+    "part": 5,
+    "blocks": true,
+    "label": "leafy tree, blocks sight"
+   },
+   {
+    "name": "jungle-tall-tree",
+    "kind": "object",
+    "part": 6,
+    "blocks": true,
+    "label": "tall leafy tree, blocks sight"
+   },
+   {
+    "name": "jungle-weeping-tree",
+    "kind": "object",
+    "part": 7,
+    "blocks": true,
+    "label": "drooping leafy tree, blocks sight"
+   },
+   {
+    "name": "blue-berry-palm",
+    "kind": "object",
+    "part": 8,
+    "blocks": true,
+    "label": "small palm with blue berries"
+   },
+   {
+    "name": "blue-flowers",
+    "kind": "object",
+    "part": 9,
+    "label": "blue flowers on the ground; walkable"
+   },
+   {
+    "name": "blue-flower-bush",
+    "kind": "object",
+    "part": 10,
+    "blocks": true,
+    "label": "large leafy plant with blue flowers, blocks sight"
+   },
+   {
+    "name": "small-fern",
+    "kind": "object",
+    "part": 11,
+    "blocks": true
+   },
+   {
+    "name": "spiky-fern",
+    "kind": "object",
+    "part": 12,
+    "blocks": true
+   },
+   {
+    "name": "palm-tree",
+    "kind": "object",
+    "part": 17,
+    "blocks": true,
+    "label": "curved palm tree"
+   },
+   {
+    "name": "palm-tree-2",
+    "kind": "object",
+    "part": 18,
+    "blocks": true,
+    "label": "straighter palm tree"
+   },
+   {
+    "name": "red-flower-vine",
+    "kind": "object",
+    "part": 27,
+    "label": "creeper with red flowers; walkable"
+   },
+   {
+    "name": "swamp-root-plant",
+    "kind": "object",
+    "part": 47,
+    "blocks": true,
+    "label": "swamp plant with pale roots"
+   },
+   {
+    "name": "swamp-palm",
+    "kind": "object",
+    "part": 48,
+    "blocks": true,
+    "label": "tall palm standing in swamp"
+   },
+   {
+    "name": "swamp-reeds",
+    "kind": "object",
+    "part": 49,
+    "label": "reeds in swamp water; walkable"
+   },
+   {
+    "name": "swamp-fern",
+    "kind": "object",
+    "part": 50,
+    "blocks": true
+   },
+   {
+    "name": "swamp-dead-fern",
+    "kind": "object",
+    "part": 51,
+    "blocks": true,
+    "label": "fern with dead pale branches"
+   },
+   {
+    "name": "swamp-dead-shrub",
+    "kind": "object",
+    "part": 56,
+    "blocks": true
+   },
+   {
+    "name": "swamp-dead-tree",
+    "kind": "object",
+    "part": 57,
+    "blocks": true,
+    "label": "bare dead tree in a swamp pool"
+   },
+   {
+    "name": "swamp-small-palm",
+    "kind": "object",
+    "part": 58,
+    "blocks": true
+   },
+   {
+    "name": "swamp-thorn-tree",
+    "kind": "object",
+    "part": 59,
+    "blocks": true,
+    "label": "dead spiky tree in swamp"
+   },
+   {
+    "name": "black-spiky-plant",
+    "kind": "object",
+    "part": 60,
+    "blocks": true
+   },
+   {
+    "name": "black-spiky-plant-small",
+    "kind": "object",
+    "part": 61,
+    "blocks": true
+   },
+   {
+    "name": "big-fern-clump",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      16
+     ],
+     [
+      1,
+      0,
+      13
+     ],
+     [
+      0,
+      1,
+      15
+     ],
+     [
+      1,
+      1,
+      14
+     ]
+    ],
+    "label": "2x2 clump of big broad-leafed ferns (impassable)"
+   },
+   {
+    "name": "palm-frond-clump",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      22
+     ],
+     [
+      1,
+      0,
+      21
+     ],
+     [
+      0,
+      1,
+      19
+     ],
+     [
+      1,
+      1,
+      20
+     ]
+    ],
+    "label": "2x2 clump of low palm fronds (impassable)"
+   },
+   {
+    "name": "red-flower-vines",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      24
+     ],
+     [
+      1,
+      0,
+      26
+     ],
+     [
+      0,
+      1,
+      23
+     ],
+     [
+      1,
+      1,
+      25
+     ]
+    ],
+    "label": "2x2 patch of creepers with red flowers; walkable"
+   },
+   {
+    "name": "blue-flower-vines",
+    "kind": "multi",
+    "parts": [
+     [
+      0,
+      0,
+      30
+     ],
+     [
+      1,
+      0,
+      29
+     ],
+     [
+      0,
+      1,
+      28
+     ],
+     [
+      1,
+      1,
+      31
+     ]
+    ],
+    "label": "2x2 patch of creepers with blue flowers; walkable"
+   },
+   {
+    "name": "giant-jungle-tree",
+    "kind": "multi",
+    "parts": [
+     [
+      1,
+      1,
+      80,
+      0
+     ],
+     [
+      0,
+      0,
+      74,
+      1
+     ],
+     [
+      1,
+      0,
+      75,
+      1
+     ],
+     [
+      2,
+      0,
+      79,
+      1
+     ],
+     [
+      0,
+      1,
+      73,
+      1
+     ],
+     [
+      1,
+      1,
+      76,
+      1
+     ],
+     [
+      2,
+      1,
+      79,
+      1
+     ],
+     [
+      0,
+      2,
+      77,
+      1
+     ],
+     [
+      1,
+      2,
+      77,
+      1
+     ],
+     [
+      2,
+      2,
+      78,
+      1
+     ],
+     [
+      0,
+      0,
+      67,
+      2
+     ],
+     [
+      1,
+      0,
+      68,
+      2
+     ],
+     [
+      2,
+      0,
+      72,
+      2
+     ],
+     [
+      0,
+      1,
+      66,
+      2
+     ],
+     [
+      1,
+      1,
+      69,
+      2
+     ],
+     [
+      2,
+      1,
+      72,
+      2
+     ],
+     [
+      0,
+      2,
+      70,
+      2
+     ],
+     [
+      1,
+      2,
+      70,
+      2
+     ],
+     [
+      2,
+      2,
+      71,
+      2
+     ]
+    ],
+    "label": "huge three-storey tree: root-buttressed trunk in the middle, dense 3x3 crown on levels +1 and +2"
+   },
+   {
+    "name": "giant-jungle-tree-2",
+    "kind": "multi",
+    "parts": [
+     [
+      1,
+      1,
+      81,
+      0
+     ],
+     [
+      0,
+      0,
+      74,
+      1
+     ],
+     [
+      1,
+      0,
+      75,
+      1
+     ],
+     [
+      2,
+      0,
+      79,
+      1
+     ],
+     [
+      0,
+      1,
+      73,
+      1
+     ],
+     [
+      1,
+      1,
+      76,
+      1
+     ],
+     [
+      2,
+      1,
+      79,
+      1
+     ],
+     [
+      0,
+      2,
+      77,
+      1
+     ],
+     [
+      1,
+      2,
+      77,
+      1
+     ],
+     [
+      2,
+      2,
+      78,
+      1
+     ],
+     [
+      0,
+      0,
+      67,
+      2
+     ],
+     [
+      1,
+      0,
+      68,
+      2
+     ],
+     [
+      2,
+      0,
+      72,
+      2
+     ],
+     [
+      0,
+      1,
+      66,
+      2
+     ],
+     [
+      1,
+      1,
+      69,
+      2
+     ],
+     [
+      2,
+      1,
+      72,
+      2
+     ],
+     [
+      0,
+      2,
+      70,
+      2
+     ],
+     [
+      1,
+      2,
+      70,
+      2
+     ],
+     [
+      2,
+      2,
+      71,
+      2
+     ]
+    ],
+    "label": "giant-jungle-tree with the other trunk sprite"
+   },
+   {
+    "name": "leaning-giant-palm",
+    "kind": "multi",
+    "parts": [
+     [
+      1,
+      1,
+      32,
+      0
+     ],
+     [
+      1,
+      1,
+      33,
+      1
+     ],
+     [
+      0,
+      0,
+      38,
+      2
+     ],
+     [
+      1,
+      0,
+      39,
+      2
+     ],
+     [
+      2,
+      0,
+      40,
+      2
+     ],
+     [
+      2,
+      1,
+      35,
+      2
+     ],
+     [
+      1,
+      2,
+      42,
+      2
+     ],
+     [
+      3,
+      2,
+      36,
+      2
+     ],
+     [
+      4,
+      2,
+      37,
+      2
+     ],
+     [
+      2,
+      3,
+      34,
+      2
+     ]
+    ],
+    "label": "huge leaning pale-trunked tree three storeys tall, fronds spreading over a 5x4 area on level +2"
+   },
+   {
+    "name": "swamp-debris",
+    "kind": "debris",
+    "part": 62,
+    "label": "muddy debris (destroyed vines/flowers)"
+   }
+  ]
+ },
+ "blocks": {
+  "CULTA00": "Open grass field, completely empty: no cover.",
+  "CULTA01": "Open grass field with a wooden rail fence along the west and north edges (gap in the west fence at y4-5).",
+  "CULTA02": "Open grass field bounded by a grey fieldstone wall on the west and north edges (gap in the north wall at x6-7).",
+  "CULTA03": "Grass field enclosed on the west and north by a tall sight-blocking hedge (gap in the west hedge at y4-5).",
+  "CULTA04": "Grass field with a low hedge along the west and north edges (gap in the north hedge at x4-5).",
+  "CULTA05": "Wheat field: ploughed ground entirely covered in tall walkable wheat, wooden fence on the west and north edges.",
+  "CULTA06": "Wheat field: ploughed ground entirely covered in tall wheat, no fences.",
+  "CULTA07": "Grass covered almost everywhere by a walkable flowering crop with scattered bare tiles.",
+  "CULTA08": "Seedling field on dirt with a wooden fence along the west and north edges (gaps at north x4-5 and west y4-5).",
+  "CULTA09": "Cabbage patch with a dirt border, fieldstone wall on the west and north (gaps at north x2-3, west y7-8).",
+  "CULTA10": "Dirt field filled with rows of leafy vegetable plants, wooden fence west and north (gaps north x6-7, west y8-9).",
+  "CULTA11": "Bare dirt, completely empty.",
+  "CULTA12": "Bare dirt with a fieldstone wall along the west and north edges (gap in the north wall at x4-5).",
+  "CULTA13": "Apple orchard: grass with about 15 scattered sight-blocking apple trees, tall hedge on the west and north edges (gap at north x8).",
+  "CULTA14": "Grass with scattered bushy trees and patches of flowering crop; mostly open.",
+  "CULTA15": "Ploughed field with scattered wheat patches and loose hay bales (low cover), wooden fence west and north.",
+  "CULTA16": "Two-storey 8x8 barn on grass: tan-brick ground floor with hay bales, a wide opening in the east wall (y3-4) and stairs along the west wall up to a wooden hay loft with plank walls and windows; corrugated roof. Grass strip on the east and south.",
+  "CULTA17": "Two single-storey sheds on dirt under corrugated roofs: a 4x8 stable on the west with plank-walled stalls and a door on the south side, and a 3x5 flagstone shed in the NE with a door in its east wall; open yard between and to the south.",
+  "CULTA18": "Large 9x9 two-storey barn: flagstone ground floor divided into stalls by plank walls, doors in the west (y1) and east (y4) walls, central stairs climbing north to a wooden upper floor with one plank partition; corrugated roof; grass strip on the south and east.",
+  "FOREST00": "Open grass meadow with a few flowered patches, a stone patch and a puddle; no cover.",
+  "FOREST01": "Open grass meadow with flowered patches around the edges; no cover.",
+  "FOREST02": "Grass covered in long grass and thick grass clumps (walkable, soft cover) over most of the block, plus a big stump and a log; NE and SE corners more open.",
+  "FOREST03": "Thicket: patches of impassable brambles, bushes, stumps, dead branches and fallen logs across the middle and west; open ground in the NW and SE.",
+  "FOREST04": "A ring of long grass around a central thicket of brambles, berry bushes and stumps; edges open.",
+  "FOREST05": "Grass with scattered long grass, one giant fir in the centre, a broad fir in the SW and a tall pine in the NE.",
+  "FOREST06": "Two giant firs (NE and SW), two broad firs (NW and SE), a tall pine, long grass; open centre and east.",
+  "FOREST07": "Dense stand of five giant firs plus a broad fir and a tall pine with long grass between; heavy cover, little open ground.",
+  "FOREST08": "Thick fir forest: six giant firs, two tall pines, a broad fir and long grass throughout; the heaviest cover of the forest blocks.",
+  "FOREST09": "A two-ring grassy hill filling the block (4x4 flat top at level -16, two-thirds of a storey up) with a thin margin of grass and long grass.",
+  "FOREST10": "20x20: two long grassy ridges running north-south (the west one wider), each rising in terraces to a full-storey plateau with tall pines and long grass on top, with a lower valley between them.",
+  "FOREST11": "20x20: one big flat-topped hill a full storey high filling almost the whole block, terraced slopes all round; giant firs, tall pines, a broad fir and long grass on top.",
+  "JUNGLE00": "Open jungle grass with a grassy mound and a few swamp puddles; no cover.",
+  "JUNGLE01": "Open jungle grass with two grassy mounds and a few swamp puddles; no cover.",
+  "JUNGLE02": "Open jungle grass with two grassy mounds and a few swamp puddles; no cover.",
+  "JUNGLE03": "Mostly open grass; dense vegetation along the west edge with a huge leaning palm in the NW, fern and frond clumps, trees in the NE and SE corners.",
+  "JUNGLE04": "Giant jungle tree in the north-centre, red and blue flower-vine patches in the middle, plants and trees round the edges (densest north and south), a grassy mound; centre-east fairly open.",
+  "JUNGLE05": "Giant jungle tree on the east edge with fern clumps and swamp plants around it, a fern clump and trees in the SW and NW; centre and west open.",
+  "JUNGLE06": "Giant jungle tree in the south, fern and frond clumps in the SE, red flower vines in the west, swamp plants in the NE; open north-centre.",
+  "JUNGLE07": "Huge leaning palm in the centre surrounded by ferns and a fern clump, fern/frond clumps in the SW, scattered plants; east half fairly open.",
+  "JUNGLE08": "Dense undergrowth over most of the block: huge leaning palm in the centre, several fern and frond clumps, small ferns; little open ground except a NE strip.",
+  "JUNGLE09": "Giant jungle tree in the centre ringed by frond clumps and ferns, swamp plants in the corners; open ground around the edges.",
+  "JUNGLE10": "Huge leaning palm in the north, giant jungle tree in the SW, fern and frond clumps in the NE, ferns and swamp plants along the south; open centre-west.",
+  "JUNGLE11": "Two giant jungle trees (NW and SE), a frond clump south of centre, ferns and palms scattered; open centre and NE."
+ },
+ "notes": "Multi parts with a 4th number are [dx, dy, part, dz], dz = levels above the base tile (tree crowns on higher levels); 3-number parts are on the base level. The catalog.ts type says [dx,dy,part], so the dz needs supporting there. Hill pieces (FOREST 27-64, 82) are object parts with raised terrainLevel in three rings (low -4, mid -12, high -20), each with edges, convex corners and inner (concave) corners, plus flats hill-step (-8), hill-top (-16) and hill-plateau (-24, a full block: the original puts a normal floor one level up to walk or put trees on it, FOREST11). hill-low-edge-n = the piece on the hill's north side; small-hill is a complete verified example. CULTIVAT wood fence: the original alternates 23/24 down west edges and 27/28 along north edges, so lay wood-fence and wood-fence-alt alternately. BARN record 7 has an undefined part type in the MCD but the maps use it as a north wall (plank window); BARN 5/6 plank walls have alt ids pointing at each other though they are not doors. barn-stairs climb north (high step 16 on the north tile, low 15 south of it, a hole in the floor above the high step), verified in CULTA16 and CULTA18. BARN 20 (dark-blue-roof) isn't used by any original block. Tree trunk/crown parts (FOREST 22-26, 65-80; JUNGLE 32-42, 66-81) only make sense inside their multis. In JUNGLE10/11 a couple of crowns aren't centred on their trunks in the original maps; the multis follow the consistent placement in JUNGLE03/04/05/07 and FOREST05-08."
+}

@@ -52,7 +52,7 @@ button:active { border-color: #121c40 #8fa7e0 #8fa7e0 #121c40; }
 button:disabled { opacity: 0.45; cursor: default; filter: none; }
 button.primary { background: linear-gradient(180deg, #3f8a4a, #1f4d26); border-color: #8fe09a #10301a #10301a #8fe09a; }
 button.danger { background: linear-gradient(180deg, #9a3f3f, #571f1f); border-color: #e09a8f #301010 #301010 #e09a8f; }
-button.small { font-size: 11px; padding: 3px 7px; }
+button.small, .btn.small { font-size: 11px; padding: 3px 7px; }
 
 input, select { font-family: "VT323", monospace; font-size: 20px; background: var(--input); color: var(--text); border: 2px solid var(--frame-lo); padding: 3px 6px; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green); }
@@ -163,22 +163,17 @@ select.start-from { flex: 1; min-width: 0; max-width: 100%; }
 .ai-panel .warnings { margin: 6px 0 0; color: var(--orange); font-size: 17px; }
 .ai-panel .loaded { color: var(--green); font-size: 17px; margin-top: 6px; }
 
-/* ---- the front door (sign-in, passkey): the UFO Defense box art, filling the window (client/ui/boxart.ts) ---- */
-.boxart { position: fixed; inset: 0; overflow: hidden; background: #000; color: #e8efe8; }
-.boxart .bx-layer { position: absolute; inset: -30px; will-change: transform; }
-.boxart .bx-stars { width: calc(100% + 60px); height: calc(100% + 60px); }
-.boxart .bx-planet { position: absolute; }
-.boxart .bx-ship-layer { pointer-events: none; }
-.boxart .bx-ship { position: absolute; width: min(56vw, 86vh); right: 7vw; top: 9vh; filter: drop-shadow(-8px 14px 22px rgba(0,0,0,0.7)); user-select: none; }
-/* the box's thin white frame */
-.boxart .bx-frame { position: absolute; inset: clamp(10px, 2.2vmin, 22px); border: 2px solid rgba(255,255,255,0.85); pointer-events: none; }
-.boxart .bx-title { position: absolute; left: clamp(14px, 3vmin, 34px); top: clamp(8px, 2vmin, 20px); pointer-events: none; }
-.boxart .bx-title-art { display: none; height: min(48vh, 40vw); width: auto; user-select: none; filter: drop-shadow(0 0 1.2vmin rgba(0,0,0,0.6)); }
-.boxart .bx-title.art .bx-title-art { display: block; }
-/* the lettering as text: shown only if the art can't load, otherwise kept for screen readers */
-.boxart .bx-title-text { margin: 0; font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 500; font-size: min(14vh, 11vw); color: #fff; -webkit-text-stroke: 1px #0d4a2a; }
-.boxart .bx-title.art .bx-title-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.boxart .bx-ui { position: absolute; left: clamp(18px, 4vmin, 48px); bottom: clamp(18px, 5vmin, 56px); max-width: min(440px, calc(100% - 36px)); }
+/* ---- the front door (sign-in, gate): the logo and a card, centered on a starfield (client/ui/frontdoor.ts) ---- */
+.frontdoor { position: fixed; inset: 0; overflow: auto; background: #000; color: #e8efe8; }
+.frontdoor .fd-stars { position: fixed; left: -20px; top: -20px; width: calc(100% + 40px); height: calc(100% + 40px); will-change: transform; }
+.frontdoor .fd-center { position: relative; min-height: 100%; box-sizing: border-box; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(12px, 3vh, 32px); }
+.frontdoor .fd-title { margin: 0; }
+.frontdoor .fd-logo { display: none; width: min(620px, 88vw, 96vh); height: auto; user-select: none; filter: drop-shadow(0 0 2.4vmin rgba(0,0,0,0.8)); }
+.frontdoor .fd-title.art .fd-logo { display: block; }
+/* the name as text: shown only if the logo can't load, otherwise kept for screen readers */
+.frontdoor .fd-title { font-family: "Oswald", "Arial Narrow", sans-serif; font-weight: 500; font-size: min(10vh, 9vw); color: #fff; text-align: center; }
+.frontdoor .fd-title.art { font-size: 0; line-height: 0; }
+.frontdoor .bx-card { width: min(440px, 100%); box-sizing: border-box; text-align: center; }
 .bx-card {
   background: rgba(0, 0, 0, 0.72); border: 1px solid rgba(63,191,106,0.7); outline: 1px solid rgba(255,255,255,0.15); outline-offset: 3px;
   padding: 16px 18px; backdrop-filter: blur(3px); font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 17px; line-height: 1.35;
@@ -186,19 +181,66 @@ select.start-from { flex: 1; min-width: 0; max-width: 100%; }
 .bx-card p { margin: 0 0 12px; color: #c8d6cc; }
 .bx-card .bx-lead { font-size: 20px; color: #fff; letter-spacing: 0.02em; }
 .bx-card .btn, .bx-card button { font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 16px; letter-spacing: 0.08em; text-transform: uppercase; }
-.bx-card a.btn.bx-google { display: inline-flex; align-items: center; gap: 10px; background: #fff; color: #111; border: 0; padding: 9px 16px; }
-.bx-card a.btn.bx-google:hover { filter: brightness(0.92); }
+.bx-card .bx-option + .bx-option { margin-top: 12px; }
+.bx-card a.btn.bx-signin { display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px; }
+/* sign-in providers with a logo (Google...): Google's dark-theme button — #131314 fill, #8E918F border, Roboto Medium */
+.bx-card a.btn.bx-provider {
+  height: 40px; box-sizing: border-box; padding: 0 16px 0 12px; gap: 10px; border-radius: 20px;
+  background: #131314; border: 1px solid #8e918f; color: #e3e3e3;
+  font-family: "Roboto", Arial, sans-serif; font-weight: 500; font-size: 14px; letter-spacing: 0.25px; text-transform: none;
+}
+.bx-card a.btn.bx-provider svg { width: 20px; height: 20px; flex: none; }
+.bx-card a.btn.bx-provider:hover { background: #1f1f20; filter: none; }
 .bx-card input { font-family: "Oswald", "Arial Narrow", sans-serif; font-size: 18px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4); color: #fff; }
 .bx-card .muted, .bx-card .hint { color: #8fa596; font-size: 15px; }
 .bx-card .err { color: #ff8a7a; margin-top: 8px; }
-.bx-card .bx-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bx-card .bx-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; text-align: left; }
 .bx-card .bx-row input { flex: 1; min-width: 0; }
-@media (max-aspect-ratio: 10/11) {
-  /* tall screens: title across the top, craft in the middle, card at the bottom */
-  .boxart .bx-title-art { height: auto; width: min(78vw, 46vh); }
-  .boxart .bx-ship { width: 96vw; right: -4vw; top: 32vh; }
-  .boxart .bx-ui { left: 50%; transform: translateX(-50%); width: calc(100% - 36px); }
-}
 .wrap.challenge { max-width: 980px; display: flex; flex-direction: column; gap: 12px; }
 .challenge-sides { margin: 4px 0 10px; padding-left: 28px; }
 .share-box { width: min(520px, 92vw); box-sizing: border-box; }
+
+/* ---- the map editor (client/ui/editor.ts): tools left, the map in the middle, overview and parts right ---- */
+body.editing { overflow: hidden; }
+.editor { position: fixed; inset: 0; display: flex; flex-direction: column; }
+.editor-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 10px; border-bottom: 2px solid var(--frame-lo); background: rgba(5, 10, 40, 0.9); }
+.editor-top .editor-name { width: 260px; font-size: 22px; }
+.editor-top select { font-size: 17px; padding: 1px 4px; }
+.editor-level { font-family: "Silkscreen", monospace; font-size: 12px; color: var(--accent); min-width: 66px; text-align: center; }
+.editor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr) 330px; }
+.editor-left { overflow-y: auto; padding: 8px; border-right: 2px solid var(--frame-lo); background: rgba(5, 11, 38, 0.8); display: flex; flex-direction: column; gap: 10px; }
+.editor-tools { display: flex; flex-direction: column; gap: 3px; }
+.editor-tools button.tool { text-align: left; font-size: 11px; padding: 4px 6px; display: flex; gap: 8px; align-items: center; }
+.editor-tools button.tool.active { background: linear-gradient(180deg, #3f8a4a, #1f4d26); border-color: #8fe09a #10301a #10301a #8fe09a; }
+.tool-key { display: inline-block; width: 14px; color: var(--accent); }
+.editor-info, .editor-problems { font-size: 16px; line-height: 1.15; }
+.editor-info .title, .editor-problems .title, .editor-section .title { font-size: 11px; margin-bottom: 4px; }
+.editor-problems > div { margin-bottom: 4px; }
+.editor-mid { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #000; }
+.editor-canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; outline: none; flex: 1; }
+.editor-status { font-size: 17px; padding: 3px 10px; color: var(--text); background: rgba(5, 10, 40, 0.95); border-top: 2px solid var(--frame-lo); min-height: 26px; }
+.editor-status.bad { color: var(--orange); }
+.editor-side { overflow-y: auto; border-left: 2px solid var(--frame-lo); background: rgba(5, 11, 38, 0.8); display: flex; flex-direction: column; }
+.editor-section { padding: 8px; border-bottom: 2px solid var(--frame-lo); }
+.editor-section .row { gap: 6px; margin: 3px 0; font-size: 17px; }
+.editor-section select { font-size: 16px; max-width: 220px; }
+.editor-plan { display: block; max-width: 100%; image-rendering: pixelated; cursor: pointer; border: 1px solid var(--frame-lo); }
+.editor-options .hint { font-size: 15px; margin-bottom: 4px; }
+.palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 3px; margin-top: 6px; }
+.palette-item { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 64px; padding: 2px; font-family: "VT323", monospace; font-size: 13px; text-transform: none; letter-spacing: 0; background: #05091f; border: 2px solid #1c2c62; overflow: hidden; }
+.palette-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.palette-item.active { border-color: var(--accent); }
+.palette-item canvas.thumb { image-rendering: pixelated; max-width: 64px; max-height: 64px; }
+.block-list { display: flex; flex-wrap: wrap; gap: 3px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
+.block-group { width: 100%; font-family: "Silkscreen", monospace; font-size: 10px; color: var(--green); margin-top: 4px; }
+.block-item { font-family: "VT323", monospace; font-size: 15px; text-transform: none; letter-spacing: 0; padding: 1px 5px; }
+.block-item.active { border-color: var(--accent); color: var(--accent); }
+.editor-dialog { width: min(820px, 94vw); max-height: 90vh; overflow-y: auto; }
+.editor-dialog textarea { width: 100%; }
+@media (max-width: 1000px) { .editor-body { grid-template-columns: 150px minmax(0, 1fr) 250px; } }
+.palette-tabs { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 6px; }
+.palette-tabs button.active { color: var(--accent); border-color: var(--accent); }
+.editor-top { flex-wrap: nowrap; overflow-x: auto; }
+.editor-top .editor-name { width: 200px; flex: none; }
+.editor-top > .muted { font-size: 16px; white-space: nowrap; }
+.editor-top label { white-space: nowrap; font-size: 17px; }
