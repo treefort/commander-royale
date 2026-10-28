@@ -144,7 +144,13 @@ export class LobbyPage {
     const version = this.edits;
     try {
       await api(`/api/matches/${this.matchId}/loadout`, { body: { loadout: this.loadout } });
-      if (version === this.edits && !this.saveTimer) this.dirty = false;
+      if (version === this.edits && !this.saveTimer) {
+        this.dirty = false;
+        // the lobby update for this save can arrive before the reply (and showed "saving..."): show "saved" now,
+        // unless that would yank a dropdown or text field out from under the user (it re-renders when they're done)
+        const active = document.activeElement as HTMLElement | null;
+        if (!(active && this.root.contains(active) && (active.tagName === "SELECT" || active.tagName === "INPUT"))) this.render();
+      }
     } catch (e) {
       this.error = (e as Error).message;
       this.render();
@@ -243,7 +249,8 @@ export class LobbyPage {
       el("table", {}, ...rows),
       s.isOwner ? this.addBotRow(s) : null,
       coop ? el("div", { class: "hint" }, `Co-op: people who join a squad play it together — its leader hires and equips it, the units are dealt out between everyone (the leader can pick who gets which), and everyone moves at once on the squad's turn. ${s.settings.coop.turnEnd === "timer" ? "The turn ends when the timer runs out." : "The turn ends once everyone has locked in (End Turn)."}${s.settings.coop.afkAI ? " The AI plays for anyone offline for more than half a minute." : ""}`) : null,
-      s.isOwner ? el("div", { class: "hint" }, !canStart ? "The battle can start once at least two squads are ready; anyone else can join it later."
+      s.isOwner ? el("div", { class: "hint" }, s.settings.autoStart ? "The battle starts by itself as soon as you're ready and another squad is (computer squads always are); anyone else can join it later."
+        : !canStart ? "The battle can start once at least two squads are ready; anyone else can join it later."
         : leaders.every((p) => p.ready) ? "Everyone's ready. Anyone you invite later can still join the battle while it's on."
         : "Squads that aren't ready yet join the battle as soon as they are (so can anyone you invite later).") : null,
       this.error ? el("div", { class: "err" }, this.error) : null,
@@ -275,7 +282,8 @@ export class LobbyPage {
           el("td", {}, p.gm ? el("span", { class: "badge dim" }, "Watching") : p.ready ? el("span", { class: "badge" }, "Ready") : p.hasLoadout ? el("span", { class: "badge dim" }, "Equipping") : el("span", { class: "badge red" }, "Not ready")),
         ))),
         el("div", { class: "hint" }, `Everyone fills up to ${sc.seatsPerPlayer} Skyranger seat${sc.seatsPerPlayer > 1 ? "s" : ""} (tanks and large aliens take 4) with ${money(s.settings.budget)}, and commands those units in battle${sc.teamStart === "apart" ? ", landing in their own zone" : ""}. The whole team moves at once, and you see every move a teammate (or any enemy in sight) makes as it happens. ${turns} ${offline}`),
-        s.isOwner ? el("div", { class: "hint" }, !team.length ? "Send the invite link: the battle can start once someone has joined the team and is ready."
+        s.isOwner ? el("div", { class: "hint" }, s.settings.autoStart ? (s.gameMaster ? "The battle starts by itself as soon as someone on the team is ready." : "The battle starts by itself as soon as you're ready; people you invite can join the team later.")
+          : !team.length ? "Send the invite link: the battle can start once someone has joined the team and is ready."
           : !canStart ? "The battle can start once someone on the team is ready."
           : team.every((p) => p.ready) ? "Everyone's ready. People you invite later can still join the team while the battle is on."
           : "Whoever isn't ready yet joins the team in battle as soon as they are (so can anyone you invite later).") : null,

@@ -16,12 +16,14 @@ import { recordEvents } from "../shared/engine/stats.ts";
 import { AIPlayer, aiOptionsFor, STAND_IN_AI } from "../shared/engine/ai.ts";
 import { seatOfUser, memberOf, membersOf, mayCommand, playedByAI, waitingFor, isShared, isObserver } from "../shared/engine/coop.ts";
 import { buildEnemyForce } from "../shared/rules/scenario.ts";
-import { buildSquad, STRATEGIES, type Strategy } from "../shared/rules/squads.ts";
+import { buildSquad, autoSquad, STRATEGIES, type Strategy } from "../shared/rules/squads.ts";
 import { RNG } from "../shared/engine/rng.ts";
 import { recalcAllLighting } from "../shared/engine/tileengine.ts";
 import { extractView, newSentState, saveMemory, restoreMemory, type SentState, type SavedMemory } from "../shared/engine/view.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
-import { getMap, mapName } from "./maps.ts";
+import { getMap, mapName, saveOrReuseMap } from "./maps.ts";
+import { compileRecipe } from "../shared/maps/recipe.ts";
+import { checkSetup } from "../shared/settings-docs.ts";
 import { BIOMES, type Biome } from "../shared/protocol.ts";
 
 export const GAME_DIR = process.env.GAME_DIR ?? join(import.meta.dir, "..", "gamedata");
@@ -469,8 +471,25 @@ export function setReady(id: string, user: UserRow, ready: boolean): string | nu
     return e;
   }
   db.query("UPDATE match_players SET ready = ? WHERE match_id = ? AND user_id = ?").run(ready ? 1 : 0, id, user.id);
+  if (ready) autoStart(id);
   touch(id);
   return null;
+}
+
+/**
+ * A match that starts by itself (`autoStart`): once the creator is ready (or, a game master who only watches, anyone
+ * on the team) and the battle can start, it does. Returns whether it started.
+ */
+function autoStart(id: string): boolean {
+  const m = getMatch(id);
+  if (!m || m.status !== "lobby") return false;
+  const s = parseSettings(m.settings);
+  if (!s.autoStart) return false;
+  const owner = getPlayers(id).find((p) => p.user_id === m.owner);
+  if (!isGameMaster(m, s, m.owner) && !owner?.ready) return false;
+  const user = db.query("SELECT * FROM users WHERE id = ?").get(m.owner) as UserRow | null;
+  // not startable yet (waiting for an opponent...) is no error: it starts when someone else gets ready
+  return !!user && startMatch(id, user) === null;
 }
 
 export function startMatch(id: string, user: UserRow): string | null {
@@ -1035,8 +1054,47 @@ export function addBot(id: string, user: UserRow, strategy: string, rawTuning?: 
   }
   db.query("INSERT INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(botId, name, Date.now());
   db.query("INSERT INTO match_players (match_id, user_id, seat, name, loadout, ready, ai) VALUES (?, ?, ?, ?, ?, 1, ?)").run(id, botId, seat, name, JSON.stringify(loadout), JSON.stringify(tuning));
+  autoStart(id);
   touch(id);
   return null;
+}
+
+/**
+ * A play link (/play?setup=...): the map built from its recipe, the match created, computer opponents added, and the
+ * player's squad auto-configured and readied (the battle then starts by itself), or left for them to hire and equip.
+ */
+export function quickPlay(user: UserRow, raw: unknown): { id?: string; started?: boolean; error?: string } {
+  const { setup } = checkSetup(raw);
+  const settings = setup.settings;
+  if (setup.recipe) {
+    let built;
+    try {
+      built = compileRecipe(setup.recipe, gameFile);
+    } catch (e) {
+      return { error: `Couldn't build the map: ${(e as Error).message}` };
+    }
+    const saved = saveOrReuseMap(user, built.doc);
+    if (!saved.id) return { error: `Couldn't save the map: ${saved.error}` };
+    settings.map = saved.id;
+  }
+  let id: string;
+  try {
+    ({ id } = createMatch(user, settings));
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  for (const o of setup.opponents) {
+    const e = addBot(id, user, o.strategy ?? "", o.ai);
+    if (e) console.error("play link: opponent not added", id, e);
+  }
+  if (setup.squad === "auto") {
+    const m = getMatch(id)!;
+    const { loadout } = autoSquad(parseSettings(m.settings), JSON.parse(m.pool) as Recruit[]);
+    const r = saveLoadout(id, user, loadout);
+    // whatever goes wrong here leaves the player in the lobby with the squad to fix, which is still a fine place
+    if (r.check?.ok) setReady(id, user, true);
+  }
+  return { id, started: getMatch(id)!.status === "playing" };
 }
 
 /** Changes a computer squad's AI settings (creator only); it hires again if its strength changed. */

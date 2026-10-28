@@ -17,7 +17,7 @@ where your friends are and how much you trust the network, then add whatever acc
 Whatever you choose, first get the game running locally (see the main [README](../README.md#running-it)):
 `bun install`, the original game's data in `gamedata/`, `bun run build`.
 
-## The knobs
+## Settings
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -35,8 +35,8 @@ Whatever you choose, first get the game running locally (see the main [README](.
 
 Plugins read their own variables (`PASSKEY`, `ALLOWLIST`, `GOOGLE_CLIENT_ID`...), listed with each below.
 
-**Name sign-in is trust-based**: whoever types "Alice" is Alice, on any device. That's what you want on a LAN or a
-tailnet of friends; on the open internet, put something in front (a proxy that signs people in, or at least the
+Name sign-in is based on trust: whoever types "Alice" is Alice, on any device. That's fine on a LAN or a tailnet
+of friends. On the open internet, put something in front (a proxy that signs people in, or at least the
 passkey plugin), or use `AUTH=header` / a sign-in plugin instead.
 
 ## Local network (LAN)
@@ -49,7 +49,7 @@ The server listens on every interface by default. Find your computer's address (
 `ip addr` / `ifconfig` elsewhere) and have everyone open `http://<that address>:3000` and type a commander name.
 Allow port 3000 through your firewall if it asks (Windows: allow Bun on private networks). Nothing leaves your network.
 
-Want a door code so a roommate's laptop can't wander in? Add the passkey plugin:
+To keep other devices on the network out, add the passkey plugin, which asks every account for a shared code once:
 
 ```sh
 PLUGINS=plugins/passkey.ts PASSKEY="nobody expects the sectoid" bun run start

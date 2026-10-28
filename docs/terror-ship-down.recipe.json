@@ -1,0 +1,24 @@
+{
+  "name": "Terror Ship Down",
+  "description": "A Terror Ship came down across Main Street. The blocks around the crash are rubble and fire; the shops, the warehouse and the old house on the corner still stand.",
+  "terrain": "URBAN",
+  "size": 60,
+  "seed": 1993,
+  "ground": "grass",
+  "blocks": [
+    "URBAN08 . URBAN01 URBAN06 . URBAN14",
+    ". . URBAN01 . . URBAN15",
+    "URBAN00 URBAN00 URBAN02 URBAN00 URBAN00 URBAN00",
+    "URBAN16 URBAN03 URBAN01 URBAN03 URBAN04 URBAN17",
+    "URBAN05 . URBAN01 URBAN07 . URBAN18",
+    ". . URBAN01 . . URBAN15"
+  ],
+  "ops": [
+    { "op": "ufo", "type": "STR_TERROR_SHIP", "at": [16, 19] },
+    { "op": "ruin", "area": [8, 12, 46, 36], "amount": 0.45 },
+    { "op": "scatter", "materials": ["scorched-earth", "scorched-asphalt", "scorched-blank"], "area": [10, 14, 42, 32], "count": 70, "anywhere": true },
+    { "op": "scatter", "materials": ["concrete-rubble", "blue-brick-rubble", "smashed-crates", "broken-lamp-post", "wrecked-phone-booth"], "area": [8, 12, 46, 36], "count": 26, "spacing": 2 },
+    { "op": "scatter", "materials": ["oil-drum", "big-crate", "stacked-crates"], "area": [0, 18, 60, 14], "count": 10, "spacing": 3 }
+  ],
+  "zones": [[0, 20, 10, 10], [50, 20, 10, 10], [20, 0, 10, 10], [20, 50, 10, 10]]
+}

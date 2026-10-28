@@ -3,14 +3,15 @@
 // real rules and data wherever possible so it can't drift from the code (tests check it covers every setting, AI
 // squad option, strategy and training course), and a checker that says what a settings object would turn into.
 // Players point their assistant at the reference, describe the match they want, and get back a link
-// (/?settings=<json>) or JSON to paste into the New Match form. Adding a feature or an option? Describe it here too.
+// (/?settings=<json>) or JSON to paste into the New Match form, or play links (/play?setup=<json>) that also build
+// a map from a recipe, add computer opponents, and auto-configure the player's squad or leave it for them to equip. Adding a feature or an option? Describe it here too.
 import {
-  BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_SIDES, DEFAULT_BOT_TUNING, defaultSettings, sanitizeSettings,
+  BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, MAX_SIDES, DEFAULT_BOT_TUNING, defaultSettings, sanitizeSettings, sanitizeBotTuning,
   recommendedMapBlocks, recommendedScenarioBlocks, type MatchSettings, type BotTuning,
 } from "./protocol.ts";
 import { UNITS, armorRule, itemRule, tr } from "./rules/index.ts";
 import { CATALOG, COURSES, MAX_SESSIONS, MIN_SESSION_PRICE, TRAINING_PREMIUM, priceUnit, budgetGuide } from "./rules/catalog.ts";
-import { STRATEGIES, STRATEGY_NAMES } from "./rules/squads.ts";
+import { STRATEGIES, STRATEGY_NAMES, type Strategy } from "./rules/squads.ts";
 import { enemyTypeChoices, weaponChoices } from "./rules/scenario.ts";
 
 export interface FieldDoc {
@@ -27,7 +28,7 @@ const list = (xs: readonly string[]) => xs.map((x) => `"${x}"`).join(" | ");
 
 /** Every setting, in the order the form shows them. */
 export const FIELDS: FieldDoc[] = [
-  { path: "mode", type: list(["ffa", "coop"]), text: "\"ffa\": free-for-all, squads fight each other and the last squad standing wins. \"coop\": a scenario — everyone who joins plays on ONE team against an enemy force the creator (the game master) defines in `scenario`." },
+  { path: "mode", type: list(["ffa", "coop"]), text: "\"ffa\": free-for-all, squads fight each other and the last squad standing wins. \"coop\": a scenario: everyone who joins plays on ONE team against an enemy force the creator (the game master) defines in `scenario`." },
   { path: "name", type: "string, up to 40 characters", text: "Shown in the match list and lobby." },
   { path: "notes", type: "string, up to 1000 characters", text: "A message from the creator to everyone who joins (house rules, schedule, the story of the mission...)." },
   { path: "biome", type: list(["RANDOM", ...BIOMES.map((b) => b.id)]), text: `Environment: ${BIOMES.map((b) => `${b.id} = ${b.name}`).join(", ")}. RANDOM is rolled when the battle starts.` },
@@ -38,7 +39,7 @@ export const FIELDS: FieldDoc[] = [
   { path: "budget", type: "integer (dollars)", range: [50_000, 5_000_000], text: "What each player (free-for-all: each squad's leader; co-op: each person) spends on hiring units, weapons and armor. See \"Budget rules of thumb\" below." },
   { path: "squadLimit", type: "integer (seats)", range: [1, 30], mode: "ffa", text: "Free-for-all squad size in Skyranger seats: soldiers and small aliens take 1, tanks and large aliens (Cyberdisc, Reaper, Sectopod) take 4. The original Skyranger holds 14." },
   { path: "poolSize", type: "integer", range: [10, 80], text: "How many recruits are in the hiring pool (everyone hires from an identical copy)." },
-  { path: "techLevel", type: list(["conventional", "laser", "alien"]), text: "What can be bought (conventional: rifles, cannons, rockets; laser: plus lasers; alien: everything incl. plasma, blaster launchers, psi-amps) — and what co-op enemies with the \"standard\" weapon carry." },
+  { path: "techLevel", type: list(["conventional", "laser", "alien"]), text: "What can be bought (conventional: rifles, cannons, rockets; laser: plus lasers; alien: everything incl. plasma, blaster launchers, psi-amps), and what co-op enemies with the \"standard\" weapon carry." },
   { path: "allowAliens", type: "boolean", text: "Alien recruits in the hiring pool (players can hire Sectoids, Mutons, Chryssalids...)." },
   { path: "allowHWP", type: "boolean", text: "Tanks (HWPs) in the hiring pool." },
   { path: "allowArmor", type: "boolean", text: "Players may buy armor (personal armor, power suit, flying suit)." },
@@ -50,8 +51,9 @@ export const FIELDS: FieldDoc[] = [
   { path: "supplyDrops.kits", type: "integer", range: [1, 12], text: "How much each drop holds, in kits: a kit is a weapon with its ammo, a pair of grenades, a medikit, a scanner... Default 3; 1 is a small top-up, 8+ re-arms a squad." },
   { path: "turnTimer", type: "integer (seconds)", range: [0, 3600], text: "Time limit per turn; 0 = none (play asynchronously: come back whenever). Needed by coop.turnEnd = \"timer\"." },
   { path: "stranger", type: "integer (percent)", range: [0, 50], text: "The Mysterious Stranger (as in Fallout): the % chance that when a unit shoots or strikes an enemy it can see and the enemy survives, a stranger with a magnum appears beside the attacker, fires one deadly shot at that enemy and vanishes. Works for every side alike. 0 (the default) = off; 10 is Fallout's chance." },
+  { path: "autoStart", type: "boolean", text: "The battle starts by itself as soon as it can once the creator is ready (free-for-all: once two squads are ready, e.g. the creator's and a computer squad; co-op with a game master who only watches: once someone on the team is ready), so nobody has to press Start. Play links (below) turn it on." },
   { path: "coop.squadSize", type: "integer", range: [1, MAX_SQUAD_SIZE], mode: "ffa", text: "Free-for-all only: people per squad. 1 = everyone fields their own. Above 1, people can join someone else's squad; the squad's units are shared out and everyone in it moves at the same time on its turn." },
-  { path: "coop.turnEnd", type: list(["lockin", "timer", "daily"]), text: "When a squad played by several people (or the co-op team) ends its turn: \"lockin\" once everyone has pressed End Turn (the default — players set the pace); \"timer\" only when turnTimer runs out (needs turnTimer > 0); \"daily\" (co-op mode only) at coop.dailyAt every day, or earlier once everyone has locked in." },
+  { path: "coop.turnEnd", type: list(["lockin", "timer", "daily"]), text: "When a squad played by several people (or the co-op team) ends its turn: \"lockin\" once everyone has pressed End Turn (the default, so players set the pace); \"timer\" only when turnTimer runs out (needs turnTimer > 0); \"daily\" (co-op mode only) at coop.dailyAt every day, or earlier once everyone has locked in." },
   { path: "coop.dailyAt", type: "\"HH:MM\" (24-hour)", text: "With turnEnd \"daily\": the time of day the team's turn ends. A turn that starts less than an hour before it runs to the next day's." },
   { path: "coop.timeZone", type: "IANA time zone, e.g. \"America/New_York\"", text: "Time zone for coop.dailyAt (the form fills in the creator's own)." },
   { path: "coop.afkAI", type: "boolean", text: "The computer plays the units of anyone offline for 30+ seconds until they're back. Off: offline players' units just stay put (anyone can also hand their units to the AI from the in-game options)." },
@@ -59,7 +61,7 @@ export const FIELDS: FieldDoc[] = [
   { path: "scenario.enemyName", type: "string, up to 30 characters", mode: "coop", text: "The enemy's side." },
   { path: "scenario.seatsPerPlayer", type: "integer (seats)", range: [1, 30], mode: "coop", text: "Skyranger seats each person fills with units they hire and command: soldiers and small aliens take 1, tanks and large aliens 4 (4 seats = 4 soldiers or 1 tank)." },
   { path: "scenario.teamStart", type: list(["together", "apart"]), mode: "coop", text: "\"together\": the whole team lands in one zone. \"apart\": each person lands in their own zone around the map edge, like squads in a free-for-all." },
-  { path: "scenario.gmPlays", type: "boolean", mode: "coop", text: "true: the creator hires units and plays on the team. false: the creator is only the game master — hires nothing, can't give orders, and watches the whole battle (every unit, both sides)." },
+  { path: "scenario.gmPlays", type: "boolean", mode: "coop", text: "true: the creator hires units and plays on the team. false: the creator is only the game master: they hire nothing, can't give orders, and watches the whole battle (every unit, both sides)." },
   { path: "scenario.enemies", type: "array of enemy groups (1–20)", mode: "coop", text: "The enemy force, played by the computer. At least one group must have round 1. The team wins when every enemy is down and no more groups are coming. See \"Enemy groups\" below." },
   { path: "scenario.enemies[].type", type: "enemy unit id (table below)", mode: "coop", text: "An alien race and rank, a terror unit, a tank, or \"SOLDIER:<0-5>\" for human soldiers of a rank (0 rookie .. 5 commander)." },
   { path: "scenario.enemies[].count", type: "integer", range: [1, 40], mode: "coop", text: "How many of this type." },
@@ -139,6 +141,26 @@ export const EXAMPLES: { ask: string; settings: Record<string, unknown> }[] = [
   },
 ];
 
+/** Requests answered with play links (checked by tests: no warnings, and the recipe builds). */
+export const PLAY_EXAMPLES: { ask: string; setup: Record<string, unknown> }[] = [
+  {
+    ask: "Get me straight into a game against two computer squads, one of them heavy weapons, in the desert at dusk.",
+    setup: {
+      settings: { mode: "ffa", name: "Dust Up", biome: "DESERT", timeOfDay: "dusk", budget: 300000 },
+      opponents: [{ strategy: "heavy" }, { strategy: "swarm", ai: { aggression: 3 } }],
+      squad: "auto",
+    },
+  },
+  {
+    ask: "Me alone against a Muton raiding party on a small farm map you design; I want to pick my own soldiers.",
+    setup: {
+      settings: { mode: "coop", name: "Muton Raid", timeOfDay: "night", budget: 350000, scenario: { seatsPerPlayer: 8, enemies: [{ type: "STR_MUTON_SOLDIER", count: 6, placement: "spread" }] } },
+      recipe: { name: "Hedgerow Farm", terrain: "CULTA", size: 40, base: "generated", zones: 4 },
+      squad: "equip",
+    },
+  },
+];
+
 function md(rows: string[][]): string {
   const esc = (c: string) => c.replace(/\|/g, "\\|").replace(/\n/g, " ");
   return [rows[0], rows[0].map(() => "---"), ...rows.slice(1)].map((r) => `| ${r.map(esc).join(" | ")} |`).join("\n");
@@ -179,7 +201,7 @@ export function settingsReference(origin: string): string {
     return `\`${k}\`${t.range ? ` (${t.range[0]}–${t.range[1]})` : ""}: ${t.text}`;
   });
   const courses = COURSES.map((c) => `${c.name} (${Object.entries(c.gains).map(([k, v]) => `+${v} ${k}`).join(", ")}${c.psionic ? "; needs psionics on" : ""})`);
-  return `# Commander Royale — game and match settings reference for AI assistants
+  return `# Commander Royale: game and match settings reference for AI assistants
 
 Commander Royale hosts multiplayer battles on the original X-COM: UFO Defense battlescape (turn-based squad tactics:
 time units, line of fire, destructible terrain, night vision, psionics): free-for-all squad battles, and co-op
@@ -191,7 +213,7 @@ description of a match into settings for the **New Match** form, and what else t
 Give the player **both**:
 
 1. A link that opens the New Match form already filled in (they review it and press Create):
-   \`${origin}/?settings=<URL-encoded JSON>\` — e.g. \`${origin}/?settings=${encodeURIComponent(JSON.stringify({ mode: "ffa", biome: "MARS", timeOfDay: "night" }))}\`
+   \`${origin}/?settings=<URL-encoded JSON>\`, for example \`${origin}/?settings=${encodeURIComponent(JSON.stringify({ mode: "ffa", biome: "MARS", timeOfDay: "night" }))}\`
 2. The same JSON in a code block, which they can paste into the "Set up a match with AI" box on the New Match form.
 
 Rules:
@@ -206,16 +228,49 @@ Rules:
 - Only the player can create the match (they're signed in; you aren't). The JSON is not secret.
 - Players can copy their current form ("Copy settings JSON" / "Copy settings link") and ask you to change it.
 
+## Play links
+
+When the player wants to play rather than review a form ("set me up a game against the computer on a map
+with..."), give them play links. A play link builds a map from a recipe (if you give one), creates the match, adds
+computer opponents, and then either auto-configures the player's squad and starts the battle, or takes them to hire
+and equip their squad and starts the battle when they press Ready.
+
+\`${origin}/play?setup=<URL-encoded JSON>\`, where the JSON is
+
+\`\`\`json
+{
+  "settings": { ... },
+  "recipe": { ... },
+  "opponents": [ { "strategy": "heavy", "ai": { "aggression": 2 } } ],
+  "squad": "auto"
+}
+\`\`\`
+
+- \`settings\`: match settings exactly as above (partial is fine). Play links always turn on \`autoStart\`.
+- \`recipe\` (optional): a map recipe (${origin}/maps.txt). It is built and saved to the player's maps, and the match
+  is played on it (it replaces \`settings.map\`). Or leave it out and use \`settings.map\` / a generated map.
+- \`opponents\` (free-for-all): the computer squads to fight, each \`{ "strategy", "ai" }\` (both optional: a strategy
+  is picked at random, \`ai\` takes the computer squad AI settings below). Left out: one computer squad. \`[]\`: none;
+  the player waits in the lobby for friends to join with the invite link (the battle starts once one is ready). In
+  co-op the enemy is \`settings.scenario.enemies\`, and the player is on the team (\`scenario.gmPlays\` is turned on).
+- \`squad\`: \`"auto"\` hires and equips the strongest squad the budget and seats allow and starts the battle at once;
+  \`"equip"\` opens the player's squad to hire and equip, and the battle starts when they press Ready.
+
+Give the player **two links**, the same setup with \`"squad": "auto"\` and with \`"squad": "equip"\`, and say which is
+which. Each opens a page describing the setup; nothing is created until the player presses a button there, so the
+links are safe to open. In this repo, \`bun tools/match-link.ts --server <address> '<setup JSON>'\` checks a
+setup and prints both links.
+
 ## The two game modes
 
 - **Free-for-all (\`"mode": "ffa"\`)**: any number of squads (up to ${MAX_SIDES}) fight; last squad standing wins.
   People can join while the battle is on: their squad lands at the map edge, as far from the others as possible,
   and takes its turn after the others each round. Each squad's leader hires and
   equips it from \`budget\` within \`squadLimit\` seats. With \`coop.squadSize\` above 1 several people can share one
-  squad (each commands some of its units; they all move at once on its turn). Computer-played squads can be added in
-  the lobby (not through these settings).
+  squad (each commands some of its units; they all move at once on its turn). Computer-played squads are added in
+  the lobby, or by a play link's \`opponents\` (not through these settings).
 - **Co-op scenario (\`"mode": "coop"\`)**: the creator is the game master. Everyone who joins (also once the battle
-  is on) is on one team — each hires and commands their own units with \`budget\` and \`scenario.seatsPerPlayer\` seats — against an
+  is on) is on one team, each hiring and commanding their own units with \`budget\` and \`scenario.seatsPerPlayer\` seats, against an
   enemy force described in \`scenario.enemies\` and played by the computer (\`scenario.ai\`). The team moves first and
   everyone acts at once; the enemy can get reinforcements in later rounds. The creator can play too or just watch
   everything (\`scenario.gmPlays\`).
@@ -238,21 +293,21 @@ can do (time units, health × armor, accuracy, reactions, strength, psionics, bu
 vision...). Any unit except a tank can carry gear (yes, a Chryssalid with a grenade). Weapons, ammo, explosives,
 equipment and armor are bought from the \`budget\` and put on units on the original inventory screen; anything left
 unequipped lands at the squad's deployment zone. **Auto-configure squad** hires and kits out a whole squad for the
-match in one click, to adjust afterwards; money it can't spend on units and gear goes on training them.
+match, to adjust afterwards; money it can't spend on units and gear goes on training them.
 
 **Training** (human soldiers, while hiring): ${courses.join(", ")}. Up to ${MAX_SESSIONS} sessions per course, never
 past the original stat caps, priced at what the better stats are worth ×${TRAINING_PREMIUM} ($${MIN_SESSION_PRICE.toLocaleString("en-US")} a session at
 least): a luxury for leftover money, since hiring a better soldier is far cheaper.
 
-**Computer squads** (free-for-all; the creator adds them in the lobby, not through settings): each hires with a
-strategy — ${STRATEGIES.map((k) => `\`${k}\` ${STRATEGY_NAMES[k]}`).join(", ")} — is always ready, and plays its
+**Computer squads** (free-for-all; the creator adds them in the lobby, or a play link's \`opponents\` does): each hires with a
+strategy (${STRATEGIES.map((k) => `\`${k}\` ${STRATEGY_NAMES[k]}`).join(", ")}), is always ready, and plays its
 turns on the server one action at a time. Each has AI settings (defaults \`${JSON.stringify(DEFAULT_BOT_TUNING)}\`):
 
 ${tuning.map((t) => `- ${t}`).join("\n")}
 
 For "a few of us against one strong computer squad", suggest free-for-all with \`coop.squadSize\` set to their number
-(so they share one squad) and tell them to add a computer squad with a higher strength in the lobby — or co-op mode,
-where the settings describe the whole enemy force.
+(so they share one squad) and a computer squad with a higher strength (a play link's \`opponents\`, or added in the
+lobby), or co-op mode, where the settings describe the whole enemy force.
 
 **During a battle.** Turns are asynchronous unless \`turnTimer\` is set: close the tab and come back later. In a squad
 played by several people (and the co-op team) everyone moves at once, each on their own units; End Turn locks you in,
@@ -299,6 +354,13 @@ ${guide.examples.map((x) => `- ${x}`).join("\n")}
 ## Examples
 
 ${EXAMPLES.map((e) => `**"${e.ask}"**\n\n\`\`\`json\n${JSON.stringify(e.settings, null, 2)}\n\`\`\`\n\nLink: ${origin}/?settings=${encodeURIComponent(JSON.stringify(e.settings))}`).join("\n\n")}
+
+### Play link examples
+
+${PLAY_EXAMPLES.map((e) => {
+  const links = playLinks(origin, e.setup);
+  return `**"${e.ask}"**\n\n\`\`\`json\n${JSON.stringify(e.setup, null, 2)}\n\`\`\`\n\nAuto-configured squad, battle starts at once: ${links.auto}\n\nPlayer equips the squad first: ${links.equip}`;
+}).join("\n\n")}
 
 ## Defaults (everything you leave out)
 
@@ -365,8 +427,9 @@ export function checkSettings(raw: unknown): { settings: MatchSettings; warnings
   }
   if (settings.mode === "ffa" && r.scenario !== undefined) warnings.push("scenario: only used in co-op mode (\"mode\": \"coop\")");
   if (settings.mode === "coop" && r.squadLimit !== undefined) warnings.push("squadLimit: co-op uses scenario.seatsPerPlayer instead");
-  if (settings.mode === "coop" && settings.ufo === "none" && settings.scenario.enemies.some((g) => g.placement === "ufo")) {
-    warnings.push("scenario.enemies: \"ufo\" placement without a landed UFO — those enemies start in the middle of the map");
+  // a custom map has its own UFO (or not): `ufo` doesn't apply
+  if (settings.mode === "coop" && !settings.map && settings.ufo === "none" && settings.scenario.enemies.some((g) => g.placement === "ufo")) {
+    warnings.push("scenario.enemies: \"ufo\" placement without a landed UFO: those enemies start in the middle of the map");
   }
   return { settings, warnings: [...new Set(warnings)] };
 }
@@ -384,6 +447,119 @@ export function parseSettingsText(text: string): unknown {
 }
 
 export { tr };
+
+/** A play link's setup (/play?setup=<json>): the match settings, an optional map recipe, opponents, and the squad. */
+export interface PlaySetup {
+  settings: MatchSettings;
+  /** a map recipe (shared/maps/recipe.ts) to build and play on, or null */
+  recipe: Record<string, unknown> | null;
+  /** free-for-all computer squads; strategy null = picked at random */
+  opponents: { strategy: Strategy | null; ai: BotTuning }[];
+  /** "auto": auto-configure the player's squad and start; "equip": they hire and equip it, then Ready starts */
+  squad: "auto" | "equip";
+}
+
+const SETUP_KEYS = ["settings", "recipe", "opponents", "squad"];
+
+/** What a (possibly partial, possibly wrong) play setup becomes, and what had to change on the way. */
+export function checkSetup(raw: unknown): { setup: PlaySetup; warnings: string[] } {
+  const r = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
+  const warnings: string[] = [];
+  if (r !== raw) warnings.push("A setup must be a JSON object: using the defaults");
+  for (const k of Object.keys(r)) if (!SETUP_KEYS.includes(k)) warnings.push(`${k}: not part of a setup (ignored; match settings go in "settings")`);
+  const checked = checkSettings(r.settings ?? {});
+  warnings.push(...checked.warnings.map((w) => `settings.${w}`));
+  const settings = checked.settings;
+  settings.autoStart = true;
+  let recipe: Record<string, unknown> | null = null;
+  if (r.recipe !== undefined && r.recipe !== null) {
+    if (typeof r.recipe !== "object" || Array.isArray(r.recipe)) warnings.push("recipe: must be a map recipe object (ignored)");
+    else {
+      recipe = r.recipe as Record<string, unknown>;
+      if (settings.map) warnings.push("settings.map: the recipe's map is played instead");
+      settings.map = "";
+      // the recipe's map decides whether there's a UFO to start at, not `ufo`
+      const crashed = (recipe.base === "generated" && recipe.ufo && recipe.ufo !== "none") || (Array.isArray(recipe.ops) && recipe.ops.some((o) => (o as { op?: unknown })?.op === "ufo"));
+      const noUfo = (w: string) => w.includes("\"ufo\" placement without a landed UFO");
+      for (let i = warnings.length - 1; i >= 0; i--) if (noUfo(warnings[i])) warnings.splice(i, 1);
+      if (!crashed && settings.mode === "coop" && settings.scenario.enemies.some((g) => g.placement === "ufo")) warnings.push("settings.scenario.enemies: \"ufo\" placement, but the recipe's map has no UFO: those enemies start in the middle of the map");
+    }
+  }
+  if (settings.mode === "coop" && !settings.scenario.gmPlays) {
+    // said only when the setup asked for a game master who just watches (the default is to play too)
+    if ((r.settings as { scenario?: { gmPlays?: unknown } } | undefined)?.scenario?.gmPlays === false) warnings.push("settings.scenario.gmPlays: a play link puts the player on the team, so it's turned on");
+    settings.scenario.gmPlays = true;
+  }
+  let opponents: PlaySetup["opponents"] = [];
+  if (settings.mode === "coop") {
+    if (r.opponents !== undefined) warnings.push("opponents: only used in free-for-all (co-op enemies are settings.scenario.enemies)");
+  } else if (r.opponents === undefined) {
+    opponents = [{ strategy: null, ai: { ...DEFAULT_BOT_TUNING } }];
+  } else if (!Array.isArray(r.opponents)) {
+    warnings.push("opponents: must be a list of computer squads (using one)");
+    opponents = [{ strategy: null, ai: { ...DEFAULT_BOT_TUNING } }];
+  } else {
+    const list = r.opponents.slice(0, MAX_SIDES - 1);
+    if (r.opponents.length > list.length) warnings.push(`opponents: at most ${MAX_SIDES - 1} (the rest are left out)`);
+    opponents = list.map((o, i) => {
+      const x = (o && typeof o === "object" ? o : {}) as Record<string, unknown>;
+      for (const k of Object.keys(x)) if (k !== "strategy" && k !== "ai") warnings.push(`opponents[${i}].${k}: not an opponent option (ignored)`);
+      let strategy: Strategy | null = null;
+      if (x.strategy !== undefined && x.strategy !== null) {
+        if (STRATEGIES.includes(x.strategy as Strategy)) strategy = x.strategy as Strategy;
+        else warnings.push(`opponents[${i}].strategy: no such strategy "${String(x.strategy)}" (one of ${STRATEGIES.join(", ")}): picked at random`);
+      }
+      const ai = sanitizeBotTuning(x.ai);
+      if (x.ai !== undefined) {
+        const given = (x.ai && typeof x.ai === "object" ? x.ai : {}) as Record<string, unknown>;
+        for (const [k, v] of Object.entries(given)) {
+          if (!(k in ai)) warnings.push(`opponents[${i}].ai.${k}: not an AI setting (ignored)`);
+          else if (JSON.stringify(v) !== JSON.stringify(ai[k as keyof BotTuning])) warnings.push(`opponents[${i}].ai.${k}: ${JSON.stringify(v)} isn't allowed here, using ${JSON.stringify(ai[k as keyof BotTuning])}`);
+        }
+      }
+      return { strategy, ai };
+    });
+  }
+  let squad: PlaySetup["squad"] = "auto";
+  if (r.squad === "equip") squad = "equip";
+  else if (r.squad !== undefined && r.squad !== "auto") warnings.push(`squad: "auto" or "equip", not ${JSON.stringify(r.squad)} (using "auto")`);
+  return { setup: { settings, recipe, opponents, squad }, warnings: [...new Set(warnings)] };
+}
+
+/** Whether pasted JSON is a play setup rather than bare match settings. */
+export function isSetup(raw: unknown): boolean {
+  return !!raw && typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).some((k) => SETUP_KEYS.includes(k)) && !("mode" in raw);
+}
+
+/** Reads a setup from a `?setup=` link value or pasted text (JSON, possibly inside a code block or a link). */
+export function parseSetupText(text: string): unknown {
+  const link = /[?&]setup=([^&\s]+)/.exec(text.trim());
+  return parseSettingsText(link ? decodeURIComponent(link[1]) : text);
+}
+
+/** The two play links for a setup (as given: the page checks it again), one per way of getting a squad. */
+export function playLinks(origin: string, setup: Record<string, unknown>): { auto: string; equip: string } {
+  const link = (squad: string) => `${origin}/play?setup=${encodeURIComponent(JSON.stringify({ ...setup, squad }))}`;
+  return { auto: link("auto"), equip: link("equip") };
+}
+
+/** A setup made short for a link: settings and opponents only where they differ from the defaults. */
+export function setupDelta(s: PlaySetup): Record<string, unknown> {
+  const settings = settingsDelta(s.settings);
+  // play links always auto-start; saying so again only adds noise
+  delete settings.autoStart;
+  if (s.recipe) delete settings.map;
+  const out: Record<string, unknown> = { settings };
+  if (s.recipe) out.recipe = s.recipe;
+  if (s.settings.mode === "ffa") {
+    out.opponents = s.opponents.map((o) => {
+      const ai = Object.fromEntries(Object.entries(o.ai).filter(([k, v]) => DEFAULT_BOT_TUNING[k as keyof BotTuning] !== v));
+      return { ...(o.strategy ? { strategy: o.strategy } : {}), ...(Object.keys(ai).length ? { ai } : {}) };
+    });
+  }
+  out.squad = s.squad;
+  return out;
+}
 
 /** Only what differs from the defaults (for "copy settings" and links: short, and shows what was chosen). */
 export function settingsDelta(s: MatchSettings): Record<string, unknown> {

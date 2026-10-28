@@ -13,7 +13,7 @@ const mapReferences = new Map<string, string>();
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
   resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots, saveMemories,
-  retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges } from "./game.ts";
+  retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges, quickPlay } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 /** The address to listen on: 0.0.0.0 (everywhere, the default) or e.g. 127.0.0.1 when a proxy is in front. */
@@ -159,6 +159,12 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
           return e ? err(e) : json({ ok: true });
         }
         return err("Not found", 404);
+      }
+      // play links: map, match, opponents and squad set up in one go
+      if (path === "/api/play" && req.method === "POST") {
+        if (!user) return err("Sign in first", 401);
+        const r = quickPlay(user, (await body<{ setup?: unknown }>(req)).setup);
+        return r.error ? err(r.error) : json(r);
       }
       // challenges: a battle's start shared for anyone to play
       const c = path.match(/^\/api\/challenges(?:\/([A-Za-z0-9]+))?(?:\/(play))?$/);

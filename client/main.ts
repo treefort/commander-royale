@@ -5,6 +5,7 @@ import { BattleScreen } from "./battle/screen.ts";
 import { renderChallenge } from "./ui/challenge.ts";
 import { renderMaps } from "./ui/maps.ts";
 import { MapEditor } from "./ui/editor.ts";
+import { renderPlay } from "./ui/play.ts";
 
 const root = document.getElementById("app")!;
 let me: Me;
@@ -21,14 +22,17 @@ async function route() {
   current = null;
   document.body.classList.remove("battle");
   const path = location.pathname;
-  // keep the query too: a ?settings= link from an AI assistant survives signing in
-  if (!me.user) return renderLogin(root, me, path + location.search);
+  // keep the query too: a ?settings= link from an AI assistant survives signing in. A long one (a play link with a
+  // map recipe) waits in this tab instead: sign-in may carry where you were going in a cookie, which it would overflow
+  if (!me.user) return renderLogin(root, me, keepForLater(path + location.search));
+  resumeLink();
   // signed in, but this server wants something more first, e.g. a passkey (then carry on to where they were going)
   if (me.gate) return renderGate(root, me, async () => {
     me = await api<Me>("/api/me");
     await route();
   });
   if (path === "/maps") return renderMaps(root, me, go);
+  if (path === "/play") return renderPlay(root, me, go);
   const map = path.match(/^\/maps\/(new|[A-Za-z0-9]+)$/);
   if (map) {
     current = new MapEditor(root, me, go, map[1] === "new" ? null : map[1]);
@@ -58,6 +62,31 @@ async function route() {
     return;
   }
   await renderHome(root, me, go);
+}
+
+const LATER = "commander-royale:link";
+
+/** Where to come back to after signing in: `next` itself, or (too long for that) its path, the rest kept here. */
+function keepForLater(next: string): string {
+  if (next.length <= 1500) return next;
+  try {
+    sessionStorage.setItem(LATER, next);
+    return `${location.pathname}?resume`;
+  } catch {
+    return next;
+  }
+}
+
+/** Back from signing in with a link kept for later: its address again. */
+function resumeLink() {
+  if (location.search !== "?resume") return;
+  try {
+    const next = sessionStorage.getItem(LATER);
+    sessionStorage.removeItem(LATER);
+    if (next?.startsWith(location.pathname + "?")) history.replaceState(null, "", next);
+  } catch {
+    /* nothing kept: carry on without it */
+  }
 }
 
 (async () => {

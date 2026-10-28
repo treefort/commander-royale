@@ -88,7 +88,7 @@ function terrainSection(name: string): string {
     return list.length ? `- ${title}: ${list.map(describe).join(", ")}` : "";
   }).filter(Boolean);
   return [
-    `### ${name}${biome ? ` — ${biome.name}` : " — X-COM base"}`,
+    `### ${name}: ${biome ? biome.name : "X-COM base"}`,
     "",
     `Part sets: ${t.mapDataSets.join(", ")}. Flat ground: \`${defaultGround(name)}\`. Hill style: ${hillStyleFor(name)}.${biome ? ` \`"base": "generated"\` works.` : " (No generator: start flat.)"}`,
     "",
@@ -114,7 +114,7 @@ function extraSection(): string {
 export function mapsReference(origin: string, only?: string): string {
   const terrains = only && TERRAINS.has(only) ? [only] : [...TERRAINS.keys()];
   const ex = (r: Recipe) => "```json\n" + JSON.stringify(r, null, 1).replace(/\n\s+(?=[\]\d"-])/g, " ").replace(/\[ /g, "[").replace(/ \]/g, "]") + "\n```";
-  return `# Commander Royale — map recipes
+  return `# Commander Royale: map recipes
 
 Commander Royale (${origin}) is a multiplayer remake of the X-COM: UFO Defense battlescape. Besides maps generated from
 a match's settings, people play on **custom maps** made in its map editor. This reference is for AI assistants making
@@ -131,7 +131,10 @@ The match settings reference is ${origin}/llms.txt (a custom map is chosen there
    --plan plan.png --iso iso.png --server ${origin}\` prints the warnings and playability problems, draws a top-down plan
    (8 pixels a tile, a line every 10 tiles, landing zones numbered) and the in-game isometric view, and prints the link.
    Look at the pictures and fix the recipe until there are no warnings.
-4. To fight on it, the saved map is picked under "Map" in the New Match form.
+4. To fight on it, the saved map is picked under "Map" in the New Match form. Or skip the saving and the form: a
+   play link (${origin}/llms.txt, "Play links") takes the recipe along with the match settings and computer
+   opponents, builds and saves the map, and creates the match, with the squad auto-configured or left for the
+   player to equip. When the person wants to play on the map rather than keep working on it, give them play links.
 
 ## Coordinates
 
@@ -172,7 +175,7 @@ ${MAP_LIMITS.maxDatasets} sets a map), and \`"DATASET:<number>"\` is a raw part.
 |---|---|---|
 | \`floor\` | material, area, z | lays a floor over the area |
 | \`path\` | material (a floor), points: [[x, y], ...], width (1), z | a road, track, river bed...: floor along straight lines through the points, clearing objects and the walls across it |
-| \`building\` | area, wall, storeys (1), floor, roof, door, window, doors, windows, stairs, z | a building filling the area: outer walls on every storey (a corner post where the terrain has one), \`doors\` on the ground storey (a list of sides "north", "south", "east", "west" — each centred — or {"side": "west", "at": 3} for 3 tiles along it; default ["south"]), \`windows\` "none" \\| "few" \\| "some" (default) \\| "many", \`floor\` on every storey (the ground storey keeps the ground if omitted), a flat \`roof\` on top (false for none), and stairs between storeys. door, window, roof and stairs default to ones that match the wall. Inside is cleared. |
+| \`building\` | area, wall, storeys (1), floor, roof, door, window, doors, windows, stairs, z | a building filling the area: outer walls on every storey (a corner post where the terrain has one), \`doors\` on the ground storey (a list of sides "north", "south", "east", "west", each centred, or {"side": "west", "at": 3} for 3 tiles along it; default ["south"]), \`windows\` "none" \\| "few" \\| "some" (default) \\| "many", \`floor\` on every storey (the ground storey keeps the ground if omitted), a flat \`roof\` on top (false for none), and stairs between storeys. door, window, roof and stairs default to ones that match the wall. Inside is cleared. |
 | \`wall\` | material or materials: [...], from, to, z, storeys (1) | a straight wall, fence or hedge along a grid line (see Coordinates); several materials take turns along it |
 | \`object\` | material, at (a position, or a list of them), z | an object, a multi-tile object (from its north-west tile), stairs (low step at "at", climbing its way) or a corner post |
 | \`scatter\` | material or materials: [...], area (whole map), count or density (0-1 of the free tiles), spacing (min tiles apart), indoors (false), anywhere (false), z | dots objects about on open ground (outdoors, nothing on the tile); landing zones and the UFO stay clear unless \`anywhere\` |

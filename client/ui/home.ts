@@ -2,7 +2,7 @@ import { api, el, money } from "../api.ts";
 import { frontDoor } from "./frontdoor.ts";
 import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
 import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
-import { checkSettings, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
+import { checkSettings, isSetup, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
 
 /** A way to sign in (server/plugin.ts SignInOption). */
@@ -398,6 +398,8 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   field("Mysterious Stranger", sel([...new Set([0, 5, 10, 20, 35, 50, s.stranger])].sort((a, b) => a - b).map((n) => ({ id: String(n), name: n ? `${n}% chance` : "Off" })), () => String(s.stranger), (v) => (s.stranger = Number(v))),
     "As in Fallout: when an attack leaves a seen enemy standing, a stranger may appear beside the attacker, shoot it with a magnum and vanish (any side)");
   field("Turn timer", num(() => s.turnTimer, (v) => (s.turnTimer = v), 0, 3600, 30), "seconds per turn (0 = no limit; play asynchronously). Squads ending on the timer need one");
+  field("Starting", check(() => s.autoStart, (v) => (s.autoStart = v), "Start the battle by itself"),
+    "As soon as you're ready and it can start (free-for-all: two squads ready, e.g. yours and a computer squad's), no Start button needed");
   f.append(err);
   if (!readOnly) {
     f.append(el("div", { class: "full" }, el("button", { class: "primary", onclick: async (e: Event) => {
@@ -524,6 +526,13 @@ function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void
   const load = (text: string, source: string) => {
     details.open = true;
     try {
+      // a play link (or its setup) sets up the whole match: its own page shows it
+      const play = /[?&]setup=([^&\s]+)/.exec(text);
+      if (play) return location.assign(`/play?setup=${play[1]}`);
+      if (text.trim().startsWith("{") || text.includes("```")) {
+        const given = parseSettingsText(text);
+        if (isSetup(given)) return location.assign(`/play?setup=${encodeURIComponent(JSON.stringify(given))}`);
+      }
       const raw = parseSettingsText(text.trim().startsWith("{") ? text : text.includes("settings=") ? text : `?settings=${encodeURIComponent(text)}`) as Record<string, unknown>;
       const { settings, warnings } = checkSettings(raw);
       // unless the assistant chose a time zone, use the browser's like the form would
@@ -544,7 +553,7 @@ function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void
     el("div", { class: "row", style: { margin: "4px 0 10px" } },
       el("button", { class: "small", onclick: (e: Event) => copyPrompt(e.target as HTMLButtonElement) }, unreachable ? "Copy prompt + reference" : "Copy prompt"),
       el("a", { href: "/llms.txt", target: "_blank", class: "hint" }, "what the assistant reads")),
-    el("div", { class: "hint" }, "It answers with a link (just open it) or JSON to paste here:"),
+    el("div", { class: "hint" }, "It answers with links (just open one: play links set up the whole match, map and opponents included) or JSON to paste here:"),
     paste,
     el("div", { class: "row", style: { marginTop: "4px" } },
       el("button", { class: "small primary", onclick: () => load(paste.value, "your assistant") }, "Load into the form"),

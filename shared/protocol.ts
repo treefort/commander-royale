@@ -47,6 +47,11 @@ export interface MatchSettings {
    * enemy survives, a stranger with a magnum appears beside the attacker, shoots the enemy and vanishes; 0 = off
    */
   stranger: number;
+  /**
+   * the battle starts by itself as soon as it can once the creator is ready (free-for-all: two squads ready; a co-op
+   * game master who only watches: someone on the team ready), no Start button needed
+   */
+  autoStart: boolean;
   coop: CoopSettings;
   /** co-op scenario mode: the creator's setup of the team and the enemy */
   scenario: Scenario;
@@ -318,6 +323,7 @@ export function defaultSettings(): MatchSettings {
     supplyDrops: { enabled: true, everyRounds: 4, warningRounds: 2, tier: "mixed", kits: 3 },
     turnTimer: 0,
     stranger: 0,
+    autoStart: false,
     coop: { squadSize: 1, turnEnd: "lockin", dailyAt: "20:00", timeZone: "UTC", afkAI: false },
     mode: "ffa",
     scenario: defaultScenario(),
@@ -365,6 +371,7 @@ export function sanitizeSettings(s: Partial<MatchSettings>): MatchSettings {
     },
     turnTimer,
     stranger: clamp(s.stranger, 0, 50, 0),
+    autoStart: !!s.autoStart,
     coop: {
       squadSize: clamp(co.squadSize, 1, MAX_SQUAD_SIZE, 1),
       // "end on the timer" needs a timer; a daily turn end is for co-op scenarios

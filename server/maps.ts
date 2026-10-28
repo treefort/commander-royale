@@ -74,6 +74,19 @@ export function saveMap(user: UserRow, id: string | null, raw: unknown): { id?: 
   return { id: nid };
 }
 
+/** Saves a map built for a play link, or finds the same map the user already has (opening a link twice). */
+export function saveOrReuseMap(user: UserRow, raw: unknown): { id?: string; error?: string } {
+  let json: string;
+  try {
+    json = JSON.stringify(sanitizeMapDoc(raw));
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  const name = (JSON.parse(json) as MapDoc).name;
+  const same = (db.query("SELECT id, doc FROM maps WHERE owner = ? AND name = ?").all(user.id, name) as { id: string; doc: string }[]).find((r) => r.doc === json);
+  return same ? { id: same.id } : saveMap(user, null, raw);
+}
+
 export function deleteMap(user: UserRow, id: string): string | null {
   const r = db.query("SELECT owner FROM maps WHERE id = ?").get(id) as { owner: string } | null;
   if (!r) return "Map not found";

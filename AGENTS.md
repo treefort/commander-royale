@@ -1,4 +1,4 @@
-# Commander Royale — notes for AI agents
+# Commander Royale: notes for AI agents
 
 A browser remake of the X-COM: UFO Defense **battlescape** (no geoscape) for multiplayer: free-for-all battles
 between any number of squads (people and/or computer), co-op scenarios against an enemy a game master designs,
@@ -9,10 +9,10 @@ Graphics, sounds and maps come from the user's **own copy** of the original game
 ## Helping someone use it
 
 **Get it running locally.** Needs Bun 1.3+ and an X-COM: UFO Defense install (GOG or Steam; ask where it is if you
-can't find it — common places: `C:\Program Files (x86)\GOG Galaxy\Games\X-COM UFO Defense`, `C:\GOG Games\`,
+can't find it. Common places: `C:\Program Files (x86)\GOG Galaxy\Games\X-COM UFO Defense`, `C:\GOG Games\`,
 Steam's `steamapps/common/XCom UFO Defense/XCOM`). Copy its `GEODATA GEOGRAPH MAPS ROUTES SOUND TERRAIN UFOGRAPH
 UNITS` folders into `gamedata/` (or set `GAME_DIR` to the folder holding them), then `bun install` and `bun run dev`
-→ http://localhost:3000, sign in by typing any name. Music is optional: `bun tools/render-music.ts` (needs ffmpeg).
+(http://localhost:3000; sign in by typing any name). Music is optional: `bun tools/render-music.ts` (needs ffmpeg).
 If the server says it can't find the game data, `GAME_DIR` doesn't point at the folder with `GEODATA` in it.
 
 **Host it for friends.** [`examples/README.md`](examples/README.md) has a recipe per situation (LAN, tailnet,
@@ -34,6 +34,14 @@ internet without something in front.
 
 Computer squads in free-for-all are added in the lobby, not through settings (the reference explains).
 
+**Set up a game to play now.** When the player wants to play rather than review a form, give them play links
+(`/play?setup=<json>`). A setup holds the settings, an optional map recipe (see "Make a map"), the computer
+opponents and how the player's squad is chosen. `bun tools/match-link.ts --server <address> '<setup JSON>'` (or
+`--recipe recipe.json '<settings JSON>'`) checks the setup, builds the recipe, and prints two links: one
+auto-configures the squad and starts the battle at once, the other lets the player hire and equip first and starts
+the battle when they press Ready. Give the player both and say which is which. Each opens a page describing the
+setup, and nothing is created until the player presses a button there, so the player still creates the match.
+
 **Make a map.** Custom maps are made in the map editor (`/maps`) and played with the `map` setting. To design one
 for the player, write a **recipe** (JSON: terrain, size, original blocks, ops like `building`, `hill`, `scatter`):
 
@@ -44,8 +52,9 @@ for the player, write a **recipe** (JSON: terrain, size, original blocks, ops li
    a line every 10, zones numbered) and the in-game view, and prints the editor link. Look at the pictures; fix the
    recipe until there are no warnings.
 3. Give the player the link (`/maps/new?recipe=...`): it opens the editor with the map built; they Save it, then
-   pick it under "Map" in the New Match form. `bun tools/map.ts render <exported map.json>` checks and draws a map
-   exported from the editor; `bun tools/map.ts blocks <dir>` draws every original block.
+   pick it under "Map" in the New Match form. To play on it straight away, put the recipe in play links instead.
+   `bun tools/map.ts render <exported map.json>` checks and draws a map exported from the editor;
+   `bun tools/map.ts blocks <dir>` draws every original block.
 
 **Restrict who can play / custom sign-in.** Write an access plugin: the API is documented in
 [`server/plugin.ts`](server/plugin.ts); [`plugins/allowlist.ts`](plugins/allowlist.ts) is the shortest example,
@@ -79,28 +88,29 @@ Matches you create while testing are stored in `data/xcom.sqlite`: delete them a
 
 ### Layout
 
-- `shared/engine/` — the authoritative simulation (runs on the server; the client reuses it for rendering helpers
+- `shared/engine/`: the authoritative simulation (runs on the server; the client reuses it for rendering helpers
   and previews): `state.ts` (Battle/Unit/Item), `tileengine.ts` (voxel line of sight/fire, lighting, explosions,
-  doors), `pathfinding.ts`, `actions.ts` (`GameRules.apply` — every command goes through it, bots included),
+  doors), `pathfinding.ts`, `actions.ts` (`GameRules.apply`: every command goes through it, bots included),
   `mapgen.ts`, `setup.ts`, `view.ts` (per-player fog-of-war views and diffs), `ai.ts` (OpenXcom AI port),
   `coop.ts` (several people sharing a squad), `deploy.ts` (landing zones, reinforcement waves), `stats.ts` /
   `record.ts` (per-unit match statistics), `serialize.ts`.
-- `shared/rules/` — `generated.json` (from `tools/convert-rules.ts`, OpenXcom's xcom1 rulesets), `catalog.ts`
+- `shared/rules/`: `generated.json` (from `tools/convert-rules.ts`, OpenXcom's xcom1 rulesets), `catalog.ts`
   (prices, recruit pool, loadout validation, training courses), `value.ts` (price model), `calibration.json`
   (measured price corrections), `squads.ts` (bot hiring strategies), `scenario.ts` (co-op enemy forces).
-- `shared/maps/` — custom maps: `format.ts` (`MapDoc`, run-length encoded tile parts), `build.ts` (a doc as a
+- `shared/maps/`: custom maps: `format.ts` (`MapDoc`, run-length encoded tile parts), `build.ts` (a doc as a
   battle and back, original blocks and UFOs from any terrain, landing zones, `checkMap` playability checks),
   `ops.ts` (the edit operations: buildings, hills, walls, scatter... used by the editor's tools and by recipes),
-  `recipe.ts` (AI recipes → map docs), `catalog.ts` + `catalog/*.json` (hand-labelled names for terrain parts and
+  `recipe.ts` (AI recipes to map docs), `catalog.ts` + `catalog/*.json` (hand-labelled names for terrain parts and
   notes on every original block), `docs.ts` (`/maps.txt`).
-- `shared/protocol.ts` — `MatchSettings` and `sanitizeSettings` (every setting passes through it).
-- `shared/settings-docs.ts` — the reference for AI assistants (`/llms.txt`, `tools/match-link.ts`).
-- `server/` — `index.ts` (routes), `auth.ts` (sessions, built-in sign-in, plugin host; API in `plugin.ts`), `db.ts`
-  (SQLite), `game.ts` (lobby, battle hosting, WebSockets, bots, match records), `maps.ts` (custom maps).
-- `client/` — `ui/` (front door, home, lobby, equip screen, the map editor: `maps.ts`, `editor.ts`), `battle/` (`screen.ts` is the battlescape: input,
-  dialogs, animation; `hud.ts`), `render/` (map and unit renderers, `plan.ts` top-down plans, fonts), `audio.ts`.
-- `plugins/` — access plugins; `examples/` — hosting recipes; `tools/` — balance, stats, music, dev helpers;
-  `tests/` — `bun test`.
+- `shared/protocol.ts`: `MatchSettings` and `sanitizeSettings` (every setting passes through it).
+- `shared/settings-docs.ts`: the reference for AI assistants (`/llms.txt`, `tools/match-link.ts`) and play-link
+  setups (`checkSetup`).
+- `server/`: `index.ts` (routes), `auth.ts` (sessions, built-in sign-in, plugin host; API in `plugin.ts`), `db.ts`
+  (SQLite), `game.ts` (lobby, battle hosting, WebSockets, bots, match records), `maps.ts` (custom maps). `quickPlay` in `game.ts` runs a play link.
+- `client/`: `ui/` (front door, home, lobby, equip screen, play-link page `play.ts`, the map editor: `maps.ts`,
+  `editor.ts`), `battle/` (`screen.ts` is the battlescape: input, dialogs, animation; `hud.ts`), `render/` (map and unit renderers, `plan.ts` top-down plans, fonts), `audio.ts`.
+- `plugins/`: access plugins. `examples/`: hosting recipes. `tools/`: balance, stats, music, dev helpers.
+  `tests/`: `bun test`.
 
 ### Rules of the house
 
@@ -112,7 +122,7 @@ Matches you create while testing are stored in `data/xcom.sqlite`: delete them a
   option goes in its tables in `shared/maps/docs.ts`; tests compile its examples and check it names every op,
   terrain and material. New terrain parts get names in `shared/maps/catalog/*.json` (`bun tools/terrain-sheet.ts`
   draws a part set's sprites with their numbers).
-- **Fog of war is sacred.** Clients only get what `extractView` sends them; never leak enemy positions or
+- **Never leak hidden information.** Clients only get what `extractView` sends them; never leak enemy positions or
   inventories. The AI plays on the real battle but only "knows" enemies it has seen (plus OpenXcom's round-20 cheat).
 - **The original rules are the spec.** Mechanics follow OpenXcom's xcom1 behaviour; deliberate departures: no
   civilians, no morale/panic, any unit but tanks can carry items, picked-up gear works at once (no research),
@@ -137,7 +147,7 @@ Matches you create while testing are stored in `data/xcom.sqlite`: delete them a
 - **Co-op squads**: a battle "player" is a squad; `PlayerState.members` are its people and `Unit.controller` who
   commands a unit. The server's `mayCommand` gates commands; "endturn" from a member toggles their lock-in. Updates
   carry `by` (who acted) so a client only waits for its own; rejected commands reply `noUpdate`. Bots and AFK
-  players share `runAI`. `publish` builds one view diff per side (`SentState` is per seat — never per socket) plus
+  players share `runAI`. `publish` builds one view diff per side (`SentState` is per seat, never per socket) plus
   an omniscient one for a game master who only watches.
 - **Co-op scenarios**: seat 0 is the team (everyone's loadouts merged, `controller` = who hired the unit, the game
   master as an `observer` member); seat 1 is `bot:scenario:<id>` with reinforcement `b.waves`. The enemy force is
