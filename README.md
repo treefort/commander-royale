@@ -34,9 +34,14 @@ Steam).
 
 <p align="center"><img src="docs/screenshots/7-battle.png" alt="An X-COM squad in power armor advancing along a dusk street toward a crashed Terror Ship, a Muton inside" width="800"></p>
 
-These follow one match from the request to the battle. The player asked an AI assistant for a co-op mission: a
-Terror Ship crashed across a town's main street at dusk, Mutons around the wreck, Chryssalids in the park, and a
-Sectopod arriving a few rounds later, on a map the assistant would design.
+These follow one match from the request to the battle. The player asked an AI assistant for this:
+
+```
+claude > Set me up a game: a Terror Ship has crashed across Main Street at dusk. Mutons dug in around
+         the wreck, Chryssalids loose in the park, and a Sectopod coming in a few rounds later. Design
+         the town map yourself and make it look incredible. I want to hire and kit out my own squad.
+         Give me the play links.
+```
 
 <img src="docs/screenshots/1-prompt.png" alt="The New Match form's Set up a match with AI panel with a request for a Terror Ship crash at dusk" width="800">
 
