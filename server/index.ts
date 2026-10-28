@@ -1,28 +1,27 @@
-// X-COM Battlescape multiplayer server (Bun).
+// Commander Royale server (Bun): the lobby API, battles over WebSockets, and the original game's files.
 import { join } from "node:path";
 import { existsSync, statSync } from "node:fs";
-import { currentUser, googleStart, googleCallback, devLogin, logout, DEV_LOGIN, googleEnabled, renameUser, PUBLIC_URL } from "./auth.ts";
-import { mayPlay, passkeyRequired, tryPasskey, accessLog } from "./access.ts";
+import { currentUser, logout, renameUser, loadPlugins, pluginRoute, signInOptions, gateFor, canSignOut, isAdmin, accessLog, origin } from "./auth.ts";
 import { settingsReference } from "../shared/settings-docs.ts";
+import { mapsReference } from "../shared/maps/docs.ts";
+import { listMaps, mapState, saveMap, deleteMap } from "./maps.ts";
 
-/** The match settings reference for AI assistants (public: no secrets, and an assistant can't sign in). */
-let reference = "";
+/** The match settings reference for AI assistants (public: no secrets, and an assistant can't sign in), per address. */
+const references = new Map<string, string>();
+/** The same for map recipes. */
+const mapReferences = new Map<string, string>();
 import {
   createMatch, listMatches, lobbyState, joinMatch, leaveMatch, updateSettings, saveLoadout, setReady, startMatch, deleteMatch,
   resolveGamePath, wsOpen, wsClose, wsMessage, tickTimers, type WsData, GAME_DIR, matchRecords, addBot, removeBot, tuneBot, joinSquad, resumeBots, saveMemories,
   retryMatch, shareChallenge, challengeState, acceptChallenge, listChallenges } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
+/** The address to listen on: 0.0.0.0 (everywhere, the default) or e.g. 127.0.0.1 when a proxy is in front. */
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = join(import.meta.dir, "..");
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 const err = (message: string, status = 400) => json({ error: message }, status);
-
-/** ADMIN_EMAILS (comma separated) may download match statistics; anyone can on a local dev-login server. */
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-function isAdmin(user: { email: string | null }): boolean {
-  return (!!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || DEV_LOGIN;
-}
 
 async function body<T>(req: Request): Promise<T> {
   try {
@@ -42,8 +41,20 @@ if (!existsSync(join(GAME_DIR, "GEODATA"))) {
   process.exit(1);
 }
 
+let signIns: string[];
+try {
+  signIns = await loadPlugins();
+} catch (e) {
+  console.error((e as Error).message);
+  process.exit(1);
+}
+if (signIns.includes("header") && !/^(127\.|::1$|localhost$)/.test(HOST)) {
+  console.warn(`AUTH=header while listening on ${HOST}: anyone who can reach port ${PORT} directly can claim to be anyone. Set HOST=127.0.0.1 (or firewall the port) so only your proxy gets through.`);
+}
+
 const server = Bun.serve<WsData>({
   port: PORT,
+  hostname: HOST,
   development: false,
   error(e) {
     console.error("request failed", e);
@@ -73,24 +84,28 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     const user = currentUser(req);
 
     if (path === "/health") return json({ ok: true });
-    // the front page's art (cut from the box cover; see tools/front-art): public, the sign-in page shows it
-    if (path === "/front/ship.webp" || path === "/front/title.webp") {
-      const p = resolveGamePath(`FRONT/${path.slice(7)}`);
-      return p ? staticFile(p, "image/webp", "public, max-age=86400") : err("Not found", 404);
+    if (path === "/maps.txt" || path === "/docs/map-recipes.md") {
+      const o = origin(req);
+      if (!mapReferences.has(o)) mapReferences.set(o, mapsReference(o));
+      return new Response(mapReferences.get(o), { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
     }
     if (path === "/llms.txt" || path === "/docs/match-settings.md") {
-      reference ||= settingsReference(PUBLIC_URL);
-      return new Response(reference, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+      const o = origin(req);
+      if (!references.has(o)) references.set(o, settingsReference(o));
+      return new Response(references.get(o), { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=300" } });
     }
-    if (path === "/auth/google") return googleEnabled() ? googleStart(req) : err("Google sign-in is not configured", 503);
-    if (path === "/auth/google/callback") return googleCallback(req);
-    if (path === "/auth/dev") return devLogin(req);
+    if (path === "/logo.webp") return staticFile(join(ROOT, "client", "logo.webp"), "image/webp", "public, max-age=86400");
+    // sign-in methods and access plugins answer their own routes
+    const routed = await pluginRoute(req);
+    if (routed) return routed;
     if (path === "/auth/logout") return logout(req);
+    // whatever a plugin still wants from this account before it plays (a passkey...)
+    const gate = user && gateFor(user, req);
 
     if (path === "/ws") {
       const matchId = url.searchParams.get("match") ?? "";
       if (!user) return err("Sign in first", 401);
-      if (!mayPlay(user)) return err("Enter the passkey first", 403);
+      if (gate) return err(gate.text, 403);
       if (srv.upgrade(req, { data: { user, matchId } })) return undefined;
       return err("WebSocket upgrade failed");
     }
@@ -102,15 +117,10 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
           if (b.name) renameUser(user.id, b.name);
           return json({ ok: true });
         }
-        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, needsPasskey: !!user && !mayPlay(user), devLogin: DEV_LOGIN, google: googleEnabled() });
+        return json({ user: user && { id: user.id, name: user.name, picture: user.picture }, signIn: user ? [] : signInOptions(req), gate, signOut: canSignOut(req) });
       }
-      if (path === "/api/passkey" && req.method === "POST") {
-        if (!user) return err("Sign in first", 401);
-        const e = tryPasskey(req, user, (await body<{ passkey?: string }>(req)).passkey);
-        return e ? err(e, 403) : json({ ok: true });
-      }
-      // signed in isn't enough to play: with a passkey set, the account has to have entered it
-      if (user && !mayPlay(user)) return json({ error: "Enter the passkey first", passkey: true }, 403);
+      // signed in isn't always enough to play
+      if (gate) return json({ error: gate.text, gate: true }, 403);
       // sign-ins and passkey attempts: admins only
       if (path === "/api/admin/access-log" && req.method === "GET") {
         if (!user) return err("Sign in first", 401);
@@ -125,6 +135,30 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
         return new Response(JSON.stringify(matchRecords(since)), {
           headers: { "content-type": "application/json", "content-disposition": "attachment; filename=match-records.json" },
         });
+      }
+      // custom maps: anyone signed in can list, open and play on them; only their author changes them
+      const mp = path.match(/^\/api\/maps(?:\/([A-Za-z0-9]+))?$/);
+      if (mp) {
+        if (!user) return err("Sign in first", 401);
+        const mid = mp[1];
+        if (!mid && req.method === "GET") return json(listMaps(user));
+        if (!mid && req.method === "POST") {
+          const r = saveMap(user, null, (await body<{ doc?: unknown }>(req)).doc);
+          return r.error ? err(r.error) : json(r);
+        }
+        if (mid && req.method === "GET") {
+          const st = mapState(mid, user);
+          return st ? json(st) : err("Map not found", 404);
+        }
+        if (mid && req.method === "POST") {
+          const r = saveMap(user, mid, (await body<{ doc?: unknown }>(req)).doc);
+          return r.error ? err(r.error) : json(r);
+        }
+        if (mid && req.method === "DELETE") {
+          const e = deleteMap(user, mid);
+          return e ? err(e) : json({ ok: true });
+        }
+        return err("Not found", 404);
       }
       // challenges: a battle's start shared for anyone to play
       const c = path.match(/^\/api\/challenges(?:\/([A-Za-z0-9]+))?(?:\/(play))?$/);
@@ -147,7 +181,14 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
         const [, id, action] = m;
         if (!id && req.method === "GET") return user ? json(listMatches(user)) : err("Sign in first", 401);
         if (!user) return err("Sign in first", 401);
-        if (!id && req.method === "POST") return json(createMatch(user, (await body<{ settings?: object }>(req)).settings ?? {}));
+        if (!id && req.method === "POST") {
+          const settings = (await body<{ settings?: object }>(req)).settings ?? {};
+          try {
+            return json(createMatch(user, settings));
+          } catch (e) {
+            return err((e as Error).message);
+          }
+        }
         if (id && !action && req.method === "GET") {
           const s = lobbyState(id, user);
           return s ? json(s) : err("Match not found", 404);
@@ -203,7 +244,7 @@ async function handle(req: Request, srv: import("bun").Server<WsData>): Promise<
     // the original game's data files are served only to signed-in players
     if (path.startsWith("/game/")) {
       if (!user) return err("Sign in first", 401);
-      if (!mayPlay(user)) return err("Enter the passkey first", 403);
+      if (gate) return err(gate.text, 403);
       let rel: string;
       try {
         rel = decodeURIComponent(path.slice(6));
@@ -235,4 +276,4 @@ for (const sig of ["SIGTERM", "SIGINT"] as const)
     saveMemories();
     process.exit(0);
   });
-console.log(`X-COM battlescape server on ${PUBLIC_URL} (port ${server.port})${DEV_LOGIN ? " — DEV LOGIN ENABLED" : ""}${passkeyRequired() ? " — passkey required to play" : ""}`);
+console.log(`Commander Royale on http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${server.port} (sign-in: ${signIns.join(", ")})`);

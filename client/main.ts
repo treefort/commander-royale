@@ -1,8 +1,10 @@
 import { api } from "./api.ts";
-import { renderHome, renderLogin, renderPasskey, type Me } from "./ui/home.ts";
+import { renderHome, renderLogin, renderGate, type Me } from "./ui/home.ts";
 import { LobbyPage } from "./ui/lobby.ts";
 import { BattleScreen } from "./battle/screen.ts";
 import { renderChallenge } from "./ui/challenge.ts";
+import { renderMaps } from "./ui/maps.ts";
+import { MapEditor } from "./ui/editor.ts";
 
 const root = document.getElementById("app")!;
 let me: Me;
@@ -21,11 +23,17 @@ async function route() {
   const path = location.pathname;
   // keep the query too: a ?settings= link from an AI assistant survives signing in
   if (!me.user) return renderLogin(root, me, path + location.search);
-  // signed in, but this server wants its passkey before anyone plays (then carry on to where they were going)
-  if (me.needsPasskey) return renderPasskey(root, me, async () => {
+  // signed in, but this server wants something more first, e.g. a passkey (then carry on to where they were going)
+  if (me.gate) return renderGate(root, me, async () => {
     me = await api<Me>("/api/me");
     await route();
   });
+  if (path === "/maps") return renderMaps(root, me, go);
+  const map = path.match(/^\/maps\/(new|[A-Za-z0-9]+)$/);
+  if (map) {
+    current = new MapEditor(root, me, go, map[1] === "new" ? null : map[1]);
+    return;
+  }
   const c = path.match(/^\/c\/([A-Za-z0-9]+)/);
   if (c) return renderChallenge(root, me, c[1], go);
   const m = path.match(/^\/m\/([A-Za-z0-9]+)/);

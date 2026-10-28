@@ -115,6 +115,8 @@ export const UFO_TERRAINS = new Map<string, TerrainRule>();
 for (const t of (data as any).ufoTerrains) {
   UFO_TERRAINS.set(t.type, { name: t.name, mapDataSets: t.mapDataSets, mapBlocks: t.mapBlocks.map((b: any) => ({ name: b.name, width: b.width, length: b.length, groups: [0] })) });
 }
+/** X-COM's craft (the Skyranger, Lightning and Avenger) as map blocks, for custom maps. */
+export const CRAFT_TERRAINS: TerrainRule[] = (data as any).craftTerrains.map((t: any) => ({ name: t.name, mapDataSets: t.mapDataSets, mapBlocks: t.mapBlocks.map((b: any) => ({ name: b.name, width: b.width, length: b.length, groups: [0] })) }));
 export const CRAFT_TERRAIN: TerrainRule = (() => {
   const t = (data as any).craftTerrains.find((c: any) => c.type === "STR_SKYRANGER");
   return { name: t.name, mapDataSets: t.mapDataSets, mapBlocks: t.mapBlocks.map((b: any) => ({ name: b.name, width: b.width, length: b.length, groups: [0] })) };

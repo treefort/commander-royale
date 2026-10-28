@@ -10,7 +10,8 @@ db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  google_sub TEXT UNIQUE,
+  -- how this account signs in, "<method>:<id>" (e.g. "name:alice", "header:alice@example.com", "google:1234")
+  login TEXT UNIQUE,
   email TEXT,
   name TEXT NOT NULL,
   picture TEXT,
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS match_players (
   ready INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (match_id, user_id)
 );
--- sign-ins and passkey attempts (server/access.ts)
+-- sign-ins, sign-outs and whatever access plugins log (server/auth.ts logAccess)
 CREATE TABLE IF NOT EXISTS access_log (
   id INTEGER PRIMARY KEY,
   at INTEGER NOT NULL,
@@ -97,8 +98,6 @@ for (const sql of [
   "ALTER TABLE match_players ADD COLUMN squad_of TEXT",
   // computer squads: AI settings (BotTuning JSON)
   "ALTER TABLE match_players ADD COLUMN ai TEXT",
-  // entered the server's passkey (allowed to play)
-  "ALTER TABLE users ADD COLUMN unlocked INTEGER NOT NULL DEFAULT 0",
   // the battle as it began (gzipped) and each side's loadout then, to play it again (retries, challenges)
   "ALTER TABLE matches ADD COLUMN start_battle BLOB",
   "ALTER TABLE matches ADD COLUMN start_loadouts TEXT",
@@ -115,7 +114,16 @@ for (const sql of [
   }
 }
 
-export interface UserRow { id: string; google_sub: string | null; email: string | null; name: string; picture: string | null; created: number; unlocked?: number }
+/** Accounts made before sign-in was pluggable: google_sub held a Google id, or "dev:<name>" for the name login. */
+export function migrateLogins(d: Database) {
+  if (!(d.query("SELECT COUNT(*) AS n FROM pragma_table_info('users') WHERE name = 'google_sub'").get() as { n: number }).n) return;
+  d.exec(`ALTER TABLE users RENAME COLUMN google_sub TO login;
+    UPDATE users SET login = 'name:' || substr(login, 5) WHERE login LIKE 'dev:%';
+    UPDATE users SET login = 'google:' || login WHERE login IS NOT NULL AND login NOT LIKE 'name:%';`);
+}
+migrateLogins(db);
+
+export interface UserRow { id: string; login: string | null; email: string | null; name: string; picture: string | null; created: number }
 export interface MatchRow { id: string; owner: string; settings: string; status: string; seed: number; pool: string; battle: string | Uint8Array | null; turn_deadline: number | null; created: number; updated: number; start_battle: Uint8Array | null; start_loadouts: string | null; solo: number; challenge_id: string | null; view_memory: string | null }
 export interface PlayerRow { match_id: string; user_id: string; seat: number; name: string; loadout: string | null; ready: number; squad_of: string | null; ai: string | null }
 

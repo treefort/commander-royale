@@ -11,6 +11,8 @@ import { dealUnits } from "./coop.ts";
 import { deployAll, newLandingZone } from "./deploy.ts";
 import { RNG } from "./rng.ts";
 import { newStats } from "./stats.ts";
+import { customMap } from "../maps/build.ts";
+import type { MapDoc } from "../maps/format.ts";
 
 export interface SetupPlayer {
   userId: string;
@@ -29,9 +31,10 @@ export interface SetupPlayer {
   zoneStash?: string[][];
 }
 
-export function createBattle(settings: MatchSettings, players: SetupPlayer[], pool: Recruit[], seed: number, files: FileSource): Battle {
+/** `custom`: the custom map (`settings.map`) to play on, instead of one generated from the settings. */
+export function createBattle(settings: MatchSettings, players: SetupPlayer[], pool: Recruit[], seed: number, files: FileSource, custom?: MapDoc): Battle {
   // an auto map size fits whoever is here at the start (the server settles it first, so it's on record)
-  if (!settings.mapBlocks) {
+  if (!settings.mapBlocks && !custom) {
     const people = players[0]?.members?.filter((m) => !m.observer).length ?? 1;
     settings = { ...settings, mapBlocks: resolveMapBlocks(settings, players.length, people), autoMap: true };
   }
@@ -42,7 +45,16 @@ export function createBattle(settings: MatchSettings, players: SetupPlayer[], po
     first.push(total);
     total += Math.max(1, p.landings ?? 1);
   }
-  const { battle: b, zones, ufo } = generateMap(settings, total, seed, files);
+  const gen = custom ? customMap(custom, settings, total, seed, files) : generateMap(settings, total, seed, files);
+  const { battle: b, ufo } = gen;
+  // a custom map with fewer landing zones than it needs: the rest at the edge, as for a squad joining later
+  const zones = [...gen.zones];
+  b.landingZones = zones.map((z) => ({ ...z, seat: -1 }));
+  while (zones.length < total) {
+    const z = newLandingZone(b, -1);
+    zones.push(z);
+    b.landingZones.push({ ...z, seat: -1 });
+  }
   b.zones = players.map((_, i) => zones[first[i]]);
   b.landingZones = zones.map((z, i) => ({ ...z, seat: first.filter((f) => f <= i).length - 1 }));
   b.ufoArea = ufo;

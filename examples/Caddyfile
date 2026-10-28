@@ -1,0 +1,16 @@
+# Commander Royale on the public internet behind Caddy: automatic HTTPS, and a user name + password per player.
+# Run the game with:
+#   HOST=127.0.0.1 PUBLIC_URL=https://game.example.com AUTH=header AUTH_HEADER=X-Remote-User bun run start
+# Make a password hash for each player with `caddy hash-password` and list them below.
+
+game.example.com {
+	basic_auth {
+		alice $2a$14$replace.with.the.output.of.caddy.hash-password.......................
+		bob   $2a$14$replace.with.the.output.of.caddy.hash-password.......................
+	}
+	# Caddy sets this header itself (whatever the browser sent), so the game can trust it.
+	# WebSockets are proxied as they are.
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Remote-User {http.auth.user.id}
+	}
+}

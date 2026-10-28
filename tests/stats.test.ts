@@ -55,7 +55,7 @@ test("the server stores a record when a real match finishes", async () => {
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
   const mkUser = (id: string, email: string | null) => {
-    db.query("INSERT INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, ?, ?, NULL, ?)").run(id, email, id, Date.now());
+    db.query("INSERT INTO users (id, login, email, name, picture, created) VALUES (?, NULL, ?, ?, NULL, ?)").run(id, email, id, Date.now());
     return db.query("SELECT * FROM users WHERE id = ?").get(id) as never;
   };
   const alice = mkUser("alice", "boss@example.com"), bob = mkUser("bob", null);
@@ -92,7 +92,7 @@ test("an AI squad joins a lobby ready, and plays its turn on the server", async 
   // reuses the database the previous test opened
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
-  db.query("INSERT INTO users (id, google_sub, email, name, picture, created) VALUES ('carol', NULL, NULL, 'carol', NULL, ?)").run(Date.now());
+  db.query("INSERT INTO users (id, login, email, name, picture, created) VALUES ('carol', NULL, NULL, 'carol', NULL, ?)").run(Date.now());
   const carol = db.query("SELECT * FROM users WHERE id = 'carol'").get() as never;
   const { id } = game.createMatch(carol, { budget: 200_000, biome: "CULTA", timeOfDay: "day" });
   expect(game.addBot(id, carol, "swarm")).toBeNull();

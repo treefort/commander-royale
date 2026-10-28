@@ -1,12 +1,18 @@
 // Automatic hiring and equipping: squad-building strategies for computer players and the balance
 // harness. Every squad passes checkLoadout, exactly like one put together in the lobby.
 import { itemRule, unitRule, livingWeaponFor, fitsSlot, INVENTORY_SLOTS, type PlacedItem, type SlotId } from "./index.ts";
-import { catalogFor, armorsFor, itemPrice, armorPrice, seatsFor, checkLoadout } from "./catalog.ts";
-import type { MatchSettings, Recruit, Loadout, SquadMember } from "../protocol.ts";
+import { catalogFor, armorsFor, itemPrice, armorPrice, seatsFor, checkLoadout, priceUnit, trainedStats, trainingCost, COURSES, MAX_SESSIONS, type Course } from "./catalog.ts";
+import { pricingTime, type MatchSettings, type Recruit, type Loadout, type SquadMember } from "../protocol.ts";
 import { RNG } from "../engine/rng.ts";
 
 export const STRATEGIES = ["swarm", "elite", "balanced", "heavy", "monster", "aliens", "tanks", "psi", "random"] as const;
 export type Strategy = (typeof STRATEGIES)[number];
+
+/** How each strategy reads in the lobby (and the reference for AI assistants). */
+export const STRATEGY_NAMES: Record<Strategy, string> = {
+  random: "Wildcard (random hires)", swarm: "Swarm (lots of cheap soldiers)", elite: "Elite (few veterans, best gear)", balanced: "Balanced",
+  heavy: "Heavy weapons", monster: "Monster (one big alien + troops)", aliens: "Alien legion", tanks: "Armored (tanks)", psi: "Psionic",
+};
 
 export interface Kit {
   name: string;
@@ -203,7 +209,50 @@ export function autoSquad(s: MatchSettings, pool: Recruit[]): { loadout: Loadout
     }
     addMedikits(settings, pool, loadout, kits);
   }
+  addTraining(settings, pool, loadout);
   return { loadout, strategy: pick.strategy };
+}
+
+/** Courses worth taking with this kit: no throwing lessons without grenades, no psi training without a Psi-Amp. */
+function usefulCourses(s: MatchSettings, m: SquadMember): Course[] {
+  const types = m.items.map((it) => itemRule(it.type).battleType);
+  return COURSES.filter((c) => {
+    if (c.psionic) return s.psionics && m.items.some((it) => it.type === "STR_PSI_AMP");
+    if (c.id === "grenadier") return types.includes(4) || types.includes(5);
+    if (c.id === "closecombat") return types.includes(3);
+    return true;
+  });
+}
+
+/** Money the squad left in the bank goes on training: one session at a time, the most stats for the money first. */
+function addTraining(s: MatchSettings, pool: Recruit[], l: Loadout) {
+  let left = s.budget - checkLoadout(s, pool, l).cost;
+  const time = pricingTime(s.timeOfDay);
+  const worth = (r: Recruit, t: SquadMember["training"]) => priceUnit("soldier", r.type, trainedStats(r.stats, t), s.psionics, undefined, time).price;
+  const soldiers = l.squad.map((m) => ({ m, r: pool.find((p) => p.id === m.recruitId)! })).filter((x) => x.r.kind === "soldier");
+  for (;;) {
+    let best: { m: SquadMember; training: NonNullable<SquadMember["training"]>; cost: number; rate: number; sessions: number } | null = null;
+    for (const { m, r } of soldiers) {
+      const now = worth(r, m.training);
+      const paid = trainingCost(s, r, m.training);
+      for (const c of usefulCourses(s, m)) {
+        const n = m.training?.[c.id] ?? 0;
+        if (n >= MAX_SESSIONS) continue;
+        const training = { ...m.training, [c.id]: n + 1 };
+        const cost = trainingCost(s, r, training) - paid;
+        // a session that adds nothing (the stats are at the caps) isn't worth any money
+        if (cost > left || JSON.stringify(trainedStats(r.stats, training)) === JSON.stringify(trainedStats(r.stats, m.training))) continue;
+        // the model prices in $500 steps, so one session often looks worth nothing: those still beat leaving the money unspent
+        const rate = (worth(r, training) - now + 1) / cost;
+        // a tie goes to the soldier with the least training so far: spread it over the squad
+        const sessions = Object.values(training).reduce((a, x) => a + (x ?? 0), 0);
+        if (!best || rate > best.rate || (rate === best.rate && sessions < best.sessions)) best = { m, training, cost, rate, sessions };
+      }
+    }
+    if (!best) return;
+    best.m.training = best.training;
+    left -= best.cost;
+  }
 }
 
 /**

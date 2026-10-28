@@ -1,0 +1,27 @@
+# systemd unit for Commander Royale: /etc/systemd/system/commander-royale.service
+# Assumes the repository (with dist/ built and node_modules installed) in /opt/commander-royale, the game data in
+# /opt/commander-royale/gamedata, a `commander` system user, and settings in /etc/commander-royale.env
+# (see commander-royale.env). Then: systemctl daemon-reload && systemctl enable --now commander-royale
+[Unit]
+Description=Commander Royale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=commander
+Group=commander
+WorkingDirectory=/opt/commander-royale
+EnvironmentFile=/etc/commander-royale.env
+ExecStart=/usr/local/bin/bun run server/index.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=commander-royale
+ReadWritePaths=/var/lib/commander-royale
+
+[Install]
+WantedBy=multi-user.target

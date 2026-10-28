@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { files } from "../tools/gamefiles.ts";
 import { defaultSettings, pricingTime } from "../shared/protocol.ts";
-import { generatePool, checkLoadout, priceUnit, trainedStats, trainingCost, trainingErrors, MAX_SESSIONS, TRAINING_PREMIUM } from "../shared/rules/catalog.ts";
+import { generatePool, checkLoadout, priceUnit, trainedStats, trainingCost, trainingErrors, MAX_SESSIONS, MIN_SESSION_PRICE, TRAINING_PREMIUM } from "../shared/rules/catalog.ts";
 import { SOLDIER } from "../shared/rules/index.ts";
 import { createBattle } from "../shared/engine/setup.ts";
 import type { UserRow } from "../server/db.ts";
@@ -31,15 +31,15 @@ test("training costs what the better stats are worth, plus the premium", () => {
   const t = { marksmanship: 3, reflexes: 2 };
   const worth = priceUnit("soldier", "SOLDIER", trainedStats(rookie.stats, t), s.psionics, undefined, time).price - priceUnit("soldier", "SOLDIER", rookie.stats, s.psionics, undefined, time).price;
   expect(worth).toBeGreaterThan(0);
-  // the model values soldier stats modestly (gear decides fights): a session costs $1,000 unless it's worth more
-  expect(trainingCost(s, rookie, t)).toBe(Math.max(5 * 1000, Math.round((worth * TRAINING_PREMIUM) / 500) * 500));
+  // the model values soldier stats modestly (gear decides fights): a session costs MIN_SESSION_PRICE unless it's worth more
+  expect(trainingCost(s, rookie, t)).toBe(Math.max(5 * MIN_SESSION_PRICE, Math.round((worth * TRAINING_PREMIUM) / 500) * 500));
   const psiAce = { ...rookie, stats: { ...rookie.stats, psiStrength: 90 } };
   const psiWorth = priceUnit("soldier", "SOLDIER", trainedStats(psiAce.stats, { psi: 4 }), s.psionics, undefined, time).price - priceUnit("soldier", "SOLDIER", psiAce.stats, s.psionics, undefined, time).price;
-  expect(trainingCost(s, psiAce, { psi: 4 })).toBe(Math.max(4000, Math.round((psiWorth * TRAINING_PREMIUM) / 500) * 500));
+  expect(trainingCost(s, psiAce, { psi: 4 })).toBe(Math.max(4 * MIN_SESSION_PRICE, Math.round((psiWorth * TRAINING_PREMIUM) / 500) * 500));
   // more training costs more; none is free; even barely-valued training costs something
   expect(trainingCost(s, rookie, { marksmanship: 4 })).toBeGreaterThan(trainingCost(s, rookie, { marksmanship: 1 }));
   expect(trainingCost(s, rookie, undefined)).toBe(0);
-  expect(trainingCost(s, rookie, { grenadier: 2 })).toBeGreaterThanOrEqual(2000);
+  expect(trainingCost(s, rookie, { grenadier: 2 })).toBeGreaterThanOrEqual(2 * MIN_SESSION_PRICE);
   // it's part of what the squad costs
   const base = checkLoadout(s, pool, { squad: [{ recruitId: rookie.id, armor: "STR_NONE_UC", items: [] }], stash: [] });
   const trained = checkLoadout(s, pool, { squad: [{ recruitId: rookie.id, armor: "STR_NONE_UC", items: [], training: t }], stash: [] });
@@ -73,7 +73,7 @@ test("the server keeps a loadout's training and charges for it", async () => {
   if (!process.env.DB_PATH) process.env.DB_PATH = join(mkdtempSync(join(tmpdir(), "xcom-train-")), "test.sqlite");
   const { db } = await import("../server/db.ts");
   const game = await import("../server/game.ts");
-  db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES ('tr_ann', NULL, NULL, 'tr_ann', NULL, ?)").run(Date.now());
+  db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES ('tr_ann', NULL, NULL, 'tr_ann', NULL, ?)").run(Date.now());
   const ann = db.query("SELECT * FROM users WHERE id = 'tr_ann'").get() as UserRow;
   const { id } = game.createMatch(ann, { budget: 200_000 });
   const lobby = game.lobbyState(id, ann)!;

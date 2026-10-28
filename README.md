@@ -1,64 +1,60 @@
-# X-COM: Battlescape (multiplayer)
+<p align="center"><img src="docs/logo.webp" alt="Commander Royale" width="600"></p>
 
-A browser port of the X-COM: UFO Defense battlescape, rebuilt for free-for-all squad battles and co-op scenarios (a team of people against an enemy a game master sets up), which anyone with the invite link can join, even mid-battle. It uses
-the original game's graphics, maps, terrain and sounds (loaded from your copy of the game) and the original rules
-(time units, accuracy, reaction fire, voxel line of fire, destructible terrain, fire, smoke, night lighting,
-psionics...), with a multiplayer layer on top: Google sign-in, lobbies with invite links, a shared recruit pool
-priced by ability, a budget-based armory and supply drops.
+> [!TIP]
+> You can point your frontier AI agent of choice at this repo, and say things like:
+>
+> - *"Clone this and get it running locally. My copy of X-COM: UFO Defense is in `C:\GOG Games\XCOM`."*
+> - *"Set this up so my friends on our home Wi-Fi can play."*
+> - *"Host it on my tailnet with Tailscale Serve, so everyone's signed in as their Tailscale identity."*
+> - *"Put it on my VPS at game.example.com behind Caddy, with a password for each of my five friends."*
+> - *"Write an access plugin that only lets in people with an invite code I hand out."*
+> - *"Set up a co-op match: four of us against Chryssalids in a city at night, reinforcements on round 3."*
+> - *"Make me a map: a ruined Mars outpost round a crashed supply ship, with cover for 4 squads."*
+> - *"Run a bot tournament and tell me which squad strategy wins most at a $400,000 budget."*
+>
+> [`AGENTS.md`](AGENTS.md) gives coding agents (Claude Code, Codex, Cursor...) what they need for all of these.
+> Chat assistants can set up matches and design maps from inside the game: see [below](#setting-up-a-match-with-an-ai-assistant).
 
-## Running locally
+# Commander Royale
 
-Requirements: [Bun](https://bun.sh) 1.3+ and an X-COM: UFO Defense install (GOG/Steam).
+A browser remake of the X-COM: UFO Defense battlescape, rebuilt for multiplayer: free-for-all squad battles and
+co-op scenarios (a team of people against an enemy a game master sets up), which anyone with the invite link can
+join, even mid-battle. It uses the original game's graphics, maps, terrain and sounds (loaded from your own copy of
+the game) and the original rules (time units, accuracy, reaction fire, voxel line of fire, destructible terrain, fire,
+smoke, night lighting, psionics...), with a multiplayer layer on top: lobbies with invite links, a shared recruit
+pool priced by ability, a budget-based armory, training, computer squads, supply drops, retries and shareable
+challenges.
+
+Commander Royale is a fan project, not affiliated with the owners of X-COM. It ships none of the original game's
+files: you need your own copy of X-COM: UFO Defense (GOG or Steam).
+
+## Running it
+
+Requirements: [Bun](https://bun.sh) 1.3+ and an X-COM: UFO Defense install.
 
 ```sh
 bun install
 # copy the game data folders into ./gamedata (or point GAME_DIR at your install)
 cp -r "<X-COM install>/"{GEODATA,GEOGRAPH,MAPS,ROUTES,SOUND,TERRAIN,UFOGRAPH,UNITS} gamedata/
-bun tools/render-music.ts   # renders the General MIDI battle music to gamedata/MUSIC (needs ffmpeg)
-bun run dev          # builds the client and starts http://localhost:3000
+bun tools/render-music.ts   # optional: renders the General MIDI battle music to gamedata/MUSIC (needs ffmpeg)
+bun run dev                 # builds the client and starts http://localhost:3000
 ```
+
+Open `http://localhost:3000`, type a commander name, and create a match. To try multiplayer on your own, open a
+second browser profile or a private window and sign in under another name.
 
 Browsers can't play MIDI, so `render-music.ts` synthesizes the original battle tracks (GMTACTIC, GMENBASE,
 GMMARS, GMWIN, GMLOSE) once with spessasynth_core and the GeneralUser GS soundfont (downloaded to
-`tools/.cache` on first run) and encodes them as Ogg Opus. They're served like the other game files and deployed
-with the rest of `gamedata`. Music and sound effects can each be switched off, and their volumes set, from the
-battlescape's Options screen.
+`tools/.cache` on first run) and encodes them as Ogg Opus. They're served like the other game files. Music and
+sound effects can each be switched off, and their volumes set, from the battlescape's Options screen.
 
-Without Google credentials the server offers a **dev login** (type any name). To test multiplayer locally, open a
-second browser profile/incognito window and sign in under another name.
+## Hosting for your friends
 
-Environment variables:
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `PORT` | 3000 | HTTP port |
-| `PUBLIC_URL` | `http://localhost:3000` | External URL (used for the OAuth redirect and secure cookies) |
-| `GAME_DIR` | `./gamedata` | Folder with the original game's data directories |
-| `DB_PATH` | `./data/xcom.sqlite` | SQLite database (accounts, sessions, matches, battle state) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | — | Enables "Sign in with Google" |
-| `DEV_LOGIN` | on when Google isn't configured | `0` disables the dev login (always do this in production) |
-
-### Google sign-in
-
-1. Google Cloud console → APIs & Services → Credentials → *Create OAuth client ID* → *Web application*.
-2. Authorized redirect URIs: `https://xcom.evanbooth.com/auth/google/callback` (and
-   `http://localhost:3000/auth/google/callback` for local testing).
-3. Download the client JSON; pass its `client_id`/`client_secret` as the environment variables above, or give the file
-   to the deploy script.
-
-## Deploying (DigitalOcean droplet)
-
-`deploy/deploy-xcom.py` follows the same pattern as gc.evanbooth.com (isolated `xcom` system user, pinned Bun,
-`/opt/xcom/releases/<timestamp>` + `current` symlink, hardened systemd unit, nginx proxy with WebSockets, certbot
-webroot certificate, state in `/var/lib/xcom/xcom.sqlite`):
-
-```sh
-bun run build
-python deploy/deploy-xcom.py --deploy --credentials path/to/client_secret.json
-```
-
-The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back up `/var/lib/xcom/xcom.sqlite` and
-`/etc/xcom/environment` along with the rest of the host.
+The game has no opinion about who may play: out of the box people just type a name, which suits a LAN or a
+tailnet. For anything else, put an authenticating proxy in front (`AUTH=header`) or load an access plugin
+(`PLUGINS=...`: a shared passkey, an allow-list, Google sign-in, or your own). **[examples/](examples/README.md)**
+walks through the common setups — LAN, Tailscale (plain or with Tailscale Serve identities), Caddy with a password
+per player, Cloudflare Tunnel + Access, oauth2-proxy, Google sign-in — and lists every setting.
 
 ## How a match works
 
@@ -67,7 +63,7 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    squads there and the budget; or pick one), budget, seat limit, recruit pool size, technology level,
    alien recruits / tanks / armor / psionics toggles, supply drops (frequency, warning time, loot table, kits per drop), the
    Mysterious Stranger's chance and an optional turn timer. The form shows what the budget buys (example squads priced from the real catalog).
-2. **Invite**: share the match link. Anyone who opens it signs in with Google and joins the lobby; there's no player
+2. **Invite**: share the match link. Anyone who opens it signs in and joins the lobby; there's no player
    limit (a battle takes up to 30 sides). The creator
    can also add computer squads ("Add AI squad", with a hiring strategy); they hire automatically, are always
    ready, and play their turns on the server one action at a time so you can watch. Each computer squad has
@@ -81,10 +77,11 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
    explosives, equipment and armor, then kit out each unit on the original inventory screen. Unequipped gear is
    dropped at your deployment zone. Human soldiers can also be put through **training** (Marksmanship, Reflexes,
    Fitness, Toughness, Grenadier, Close combat and, with psionics, Psi training; up to 4 sessions each, never past
-   the original stat caps), at $1,000 a session or what the price model says the better stats are worth plus 25%.
-   New players can press **Auto-configure squad**: it hires and equips a whole squad for the match's pool, budget,
-   seats, tech and time of day (the strategy that wins most in bot tournaments, "elite", with at least 4 units,
-   flares at night and a medikit per five soldiers), which they can then adjust.
+   the original stat caps), at $10,000 a session or 12.5× what the price model says the better stats are worth: a
+   luxury, since a better recruit is far cheaper. New players can press **Auto-configure squad**: it hires and
+   equips a whole squad for the match's pool, budget, seats, tech and time of day (the strategy that wins most in
+   bot tournaments, "elite", with at least 4 units, flares at night and a medikit per five soldiers), spends what's
+   left on training, and they can then adjust it.
 4. **Battle**: the creator starts once two squads are ready; squads deploy around the map edge. Players take turns
    in a shuffled order; the game is asynchronous (close the tab and come back) unless a turn timer is set. Last
    squad standing wins.
@@ -99,12 +96,43 @@ The first run also uploads the game data (~9 MB) to `/opt/xcom/gamedata`. Back u
 The New Match form has a **"Set up a match with AI"** panel. Copy its prompt into any AI assistant, describe the
 match you want ("three of us against a Sectoid crash site, Floaters arriving later, turns end at 8pm"), and it
 answers with a link that opens the form filled in (or JSON to paste into the panel). The panel lists anything it
-had to adjust, and "Copy settings JSON / link" hands the current form back to the assistant to tweak.
+had to adjust, and "Copy settings JSON / link" hands the current form back to the assistant to tweak. On a server
+that isn't on the public internet (a LAN, a tailnet, localhost) a chat assistant can't open its address, so the
+panel copies the whole reference along with the prompt. A coding agent working in this repo can use
+`bun tools/match-link.ts` instead: it prints the reference, and checks settings and turns them into a link.
 
 The assistant reads **`/llms.txt`** (public, also at `/docs/match-settings.md`): both game modes, every setting
 with its range and default, every enemy unit and weapon id with rough strengths, budget rules of thumb and worked
-examples. It's generated from the game's rules (`shared/settings-docs.ts`), and tests check it covers every setting
-and states the same ranges the server enforces.
+examples, plus everything players can do outside the settings (computer squads and their AI options, training,
+co-op controls, retries and challenges). It's generated from the game's rules (`shared/settings-docs.ts`), and tests
+check it covers every setting, AI option, bot strategy and training course and states the ranges the server enforces.
+
+### Custom maps: the map editor
+
+Besides maps generated from the settings, matches can be played on **custom maps**. **Map editor** (top bar, or
+`/maps`) lists everyone's maps; anyone can play on or copy them, and only a map's author changes it.
+
+- **New map**: a terrain (any environment, or the X-COM base), a size (10–100 tiles each way, 1–8 levels), and flat
+  ground or a generated map like a normal match's to start from.
+- **The editor** draws the map exactly as in battle — isometric, a level at a time (wheel or PageUp/PageDown), with
+  day/dusk/night lighting — beside a top-down overview. Tools: **paint** any terrain part (walls go on the tile edge
+  under the cursor), **rectangles** of floor or rooms of wall, straight **wall lines**, **erase**, **fill**, whole
+  **buildings** (walls with windows and doors on every storey, floors, stairs and a roof), **hills**, **scatter**
+  (trees, rocks, crates), **original map blocks** from any terrain, **UFOs**, **copy/paste**, and **landing zones**.
+  The parts palette names over 600 of the original terrain's parts ("blue-brick-wall", "apple-tree", "barn-stairs")
+  and can add any other terrain's parts to a map. Undo/redo, export/import, and **Check** (every landing zone has
+  room, and squads can walk between them).
+- **Play**: pick the map under **Map** in the New Match form. A map has as many landing zones as you like; a battle
+  uses as many as it has squads, spread out, and makes more at the edge if more squads come.
+
+**Maps by AI**: the maps page has a **"Make a map with AI"** panel and the editor an **AI** button (to change the
+open map: the assistant gets a text plan of it). An assistant describes the map as a **recipe** — JSON with a
+terrain, a size, original blocks on a grid, and operations like `building`, `hill`, `path`, `scatter`, `ufo` and
+`ruin` — and answers with a link (`/maps/new?recipe=...`) that opens it in the editor to look over and save. The
+recipe format, every terrain's original blocks (described) and named parts, and what makes a map play well are in
+**`/maps.txt`** (`shared/maps/docs.ts`). A coding agent can check its work with `bun tools/map.ts build recipe.json
+--plan plan.png --iso iso.png`: it lists warnings and playability problems and draws a top-down plan and the in-game
+view.
 
 ### Co-op scenarios (game mode)
 
@@ -214,9 +242,11 @@ Enter chat, hold Shift to speed up animations.
   Runs authoritatively on the server; the client uses the same code for rendering helpers and path previews.
 - `shared/formats` — decoders for the original PCK/TAB, SPK, SCR, MCD, MAP, LOFTEMPS and font files.
 - `shared/rules` — unit/item/armor/terrain data and the multiplayer catalog, pricing and budget guide.
-- `server` — Bun HTTP + WebSocket server, Google OAuth, SQLite persistence, lobby and battle hosting. Every action
+- `server` — Bun HTTP + WebSocket server, sign-in (built-in methods and the access plugin API, `server/plugin.ts`),
+  SQLite persistence, lobby and battle hosting. Every action
   is resolved on the server and each player receives only the events and map knowledge their units can see.
 - `client` — the lobby (HTML) and the battlescape, rendered in the original 8-bit palette onto a canvas.
+- `plugins` — optional access plugins (passkey, allow-list, Google sign-in); `examples` — hosting setups.
 
 `bun test` runs headless random battles in several environments as a regression check.
 
@@ -253,12 +283,12 @@ its kit, armor, price and gear cost, kills and the value of what it killed, its 
 what happened to the supply drops. Records are kept even if the match is later deleted. Bot matches produce the
 same records, so tournament and real-game numbers compare directly.
 
-- `bun tools/player-stats.ts --db /var/lib/xcom/xcom.sqlite [--since 2026-11-01] [--csv units.csv]` prints the
+- `bun tools/player-stats.ts --db data/xcom.sqlite [--since 2026-11-01] [--csv units.csv]` prints the
   real-game balance report: turn-order advantage, budget use, matches by map/time/budget, squad shape vs win
   rate, value for money by hire, armor and weapon, weapon accuracy and damage, tactics (movement, reaction fire,
   psi success, friendly fire, supply-drop looting) and a per-player table. `--csv` writes one row per unit for
   spreadsheets.
-- Accounts listed in `ADMIN_EMAILS` (comma separated; `deploy-xcom.py --admin-email you@example.com`) can download
+- Accounts listed in `ADMINS` (comma separated emails or logins) can download
   everything as JSON from `/api/admin/match-records` (optionally `?since=2026-11-01`) and run the report locally
   with `--json match-records.json`.
 

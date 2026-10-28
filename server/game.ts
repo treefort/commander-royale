@@ -21,6 +21,8 @@ import { RNG } from "../shared/engine/rng.ts";
 import { recalcAllLighting } from "../shared/engine/tileengine.ts";
 import { extractView, newSentState, saveMemory, restoreMemory, type SentState, type SavedMemory } from "../shared/engine/view.ts";
 import { BattleEvents } from "../shared/engine/events.ts";
+import { getMap, mapName } from "./maps.ts";
+import { BIOMES, type Biome } from "../shared/protocol.ts";
 
 export const GAME_DIR = process.env.GAME_DIR ?? join(import.meta.dir, "..", "gamedata");
 
@@ -127,8 +129,23 @@ function deployed(m: MatchRow, userId: string): boolean {
 // lobby
 // ------------------------------------------------------------------------------------------
 
-export function createMatch(user: UserRow, raw: Partial<MatchSettings>) {
+/** A custom map setting made to agree with the map: it must exist, and the lobby shows its name. */
+function withMap(s: MatchSettings): string | null {
+  if (!s.map) {
+    delete s.mapName;
+    return null;
+  }
+  const name = mapName(s.map);
+  if (!name) return "That custom map doesn't exist (any more): choose another, or a generated map";
+  s.mapName = name;
+  return null;
+}
+
+/** Creates a match (throws if its settings can't be used: a custom map that's gone). */
+export function createMatch(user: UserRow, raw: Partial<MatchSettings>): { id: string } {
   const settings = sanitizeSettings(raw);
+  const bad = withMap(settings);
+  if (bad) throw new Error(bad);
   const id = randomId(10);
   const seed = Math.floor(Math.random() * 2 ** 31);
   const pool = generatePool(settings, seed);
@@ -361,6 +378,8 @@ export function updateSettings(id: string, user: UserRow, raw: Partial<MatchSett
   if (m.status !== "lobby") return "The match has already started";
   const old = parseSettings(m.settings);
   const s = sanitizeSettings(raw);
+  const bad = withMap(s);
+  if (bad) return bad;
   let players = getPlayers(id);
   if (s.mode === "coop") {
     // a scenario has one team and a scripted enemy: computer squads and co-op squad links go
@@ -481,7 +500,15 @@ export function startMatch(id: string, user: UserRow): string | null {
     settings.timeOfDay = resolveTimeOfDay(settings.timeOfDay, m.seed);
     settings.randomTime = true;
   }
-  if (!settings.mapBlocks) {
+  // a custom map: as it is now (later changes to it don't reach this battle), with its terrain and size
+  const custom = settings.map ? getMap(settings.map) : undefined;
+  if (settings.map && !custom) return "The custom map for this match has been deleted: choose another in the settings";
+  if (custom) {
+    if (BIOMES.some((b) => b.id === custom.terrain)) settings.biome = custom.terrain as Biome;
+    settings.ufo = "none";
+    settings.mapName = custom.name;
+    settings.mapBlocks = Math.ceil(Math.max(custom.size[0], custom.size[1]) / 10);
+  } else if (!settings.mapBlocks) {
     settings.mapBlocks = resolveMapBlocks(settings, players.length, players.length);
     settings.autoMap = true;
   }
@@ -500,7 +527,7 @@ export function startMatch(id: string, user: UserRow): string | null {
       ...(isBot(p.user_id) ? { ai: botTuning(p) } : { members: squadOf(everyone, p).map((x) => ({ userId: x.user_id, name: x.name })) }),
     }));
   }
-  const battle = createBattle(settings, setup, pool, m.seed, gameFile);
+  const battle = createBattle(settings, setup, pool, m.seed, gameFile, custom ?? undefined);
   const host = newHost(id, battle);
   hosts.set(id, host);
   // kept as it begins, to be played again (a retry, a challenge); with what each side brought, for the statistics
@@ -1006,7 +1033,7 @@ export function addBot(id: string, user: UserRow, strategy: string, rawTuning?: 
   } catch (e) {
     return "Couldn't build that squad: " + (e as Error).message;
   }
-  db.query("INSERT INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(botId, name, Date.now());
+  db.query("INSERT INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(botId, name, Date.now());
   db.query("INSERT INTO match_players (match_id, user_id, seat, name, loadout, ready, ai) VALUES (?, ?, ?, ?, ?, 1, ?)").run(id, botId, seat, name, JSON.stringify(loadout), JSON.stringify(tuning));
   touch(id);
   return null;
@@ -1216,7 +1243,7 @@ function playFrom(sp: StartPoint, seat: number, user: UserRow, name: string, cha
   // the match list shows who's in it: the person, and (free-for-all) the squads the AI plays
   b.players.forEach((p, i) => {
     if (i !== seat && (b.settings.mode === "coop" || !isBot(p.userId))) return;
-    if (i !== seat) db.query("INSERT OR IGNORE INTO users (id, google_sub, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(p.userId, p.name, now);
+    if (i !== seat) db.query("INSERT OR IGNORE INTO users (id, login, email, name, picture, created) VALUES (?, NULL, NULL, ?, NULL, ?)").run(p.userId, p.name, now);
     db.query("INSERT INTO match_players (match_id, user_id, seat, name, loadout, ready) VALUES (?, ?, ?, ?, ?, 1)").run(id, p.userId, i, i === seat ? user.name : p.name, JSON.stringify(sp.loadouts[i] ?? null));
   });
   if (challengeId) db.query("INSERT INTO challenge_attempts (match_id, challenge_id, user_id, name, started) VALUES (?, ?, ?, ?, ?)").run(id, challengeId, user.id, user.name, now);
@@ -1253,6 +1280,8 @@ export function retryMatch(id: string, user: UserRow): { id?: string; error?: st
 /** What a challenge's page shows before anyone plays it (worked out once, when it's made). */
 export interface ChallengeSummary {
   biome: string;
+  /** the custom map's name, if it's on one */
+  mapName?: string;
   timeOfDay: string;
   mapBlocks: number;
   mode: string;
@@ -1265,7 +1294,7 @@ export interface ChallengeSummary {
 function challengeSummary(b: Battle, seat: number): ChallengeSummary {
   const s = b.settings;
   return {
-    biome: s.biome, timeOfDay: s.timeOfDay, mapBlocks: s.mapBlocks, mode: s.mode, turnTimer: s.turnTimer,
+    biome: s.biome, timeOfDay: s.timeOfDay, mapBlocks: s.mapBlocks, mode: s.mode, turnTimer: s.turnTimer, ...(s.map ? { mapName: s.mapName ?? "a custom map" } : {}),
     sides: b.players.map((p, i) => ({
       name: p.name, yours: i === seat, units: b.units.filter((u) => u.originalOwner === i && !isOut(u)).length,
       reinforcements: b.waves.filter((w) => w.seat === i).reduce((n, w) => n + w.members.length, 0),

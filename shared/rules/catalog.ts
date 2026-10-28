@@ -167,10 +167,10 @@ export const COURSES: Course[] = [
 ];
 /** Sessions per course at most: training sharpens a soldier, it doesn't remake one. */
 export const MAX_SESSIONS = 4;
-/** On top of what the stats are worth, so a natural veteran stays slightly better value than a trained rookie. */
-export const TRAINING_PREMIUM = 1.25;
+/** Times what the stats are worth: training is a luxury, and a natural veteran is far better value than a trained rookie. */
+export const TRAINING_PREMIUM = 12.5;
 /** Even training the price model barely values costs something. */
-const MIN_SESSION_PRICE = 1000;
+export const MIN_SESSION_PRICE = 10_000;
 
 /** A soldier's stats after the training bought for them. */
 export function trainedStats(base: Stats, training: SquadMember["training"]): Stats {

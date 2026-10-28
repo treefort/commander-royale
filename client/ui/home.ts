@@ -1,21 +1,34 @@
 import { api, el, money } from "../api.ts";
-import { boxArtScene } from "./boxart.ts";
+import { frontDoor } from "./frontdoor.ts";
 import { BIOMES, UFO_CHOICES, PLACEMENTS, MAX_SQUAD_SIZE, defaultSettings, recommendedMapBlocks, recommendedScenarioBlocks, biomeName, type MatchSettings, type GameMode, type BotTuning } from "../../shared/protocol.ts";
 import { enemyTypeChoices, weaponChoices } from "../../shared/rules/scenario.ts";
 import { checkSettings, parseSettingsText, settingsDelta } from "../../shared/settings-docs.ts";
 import { budgetGuide } from "../../shared/rules/catalog.ts";
 
+/** A way to sign in (server/plugin.ts SignInOption). */
+export type SignInOption =
+  | { label: string; href: string; icon?: string }
+  | { label: string; field: { name: string; placeholder: string; type?: string }; action?: string }
+  | { text: string };
+
+/** What a signed-in account must do before it can play (server/plugin.ts Gate). */
+export interface Gate { title?: string; text: string; field?: { placeholder: string; type?: string }; action?: string; button?: string }
+
 export interface Me {
   user: { id: string; name: string; picture?: string } | null;
-  /** signed in, but the server wants its passkey before this account can play */
-  needsPasskey?: boolean;
-  devLogin: boolean;
-  google: boolean;
+  /** how to sign in on this server (when signed out) */
+  signIn: SignInOption[];
+  /** signed in, but the server wants something more before this account can play */
+  gate: Gate | null;
+  /** there's a session to end (not when a proxy in front of the server says who you are) */
+  signOut: boolean;
 }
 
 export function topbar(me: Me): HTMLElement {
   return el("div", { class: "topbar" },
-    el("a", { class: "logo", href: "/" }, "X-COM: BATTLESCAPE"),
+    el("div", { class: "row" },
+      el("a", { class: "logo", href: "/" }, "COMMANDER ROYALE"),
+      me.user ? el("a", { class: "btn small", href: "/maps", title: "Make your own battle maps (or have an AI assistant make them)" }, "Map editor") : null),
     me.user
       ? el("div", { class: "row" },
         el("span", {}, "Commander ", el("b", {}, me.user.name)),
@@ -26,61 +39,67 @@ export function topbar(me: Me): HTMLElement {
             location.reload();
           }
         } }, "Rename"),
-        el("a", { class: "btn small", href: "/auth/logout" }, "Sign out"))
+        me.signOut ? el("a", { class: "btn small", href: "/auth/logout" }, "Sign out") : null)
       : el("span", {}),
   );
 }
 
-/** Google's "G" mark, for the sign-in button. */
-const GOOGLE_G = `<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.5 0 20.1 0 24s1 7.5 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>`;
+/** One input and a button that runs `submit` (on Enter too). */
+function oneField(placeholder: string, type: string | undefined, button: string, submit: (value: string, input: HTMLInputElement) => void) {
+  const input = el("input", { type: type ?? "text", placeholder, maxlength: 100, autocomplete: type === "password" ? "off" : undefined }) as HTMLInputElement;
+  const go = () => input.value.trim() && submit(input.value.trim(), input);
+  input.addEventListener("keydown", (e) => e.key === "Enter" && go());
+  return { input, row: el("div", { class: "bx-row" }, input, el("button", { class: "primary", onclick: go }, button)) };
+}
 
 export function renderLogin(root: HTMLElement, me: Me, next = location.pathname) {
   root.innerHTML = "";
-  const nameInput = el("input", { placeholder: "Commander name", maxlength: 40 }) as HTMLInputElement;
-  const google = el("a", { class: "btn bx-google", href: `/auth/google?next=${encodeURIComponent(next)}` });
-  google.innerHTML = `${GOOGLE_G}<span>Sign in with Google</span>`;
+  const n = encodeURIComponent(next);
+  const options = me.signIn.map((o) => {
+    if ("text" in o) return el("p", { class: "muted" }, o.text);
+    if ("href" in o) {
+      const a = el("a", { class: `btn bx-signin${o.icon ? " bx-provider" : ""}`, href: o.href.replace("{next}", n) });
+      if (o.icon) a.innerHTML = o.icon;
+      a.append(el("span", {}, o.label));
+      return el("div", { class: "bx-option" }, a);
+    }
+    const f = oneField(o.field.placeholder, o.field.type, o.label, (v) => {
+      location.href = `${o.action ?? "/auth/name"}?${encodeURIComponent(o.field.name)}=${encodeURIComponent(v)}&next=${n}`;
+    });
+    return el("div", { class: "bx-option" }, f.row);
+  });
   const card = el("div", { class: "bx-card" },
     el("p", { class: "bx-lead" }, "Multiplayer battlescape: hire soldiers and aliens, kit them out, and fight to the last unit standing — or team up against an invasion."),
-    me.google ? google : el("p", { class: "muted" }, "Google sign-in isn't configured on this server yet."),
-    me.devLogin
-      ? el("div", { style: { marginTop: "14px" } },
-        el("div", { class: "hint" }, "Local development login:"),
-        el("div", { class: "bx-row", style: { marginTop: "6px" } },
-          nameInput,
-          el("button", { onclick: () => {
-            if (nameInput.value.trim()) location.href = `/auth/dev?name=${encodeURIComponent(nameInput.value.trim())}&next=${encodeURIComponent(next)}`;
-          } }, "Enter")))
-      : null,
+    ...(options.length ? options : [el("p", { class: "muted" }, "This server has no way to sign in set up.")]),
   );
-  root.append(boxArtScene(card));
-  nameInput.addEventListener("keydown", (e) => e.key === "Enter" && (nameInput.nextSibling as HTMLButtonElement)?.click());
+  root.append(frontDoor(card));
+  (card.querySelector("input") as HTMLInputElement | null)?.focus();
 }
 
-/** The passkey a signed-in account enters once before it can play on this server. */
-export function renderPasskey(root: HTMLElement, me: Me, onUnlocked: () => void) {
+/** What a signed-in account has to do before it can play here (enter a passkey...). */
+export function renderGate(root: HTMLElement, me: Me, onDone: () => void) {
   root.innerHTML = "";
-  const input = el("input", { type: "password", placeholder: "Passkey", maxlength: 100, autocomplete: "off" }) as HTMLInputElement;
+  const gate = me.gate!;
   const msg = el("div", { class: "err" });
-  const submit = async () => {
+  const f = gate.field && oneField(gate.field.placeholder, gate.field.type, gate.button ?? "Enter", async (value, input) => {
     msg.textContent = "";
     try {
-      await api("/api/passkey", { body: { passkey: input.value } });
-      onUnlocked();
+      await api(gate.action!, { body: { value } });
+      onDone();
     } catch (e) {
       msg.textContent = (e as Error).message;
       input.select();
     }
-  };
-  input.addEventListener("keydown", (e) => e.key === "Enter" && submit());
+  });
   const card = el("div", { class: "bx-card" },
-    el("p", { class: "bx-lead" }, `Welcome, Commander ${me.user!.name}.`),
-    el("p", {}, "This server is for invited players: enter the passkey you were given. You only need it once."),
-    el("div", { class: "bx-row" }, input, el("button", { class: "primary", onclick: submit }, "Enter")),
+    el("p", { class: "bx-lead" }, gate.title ?? `Welcome, Commander ${me.user!.name}.`),
+    el("p", {}, gate.text),
+    f?.row,
     msg,
-    el("p", { class: "hint", style: { margin: "12px 0 0" } }, "Not you? ", el("a", { href: "/auth/logout" }, "Sign out")),
+    me.signOut ? el("p", { class: "hint", style: { margin: "12px 0 0" } }, "Not you? ", el("a", { href: "/auth/logout" }, "Sign out")) : null,
   );
-  root.append(boxArtScene(card));
-  input.focus();
+  root.append(frontDoor(card));
+  f?.input.focus();
 }
 
 export async function renderHome(root: HTMLElement, me: Me, go: (path: string) => void) {
@@ -320,11 +339,40 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   field("Enemy tactics", aiControls(s.scenario.ai, readOnly), "Bold and reckless enemies charge; cautious ones take aimed shots and fall back", "coop");
 
   // ---- the battlefield (both modes) ----
-  field("Environment", sel([{ id: "RANDOM" as const, name: "Random (rolled when the battle starts)" }, ...BIOMES.map((b) => ({ id: b.id, name: b.name }))], () => s.biome, (v) => (s.biome = v)));
+  // a custom map (made in the map editor) instead of one generated from the environment, UFO and size below
+  const mapSel = el("select", { disabled: readOnly }, el("option", { value: "" }, "Generated from the settings below"),
+    ...(s.map ? [el("option", { value: s.map, selected: true }, s.mapName ?? "A custom map")] : [])) as HTMLSelectElement;
+  const mapInfo = el("span", { class: "hint" });
+  let maps: { id: string; name: string; terrain: string; size: string; zones: number; author: string; mine: boolean }[] = [];
+  const showMapInfo = () => {
+    const m = maps.find((x) => x.id === s.map);
+    mapInfo.replaceChildren(s.map
+      ? el("span", {}, m ? `${m.terrain === "XBASE" ? "X-COM Base" : biomeName(m.terrain)}, ${m.size.split("x").slice(0, 2).join("x")} tiles, ${m.zones} landing zones${m.mine ? "" : `, by ${m.author}`} · ` : "", el("a", { href: `/maps/${s.map}`, target: "_blank" }, "open it in the map editor"))
+      : el("span", {}, "Or one of your own: ", el("a", { href: "/maps", target: "_blank" }, "make one in the map editor"), " (by hand, or by an AI assistant)"));
+  };
+  mapSel.addEventListener("change", () => {
+    s.map = mapSel.value;
+    s.mapName = maps.find((x) => x.id === s.map)?.name;
+    refresh();
+  });
+  if (!readOnly)
+    api<typeof maps>("/api/maps").then((list) => {
+      maps = list;
+      const chosen = list.find((m) => m.id === s.map);
+      if (chosen) {
+        s.mapName = chosen.name;
+        mapSel.options[1].textContent = `${chosen.name}${chosen.mine ? "" : ` (by ${chosen.author})`}`;
+      }
+      for (const m of list) if (m.id !== s.map) mapSel.append(el("option", { value: m.id }, `${m.name}${m.mine ? "" : ` (by ${m.author})`}`));
+      showMapInfo();
+    }).catch(() => {});
+  field("Map", mapSel, mapInfo);
+  const generatedOnly: HTMLElement[] = [];
+  generatedOnly.push(...field("Environment", sel([{ id: "RANDOM" as const, name: "Random (rolled when the battle starts)" }, ...BIOMES.map((b) => ({ id: b.id, name: b.name }))], () => s.biome, (v) => (s.biome = v))));
   field("Time of day", sel([{ id: "random", name: "Random (rolled when the battle starts)" }, { id: "day", name: "Day" }, { id: "dusk", name: "Dusk" }, { id: "night", name: "Night" }] as const, () => s.timeOfDay, (v) => (s.timeOfDay = v)), "At night humans see 9 tiles unless an area is lit; aliens see in the dark");
-  field("Landed UFO", sel(UFO_CHOICES, () => s.ufo, (v) => (s.ufo = v)), "Placed in the middle of the map");
+  generatedOnly.push(...field("Landed UFO", sel(UFO_CHOICES, () => s.ufo, (v) => (s.ufo = v)), "Placed in the middle of the map"));
   const mapInput = sel([{ id: "0", name: "Auto" }, ...[4, 5, 6, 7, 8, 9, 10].map((n) => ({ id: String(n), name: `${n} (${n * 10}x${n * 10} tiles)` }))], () => String(s.mapBlocks), (v) => (s.mapBlocks = Number(v)));
-  field("Map size (blocks)", mapInput, mapHint);
+  generatedOnly.push(...field("Map size (blocks)", mapInput, mapHint));
   const budgetInput = num(() => s.budget, (v) => (s.budget = v), 50_000, 5_000_000, 10_000);
   field("Budget per player", budgetInput);
   f.append(guide);
@@ -413,6 +461,8 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
   function refresh() {
     for (const o of only) for (const e of o.els) e.style.display = o.mode === s.mode ? "" : "none";
     MODES.forEach((m, i) => tabButtons[i].classList.toggle("active", m.id === s.mode));
+    for (const e of generatedOnly) e.style.display = s.map ? "none" : "";
+    showMapInfo();
     tabBlurb.textContent = MODES.find((m) => m.id === s.mode)!.blurb;
     const atStart = s.scenario.enemies.filter((g) => g.round <= 1).reduce((a, g) => a + g.count, 0);
     const later = s.scenario.enemies.filter((g) => g.round > 1).reduce((a, g) => a + g.count, 0);
@@ -439,9 +489,25 @@ export function settingsForm(initial: MatchSettings, onSubmit: (s: MatchSettings
  */
 function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void) {
   const origin = location.origin;
-  const prompt = `Read ${origin}/llms.txt (it explains how matches on this X-COM server are set up), then set up this match for me and give me the settings link and JSON: `;
+  // an assistant on the web can't open a LAN, tailnet or localhost address: then the reference goes along with the prompt
+  const host = location.hostname;
+  const unreachable = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|\[?::1|\[?f[cd])/.test(host) || /\.(local|lan|home|internal|ts\.net)$/.test(host) || !host.includes(".");
+  const prompt = unreachable
+    ? `The reference below explains how matches on my Commander Royale server (${origin}) are set up. Use it to set up this match for me and give me the settings link and JSON: `
+    : `Read ${origin}/llms.txt (it explains how matches on this Commander Royale server are set up), then set up this match for me and give me the settings link and JSON: `;
   const promptBox = el("textarea", { rows: 3, readonly: true }) as HTMLTextAreaElement;
-  promptBox.value = prompt + "<describe the match you want>";
+  promptBox.value = prompt + "<describe the match you want>" + (unreachable ? "\n\n<the reference is added when you copy>" : "");
+  const copyPrompt = async (btn: HTMLButtonElement) => {
+    let text = prompt + "<describe the match you want>";
+    if (unreachable) {
+      try {
+        text += "\n\n" + (await (await fetch("/llms.txt")).text());
+      } catch {
+        /* without it the assistant can still try */
+      }
+    }
+    await copy(text, btn);
+  };
   const paste = el("textarea", { rows: 4, placeholder: "Paste what your assistant gave you: the JSON, or the link" }) as HTMLTextAreaElement;
   const out = el("div", {});
   const details = el("details", { class: "ai-panel" }) as HTMLDetailsElement;
@@ -471,10 +537,12 @@ function aiPanel(current: () => MatchSettings, apply: (s: MatchSettings) => void
   };
   details.append(
     el("summary", {}, "Set up a match with AI"),
-    el("div", { class: "hint", style: { margin: "6px 0" } }, "Describe the match you want to any AI assistant (Claude, ChatGPT...) and let it fill in the settings. Start it off with this:"),
+    el("div", { class: "hint", style: { margin: "6px 0" } }, unreachable
+      ? "Describe the match you want to any AI assistant (Claude, ChatGPT...) and let it fill in the settings. This server isn't on the public internet, so copy the prompt with the reference, paste it into the chat, and replace the part in angle brackets:"
+      : "Describe the match you want to any AI assistant (Claude, ChatGPT...) and let it fill in the settings. Start it off with this:"),
     promptBox,
     el("div", { class: "row", style: { margin: "4px 0 10px" } },
-      el("button", { class: "small", onclick: (e: Event) => copy(prompt, e.target as HTMLButtonElement) }, "Copy prompt"),
+      el("button", { class: "small", onclick: (e: Event) => copyPrompt(e.target as HTMLButtonElement) }, unreachable ? "Copy prompt + reference" : "Copy prompt"),
       el("a", { href: "/llms.txt", target: "_blank", class: "hint" }, "what the assistant reads")),
     el("div", { class: "hint" }, "It answers with a link (just open it) or JSON to paste here:"),
     paste,

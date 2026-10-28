@@ -43,6 +43,19 @@ test("auto-configure follows the settings: no banned units or gear, flares at ni
   expect(check({}).loadout.squad.some((m) => m.items.some((i) => i.type === "STR_MEDI_KIT"))).toBe(true);
 });
 
+test("money the squad can't use goes on training", () => {
+  // four seats and a big budget: far more money than four soldiers and their gear cost
+  const { s, pool, loadout, chk } = check({ squadLimit: 4, budget: 1_000_000 });
+  expect(chk.errors).toEqual([]);
+  expect(loadout.squad.some((m) => m.training)).toBe(true);
+  for (const m of loadout.squad) {
+    if (pool.find((p) => p.id === m.recruitId)!.kind !== "soldier") expect(m.training).toBeUndefined();
+    // a Psi-Amp is what psi training is for
+    if (m.training?.psi) expect(m.items.some((it) => it.type === "STR_PSI_AMP")).toBe(true);
+  }
+  expect(chk.cost).toBeLessThanOrEqual(s.budget);
+});
+
 test("in a co-op scenario it fills the player's own Skyranger seats", () => {
   for (const seats of [1, 3, 8]) {
     const s = sanitizeSettings({ ...defaultSettings(), mode: "coop", budget: 400_000, scenario: { ...defaultSettings().scenario, seatsPerPlayer: seats } });

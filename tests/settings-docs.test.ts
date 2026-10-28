@@ -1,6 +1,8 @@
 import { test, expect } from "bun:test";
-import { defaultSettings, sanitizeSettings } from "../shared/protocol.ts";
-import { FIELDS, EXAMPLES, settingsReference, checkSettings, parseSettingsText, settingsDelta } from "../shared/settings-docs.ts";
+import { defaultSettings, sanitizeSettings, sanitizeBotTuning, DEFAULT_BOT_TUNING, type BotTuning } from "../shared/protocol.ts";
+import { STRATEGIES, STRATEGY_NAMES } from "../shared/rules/squads.ts";
+import { COURSES } from "../shared/rules/catalog.ts";
+import { FIELDS, EXAMPLES, BOT_TUNING_DOCS, settingsReference, checkSettings, parseSettingsText, settingsDelta } from "../shared/settings-docs.ts";
 import { enemyTypeChoices } from "../shared/rules/scenario.ts";
 
 /** Every leaf setting path of an object ("scenario.enemies" counts as one, its groups are documented as []). */
@@ -56,6 +58,20 @@ test("the examples are valid as written, and the reference lists every enemy", (
   expect(ref.length).toBeLessThan(60_000);
 });
 
+test("the reference also covers what isn't a match setting: computer squads, strategies, training", () => {
+  const ref = settingsReference("https://xcom.example");
+  // every AI option, with the range the server really enforces
+  expect(Object.keys(BOT_TUNING_DOCS).sort()).toEqual(Object.keys(DEFAULT_BOT_TUNING).sort());
+  for (const [k, d] of Object.entries(BOT_TUNING_DOCS)) {
+    expect(ref).toContain(`\`${k}\``);
+    if (!d.range) continue;
+    const [lo, hi] = d.range;
+    expect([k, sanitizeBotTuning({ [k]: lo - 1 })[k as keyof BotTuning], sanitizeBotTuning({ [k]: hi + 1 })[k as keyof BotTuning]]).toEqual([k, lo, hi]);
+  }
+  for (const s of STRATEGIES) expect(ref).toContain(`\`${s}\` ${STRATEGY_NAMES[s]}`);
+  for (const c of COURSES) expect(ref).toContain(c.name);
+});
+
 test("pasted answers are read whatever shape they come in, and mistakes are reported", () => {
   const s = { mode: "coop", biome: "MARS" };
   const json = JSON.stringify(s);
@@ -86,4 +102,18 @@ test("copying the form as JSON gives just what changed, and it comes back the sa
     expect(JSON.stringify(delta).length).toBeLessThan(JSON.stringify(full).length);
   }
   expect(settingsDelta(defaultSettings())).toEqual({ mode: "ffa" });
+});
+
+test("tools/match-link.ts: the reference offline, and checked settings turned into a link that comes back the same", async () => {
+  const { run } = await import("../tools/match-link.ts");
+  expect(run([]).out).toBe(settingsReference("http://localhost:3000"));
+  for (const e of EXAMPLES) {
+    const { out, ok } = run(["--server", "http://game.lan:3000/", JSON.stringify(e.settings)]);
+    expect(ok).toBe(true);
+    const link = out.split("\n").find((l) => l.startsWith("http://game.lan:3000/?settings="))!;
+    expect(sanitizeSettings(parseSettingsText(link) as object)).toEqual(sanitizeSettings(e.settings));
+  }
+  const bad = run(['{"mode":"coop","mapBlocks":2}']);
+  expect([bad.ok, bad.out]).toEqual([false, expect.stringContaining("mapBlocks: 2 isn't allowed here, using 4")]);
+  expect(run(["-"], () => "make it hard").ok).toBe(false);
 });
