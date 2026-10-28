@@ -27,7 +27,8 @@ pool priced by ability, a budget-based armory, training, computer squads, supply
 challenges.
 
 Commander Royale is a fan project, not affiliated with the owners of X-COM. It ships none of the original game's
-files: you need your own copy of X-COM: UFO Defense (GOG or Steam).
+files: you need your own copy of X-COM: UFO Defense ([GOG](https://www.gog.com/en/game/xcom_ufo_defense) or
+Steam).
 
 ### Screenshots
 

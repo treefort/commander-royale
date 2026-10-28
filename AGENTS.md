@@ -8,7 +8,7 @@ Graphics, sounds and maps come from the user's **own copy** of the original game
 
 ## Helping someone use it
 
-**Get it running locally.** Needs Bun 1.3+ and an X-COM: UFO Defense install (GOG or Steam; ask where it is if you
+**Get it running locally.** Needs Bun 1.3+ and an X-COM: UFO Defense install ([GOG](https://www.gog.com/en/game/xcom_ufo_defense) or Steam; ask where it is if you
 can't find it. Common places: `C:\Program Files (x86)\GOG Galaxy\Games\X-COM UFO Defense`, `C:\GOG Games\`,
 Steam's `steamapps/common/XCom UFO Defense/XCOM`). Copy its `GEODATA GEOGRAPH MAPS ROUTES SOUND TERRAIN UFOGRAPH
 UNITS` folders into `gamedata/` (or set `GAME_DIR` to the folder holding them), then `bun install` and `bun run dev`
